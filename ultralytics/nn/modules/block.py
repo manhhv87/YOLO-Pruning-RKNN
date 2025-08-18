@@ -341,6 +341,16 @@ class C2f(nn.Module):
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
 
+    def forward_split(self, x: torch.Tensor) -> torch.Tensor:
+        """
+            Forward pass through C2f layer.
+            copying Forward, may solve some bugs.
+        """
+        # y = list(self.cv1(x).chunk(2, 1))
+        y = [self.cv0(x), self.cv1(x)]
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+
 
 class C3(nn.Module):
     """CSP Bottleneck with 3 convolutions."""
