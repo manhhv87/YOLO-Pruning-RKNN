@@ -346,8 +346,10 @@ class C2f(nn.Module):
             Forward pass through C2f layer.
             copying Forward, may solve some bugs.
         """
-        # y = list(self.cv1(x).chunk(2, 1))
-        y = [self.cv0(x), self.cv1(x)]
+        if hasattr(self, 'cv0'):
+            y = [self.cv0(x), self.cv1(x)]
+        else:
+            y = list(self.cv1(x).split((self.c, self.c), 1))
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
 
