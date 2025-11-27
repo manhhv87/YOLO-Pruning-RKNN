@@ -46,7 +46,9 @@ class BaseTensor(SimpleClass):
         >>> gpu_tensor = base_tensor.cuda()
     """
 
-    def __init__(self, data: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]) -> None:
+    def __init__(
+        self, data: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]
+    ) -> None:
         """
         Initialize BaseTensor with prediction data and the original shape of the image.
 
@@ -60,7 +62,9 @@ class BaseTensor(SimpleClass):
             >>> orig_shape = (720, 1280)
             >>> base_tensor = BaseTensor(data, orig_shape)
         """
-        assert isinstance(data, (torch.Tensor, np.ndarray)), "data must be torch.Tensor or np.ndarray"
+        assert isinstance(
+            data, (torch.Tensor, np.ndarray)
+        ), "data must be torch.Tensor or np.ndarray"
         self.data = data
         self.orig_shape = orig_shape
 
@@ -96,7 +100,11 @@ class BaseTensor(SimpleClass):
             >>> cpu_tensor.data.device
             device(type='cpu')
         """
-        return self if isinstance(self.data, np.ndarray) else self.__class__(self.data.cpu(), self.orig_shape)
+        return (
+            self
+            if isinstance(self.data, np.ndarray)
+            else self.__class__(self.data.cpu(), self.orig_shape)
+        )
 
     def numpy(self):
         """
@@ -113,7 +121,11 @@ class BaseTensor(SimpleClass):
             >>> print(type(numpy_array))
             <class 'numpy.ndarray'>
         """
-        return self if isinstance(self.data, np.ndarray) else self.__class__(self.data.numpy(), self.orig_shape)
+        return (
+            self
+            if isinstance(self.data, np.ndarray)
+            else self.__class__(self.data.numpy(), self.orig_shape)
+        )
 
     def cuda(self):
         """
@@ -150,7 +162,9 @@ class BaseTensor(SimpleClass):
             >>> cuda_tensor = base_tensor.to("cuda")
             >>> float16_tensor = base_tensor.to(dtype=torch.float16)
         """
-        return self.__class__(torch.as_tensor(self.data).to(*args, **kwargs), self.orig_shape)
+        return self.__class__(
+            torch.as_tensor(self.data).to(*args, **kwargs), self.orig_shape
+        )
 
     def __len__(self) -> int:
         """
@@ -279,12 +293,22 @@ class Results(SimpleClass, DataExportMixin):
         """
         self.orig_img = orig_img
         self.orig_shape = orig_img.shape[:2]
-        self.boxes = Boxes(boxes, self.orig_shape) if boxes is not None else None  # native size boxes
-        self.masks = Masks(masks, self.orig_shape) if masks is not None else None  # native size or imgsz masks
+        self.boxes = (
+            Boxes(boxes, self.orig_shape) if boxes is not None else None
+        )  # native size boxes
+        self.masks = (
+            Masks(masks, self.orig_shape) if masks is not None else None
+        )  # native size or imgsz masks
         self.probs = Probs(probs) if probs is not None else None
-        self.keypoints = Keypoints(keypoints, self.orig_shape) if keypoints is not None else None
+        self.keypoints = (
+            Keypoints(keypoints, self.orig_shape) if keypoints is not None else None
+        )
         self.obb = OBB(obb, self.orig_shape) if obb is not None else None
-        self.speed = speed if speed is not None else {"preprocess": None, "inference": None, "postprocess": None}
+        self.speed = (
+            speed
+            if speed is not None
+            else {"preprocess": None, "inference": None, "postprocess": None}
+        )
         self.names = names
         self.path = path
         self.save_dir = None
@@ -471,7 +495,9 @@ class Results(SimpleClass, DataExportMixin):
             >>> results = model("path/to/image.jpg")
             >>> new_result = results[0].new()
         """
-        return Results(orig_img=self.orig_img, path=self.path, names=self.names, speed=self.speed)
+        return Results(
+            orig_img=self.orig_img, path=self.path, names=self.names, speed=self.speed
+        )
 
     def plot(
         self,
@@ -526,9 +552,17 @@ class Results(SimpleClass, DataExportMixin):
             >>>     im = result.plot()
             >>>     im.show()
         """
-        assert color_mode in {"instance", "class"}, f"Expected color_mode='instance' or 'class', not {color_mode}."
+        assert color_mode in {
+            "instance",
+            "class",
+        }, f"Expected color_mode='instance' or 'class', not {color_mode}."
         if img is None and isinstance(self.orig_img, torch.Tensor):
-            img = (self.orig_img[0].detach().permute(1, 2, 0).contiguous() * 255).to(torch.uint8).cpu().numpy()
+            img = (
+                (self.orig_img[0].detach().permute(1, 2, 0).contiguous() * 255)
+                .to(torch.uint8)
+                .cpu()
+                .numpy()
+            )
 
         names = self.names
         is_obb = self.obb is not None
@@ -540,7 +574,10 @@ class Results(SimpleClass, DataExportMixin):
             line_width,
             font_size,
             font,
-            pil or (pred_probs is not None and show_probs),  # Classify tasks default to pil=True
+            pil
+            or (
+                pred_probs is not None and show_probs
+            ),  # Classify tasks default to pil=True
             example=names,
         )
 
@@ -549,7 +586,9 @@ class Results(SimpleClass, DataExportMixin):
             if im_gpu is None:
                 img = LetterBox(pred_masks.shape[1:])(image=annotator.result())
                 im_gpu = (
-                    torch.as_tensor(img, dtype=torch.float16, device=pred_masks.data.device)
+                    torch.as_tensor(
+                        img, dtype=torch.float16, device=pred_masks.data.device
+                    )
                     .permute(2, 0, 1)
                     .flip(0)
                     .contiguous()
@@ -558,16 +597,24 @@ class Results(SimpleClass, DataExportMixin):
             idx = (
                 pred_boxes.id
                 if pred_boxes.is_track and color_mode == "instance"
-                else pred_boxes.cls
-                if pred_boxes and color_mode == "class"
-                else reversed(range(len(pred_masks)))
+                else (
+                    pred_boxes.cls
+                    if pred_boxes and color_mode == "class"
+                    else reversed(range(len(pred_masks)))
+                )
             )
-            annotator.masks(pred_masks.data, colors=[colors(x, True) for x in idx], im_gpu=im_gpu)
+            annotator.masks(
+                pred_masks.data, colors=[colors(x, True) for x in idx], im_gpu=im_gpu
+            )
 
         # Plot Detect results
         if pred_boxes is not None and show_boxes:
             for i, d in enumerate(reversed(pred_boxes)):
-                c, d_conf, id = int(d.cls), float(d.conf) if conf else None, int(d.id.item()) if d.is_track else None
+                c, d_conf, id = (
+                    int(d.cls),
+                    float(d.conf) if conf else None,
+                    int(d.id.item()) if d.is_track else None,
+                )
                 name = ("" if id is None else f"id:{id} ") + names[c]
                 label = (f"{name} {d_conf:.2f}" if conf else name) if labels else None
                 box = d.xyxyxyxy.squeeze() if is_obb else d.xyxy.squeeze()
@@ -575,22 +622,29 @@ class Results(SimpleClass, DataExportMixin):
                     box,
                     label,
                     color=colors(
-                        c
-                        if color_mode == "class"
-                        else id
-                        if id is not None
-                        else i
-                        if color_mode == "instance"
-                        else None,
+                        (
+                            c
+                            if color_mode == "class"
+                            else (
+                                id
+                                if id is not None
+                                else i if color_mode == "instance" else None
+                            )
+                        ),
                         True,
                     ),
                 )
 
         # Plot Classify results
         if pred_probs is not None and show_probs:
-            text = "\n".join(f"{names[j] if names else j} {pred_probs.data[j]:.2f}" for j in pred_probs.top5)
+            text = "\n".join(
+                f"{names[j] if names else j} {pred_probs.data[j]:.2f}"
+                for j in pred_probs.top5
+            )
             x = round(self.orig_shape[0] * 0.03)
-            annotator.text([x, x], text, txt_color=txt_color, box_color=(64, 64, 64, 128))  # RGBA box
+            annotator.text(
+                [x, x], text, txt_color=txt_color, box_color=(64, 64, 64, 128)
+            )  # RGBA box
 
         # Plot Pose results
         if self.keypoints is not None:
@@ -691,7 +745,11 @@ class Results(SimpleClass, DataExportMixin):
             return f"{', '.join(f'{self.names[j]} {probs.data[j]:.2f}' for j in probs.top5)}, "
         if boxes := self.boxes:
             counts = boxes.cls.int().bincount()
-            return "".join(f"{n} {self.names[i]}{'s' * (n > 1)}, " for i, n in enumerate(counts) if n > 0)
+            return "".join(
+                f"{n} {self.names[i]}{'s' * (n > 1)}, "
+                for i, n in enumerate(counts)
+                if n > 0
+            )
 
     def save_txt(self, txt_file: Union[str, Path], save_conf: bool = False) -> str:
         """
@@ -732,13 +790,23 @@ class Results(SimpleClass, DataExportMixin):
         elif boxes:
             # Detect/segment/pose
             for j, d in enumerate(boxes):
-                c, conf, id = int(d.cls), float(d.conf), int(d.id.item()) if d.is_track else None
+                c, conf, id = (
+                    int(d.cls),
+                    float(d.conf),
+                    int(d.id.item()) if d.is_track else None,
+                )
                 line = (c, *(d.xyxyxyxyn.view(-1) if is_obb else d.xywhn.view(-1)))
                 if masks:
-                    seg = masks[j].xyn[0].copy().reshape(-1)  # reversed mask.xyn, (n,2) to (n*2)
+                    seg = (
+                        masks[j].xyn[0].copy().reshape(-1)
+                    )  # reversed mask.xyn, (n,2) to (n*2)
                     line = (c, *seg)
                 if kpts is not None:
-                    kpt = torch.cat((kpts[j].xyn, kpts[j].conf[..., None]), 2) if kpts[j].has_visible else kpts[j].xyn
+                    kpt = (
+                        torch.cat((kpts[j].xyn, kpts[j].conf[..., None]), 2)
+                        if kpts[j].has_visible
+                        else kpts[j].xyn
+                    )
                     line += (*kpt.reshape(-1).tolist(),)
                 line += (conf,) * save_conf + (() if id is None else (id,))
                 texts.append(("%g " * len(line)).rstrip() % line)
@@ -750,7 +818,9 @@ class Results(SimpleClass, DataExportMixin):
 
         return str(txt_file)
 
-    def save_crop(self, save_dir: Union[str, Path], file_name: Union[str, Path] = Path("im.jpg")):
+    def save_crop(
+        self, save_dir: Union[str, Path], file_name: Union[str, Path] = Path("im.jpg")
+    ):
         """
         Save cropped detection images to specified directory.
 
@@ -782,11 +852,15 @@ class Results(SimpleClass, DataExportMixin):
             save_one_box(
                 d.xyxy,
                 self.orig_img.copy(),
-                file=Path(save_dir) / self.names[int(d.cls)] / Path(file_name).with_suffix(".jpg"),
+                file=Path(save_dir)
+                / self.names[int(d.cls)]
+                / Path(file_name).with_suffix(".jpg"),
                 BGR=True,
             )
 
-    def summary(self, normalize: bool = False, decimals: int = 5) -> List[Dict[str, Any]]:
+    def summary(
+        self, normalize: bool = False, decimals: int = 5
+    ) -> List[Dict[str, Any]]:
         """
         Convert inference results to a summarized dictionary with optional normalization for box coordinates.
 
@@ -828,12 +902,19 @@ class Results(SimpleClass, DataExportMixin):
         h, w = self.orig_shape if normalize else (1, 1)
         for i, row in enumerate(data):  # xyxy, track_id if tracking, conf, class_id
             class_id, conf = int(row.cls), round(row.conf.item(), decimals)
-            box = (row.xyxyxyxy if is_obb else row.xyxy).squeeze().reshape(-1, 2).tolist()
+            box = (
+                (row.xyxyxyxy if is_obb else row.xyxy).squeeze().reshape(-1, 2).tolist()
+            )
             xy = {}
             for j, b in enumerate(box):
                 xy[f"x{j + 1}"] = round(b[0] / w, decimals)
                 xy[f"y{j + 1}"] = round(b[1] / h, decimals)
-            result = {"name": self.names[class_id], "class": class_id, "confidence": conf, "box": xy}
+            result = {
+                "name": self.names[class_id],
+                "class": class_id,
+                "confidence": conf,
+                "box": xy,
+            }
             if data.is_track:
                 result["track_id"] = int(row.id.item())  # track ID
             if self.masks:
@@ -842,9 +923,14 @@ class Results(SimpleClass, DataExportMixin):
                     "y": (self.masks.xy[i][:, 1] / h).round(decimals).tolist(),
                 }
             if self.keypoints is not None:
-                x, y, visible = self.keypoints[i].data[0].cpu().unbind(dim=1)  # torch Tensor
+                x, y, visible = (
+                    self.keypoints[i].data[0].cpu().unbind(dim=1)
+                )  # torch Tensor
                 result["keypoints"] = {
-                    "x": (x / w).numpy().round(decimals).tolist(),  # decimals named argument required
+                    "x": (x / w)
+                    .numpy()
+                    .round(decimals)
+                    .tolist(),  # decimals named argument required
                     "y": (y / h).numpy().round(decimals).tolist(),
                     "visible": visible.numpy().round(decimals).tolist(),
                 }
@@ -890,7 +976,9 @@ class Boxes(BaseTensor):
         >>> print(boxes.xywhn)
     """
 
-    def __init__(self, boxes: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]) -> None:
+    def __init__(
+        self, boxes: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]
+    ) -> None:
         """
         Initialize the Boxes class with detection box data and the original image shape.
 
@@ -920,7 +1008,10 @@ class Boxes(BaseTensor):
         if boxes.ndim == 1:
             boxes = boxes[None, :]
         n = boxes.shape[-1]
-        assert n in {6, 7}, f"expected 6 or 7 values but got {n}"  # xyxy, track_id, conf, cls
+        assert n in {
+            6,
+            7,
+        }, f"expected 6 or 7 values but got {n}"  # xyxy, track_id, conf, cls
         super().__init__(boxes, orig_shape)
         self.is_track = n == 7
         self.orig_shape = orig_shape
@@ -1041,7 +1132,11 @@ class Boxes(BaseTensor):
             >>> print(normalized)
             tensor([[0.1562, 0.1042, 0.4688, 0.8333]])
         """
-        xyxy = self.xyxy.clone() if isinstance(self.xyxy, torch.Tensor) else np.copy(self.xyxy)
+        xyxy = (
+            self.xyxy.clone()
+            if isinstance(self.xyxy, torch.Tensor)
+            else np.copy(self.xyxy)
+        )
         xyxy[..., [0, 2]] /= self.orig_shape[1]
         xyxy[..., [1, 3]] /= self.orig_shape[0]
         return xyxy
@@ -1099,7 +1194,9 @@ class Masks(BaseTensor):
         >>> normalized_coords = masks.xyn
     """
 
-    def __init__(self, masks: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]) -> None:
+    def __init__(
+        self, masks: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]
+    ) -> None:
         """
         Initialize the Masks class with detection mask data and the original image shape.
 
@@ -1203,7 +1300,9 @@ class Keypoints(BaseTensor):
         >>> keypoints_cpu = keypoints.cpu()  # Move keypoints to CPU
     """
 
-    def __init__(self, keypoints: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]) -> None:
+    def __init__(
+        self, keypoints: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]
+    ) -> None:
         """
         Initialize the Keypoints object with detection keypoints and original image dimensions.
 
@@ -1325,7 +1424,11 @@ class Probs(BaseTensor):
         tensor([0.6000, 0.3000, 0.1000])
     """
 
-    def __init__(self, probs: Union[torch.Tensor, np.ndarray], orig_shape: Optional[Tuple[int, int]] = None) -> None:
+    def __init__(
+        self,
+        probs: Union[torch.Tensor, np.ndarray],
+        orig_shape: Optional[Tuple[int, int]] = None,
+    ) -> None:
         """
         Initialize the Probs class with classification probabilities.
 
@@ -1387,7 +1490,9 @@ class Probs(BaseTensor):
             >>> print(probs.top5)
             [4, 3, 2, 1, 0]
         """
-        return (-self.data).argsort(0)[:5].tolist()  # this way works with both torch and numpy.
+        return (
+            (-self.data).argsort(0)[:5].tolist()
+        )  # this way works with both torch and numpy.
 
     @property
     @lru_cache(maxsize=1)
@@ -1466,7 +1571,9 @@ class OBB(BaseTensor):
         >>> print(obb.cls)
     """
 
-    def __init__(self, boxes: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]) -> None:
+    def __init__(
+        self, boxes: Union[torch.Tensor, np.ndarray], orig_shape: Tuple[int, int]
+    ) -> None:
         """
         Initialize an OBB (Oriented Bounding Box) instance with oriented bounding box data and original image shape.
 
@@ -1497,7 +1604,10 @@ class OBB(BaseTensor):
         if boxes.ndim == 1:
             boxes = boxes[None, :]
         n = boxes.shape[-1]
-        assert n in {7, 8}, f"expected 7 or 8 values but got {n}"  # xywh, rotation, track_id, conf, cls
+        assert n in {
+            7,
+            8,
+        }, f"expected 7 or 8 values but got {n}"  # xywh, rotation, track_id, conf, cls
         super().__init__(boxes, orig_shape)
         self.is_track = n == 8
         self.orig_shape = orig_shape
@@ -1613,7 +1723,11 @@ class OBB(BaseTensor):
             >>> print(normalized_boxes.shape)
             torch.Size([10, 4, 2])
         """
-        xyxyxyxyn = self.xyxyxyxy.clone() if isinstance(self.xyxyxyxy, torch.Tensor) else np.copy(self.xyxyxyxy)
+        xyxyxyxyn = (
+            self.xyxyxyxy.clone()
+            if isinstance(self.xyxyxyxy, torch.Tensor)
+            else np.copy(self.xyxyxyxy)
+        )
         xyxyxyxyn[..., 0] /= self.orig_shape[1]
         xyxyxyxyn[..., 1] /= self.orig_shape[0]
         return xyxyxyxyn

@@ -38,7 +38,12 @@ class PoseTrainer(yolo.detect.DetectionTrainer):
         >>> trainer.train()
     """
 
-    def __init__(self, cfg=DEFAULT_CFG, overrides: Optional[Dict[str, Any]] = None, _callbacks=None):
+    def __init__(
+        self,
+        cfg=DEFAULT_CFG,
+        overrides: Optional[Dict[str, Any]] = None,
+        _callbacks=None,
+    ):
         """
         Initialize a PoseTrainer object for training YOLO pose estimation models.
 
@@ -89,7 +94,11 @@ class PoseTrainer(yolo.detect.DetectionTrainer):
             (PoseModel): Initialized pose estimation model.
         """
         model = PoseModel(
-            cfg, nc=self.data["nc"], ch=self.data["channels"], data_kpt_shape=self.data["kpt_shape"], verbose=verbose
+            cfg,
+            nc=self.data["nc"],
+            ch=self.data["channels"],
+            data_kpt_shape=self.data["kpt_shape"],
+            verbose=verbose,
         )
         if weights:
             model.load(weights)
@@ -105,7 +114,10 @@ class PoseTrainer(yolo.detect.DetectionTrainer):
         """Return an instance of the PoseValidator class for validation."""
         self.loss_names = "box_loss", "pose_loss", "kobj_loss", "cls_loss", "dfl_loss"
         return yolo.pose.PoseValidator(
-            self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
+            self.test_loader,
+            save_dir=self.save_dir,
+            args=copy(self.args),
+            _callbacks=self.callbacks,
         )
 
     def plot_metrics(self):
@@ -124,5 +136,7 @@ class PoseTrainer(yolo.detect.DetectionTrainer):
         """
         data = super().get_dataset()
         if "kpt_shape" not in data:
-            raise KeyError(f"No `kpt_shape` in the {self.args.data}. See https://docs.ultralytics.com/datasets/pose/")
+            raise KeyError(
+                f"No `kpt_shape` in the {self.args.data}. See https://docs.ultralytics.com/datasets/pose/"
+            )
         return data

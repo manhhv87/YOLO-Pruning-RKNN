@@ -35,7 +35,11 @@ def imread(filename: str, flags: int = cv2.IMREAD_COLOR) -> Optional[np.ndarray]
         success, frames = cv2.imdecodemulti(file_bytes, cv2.IMREAD_UNCHANGED)
         if success:
             # Handle RGB images in tif/tiff format
-            return frames[0] if len(frames) == 1 and frames[0].ndim == 3 else np.stack(frames, axis=2)
+            return (
+                frames[0]
+                if len(frames) == 1 and frames[0].ndim == 3
+                else np.stack(frames, axis=2)
+            )
         return None
     else:
         im = cv2.imdecode(file_bytes, flags)
@@ -137,7 +141,9 @@ def torch_save(*args, **kwargs):
     for i in range(4):  # 3 retries
         try:
             return _torch_save(*args, **kwargs)
-        except RuntimeError as e:  # Unable to save, possibly waiting for device to flush or antivirus scan
+        except (
+            RuntimeError
+        ) as e:  # Unable to save, possibly waiting for device to flush or antivirus scan
             if i == 3:
                 raise e
             time.sleep((2**i) / 2)  # Exponential backoff: 0.5s, 1.0s, 2.0s
@@ -155,7 +161,9 @@ def arange_patch(args):
 
         def arange(*args, dtype=None, **kwargs):
             """Return a 1-D tensor of size with values from the interval and common difference."""
-            return func(*args, **kwargs).to(dtype)  # cast to dtype instead of passing dtype
+            return func(*args, **kwargs).to(
+                dtype
+            )  # cast to dtype instead of passing dtype
 
         torch.arange = arange  # patch
         yield

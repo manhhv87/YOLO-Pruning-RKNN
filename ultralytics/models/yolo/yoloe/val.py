@@ -47,7 +47,9 @@ class YOLOEDetectValidator(DetectionValidator):
     """
 
     @smart_inference_mode()
-    def get_visual_pe(self, dataloader: torch.utils.data.DataLoader, model: YOLOEModel) -> torch.Tensor:
+    def get_visual_pe(
+        self, dataloader: torch.utils.data.DataLoader, model: YOLOEModel
+    ) -> torch.Tensor:
         """
         Extract visual prompt embeddings from training samples.
 
@@ -63,7 +65,10 @@ class YOLOEDetectValidator(DetectionValidator):
             (torch.Tensor): Visual prompt embeddings with shape (1, num_classes, embed_dim).
         """
         assert isinstance(model, YOLOEModel)
-        names = [name.split("/", 1)[0] for name in list(dataloader.dataset.data["names"].values())]
+        names = [
+            name.split("/", 1)[0]
+            for name in list(dataloader.dataset.data["names"].values())
+        ]
         visual_pe = torch.zeros(len(names), model.model[-1].embed, device=self.device)
         cls_visual_num = torch.zeros(len(names))
 
@@ -81,18 +86,27 @@ class YOLOEDetectValidator(DetectionValidator):
         pbar = TQDM(dataloader, total=len(dataloader), desc=desc)
         for batch in pbar:
             batch = self.preprocess(batch)
-            preds = model.get_visual_pe(batch["img"], visual=batch["visuals"])  # (B, max_n, embed_dim)
+            preds = model.get_visual_pe(
+                batch["img"], visual=batch["visuals"]
+            )  # (B, max_n, embed_dim)
 
             batch_idx = batch["batch_idx"]
             for i in range(preds.shape[0]):
-                cls = batch["cls"][batch_idx == i].squeeze(-1).to(torch.int).unique(sorted=True)
+                cls = (
+                    batch["cls"][batch_idx == i]
+                    .squeeze(-1)
+                    .to(torch.int)
+                    .unique(sorted=True)
+                )
                 pad_cls = torch.ones(preds.shape[1], device=self.device) * -1
                 pad_cls[: len(cls)] = cls
                 for c in cls:
                     visual_pe[c] += preds[i][pad_cls == c].sum(0) / cls_visual_num[c]
 
         # Normalize embeddings for classes with samples, set others to zero
-        visual_pe[cls_visual_num != 0] = F.normalize(visual_pe[cls_visual_num != 0], dim=-1, p=2)
+        visual_pe[cls_visual_num != 0] = F.normalize(
+            visual_pe[cls_visual_num != 0], dim=-1, p=2
+        )
         visual_pe[cls_visual_num == 0] = 0
         return visual_pe.unsqueeze(0)
 
@@ -165,7 +179,10 @@ class YOLOEDetectValidator(DetectionValidator):
         if trainer is not None:
             self.device = trainer.device
             model = trainer.ema.ema
-            names = [name.split("/", 1)[0] for name in list(self.dataloader.dataset.data["names"].values())]
+            names = [
+                name.split("/", 1)[0]
+                for name in list(self.dataloader.dataset.data["names"].values())
+            ]
 
             if load_vp:
                 LOGGER.info("Validate using the visual prompt.")
@@ -200,7 +217,9 @@ class YOLOEDetectValidator(DetectionValidator):
                 vpe = self.get_visual_pe(dataloader, model)
                 model.set_classes(names, vpe)
                 stats = super().__call__(model=deepcopy(model))
-            elif isinstance(model.model[-1], YOLOEDetect) and hasattr(model.model[-1], "lrpc"):  # prompt-free
+            elif isinstance(model.model[-1], YOLOEDetect) and hasattr(
+                model.model[-1], "lrpc"
+            ):  # prompt-free
                 return super().__call__(trainer, model)
             else:
                 LOGGER.info("Validate using the text prompt.")

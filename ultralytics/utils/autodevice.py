@@ -93,7 +93,11 @@ class GPUInfo:
         def safe_get(func, *args, default=-1, divisor=1):
             try:
                 val = func(*args)
-                return val // divisor if divisor != 1 and isinstance(val, (int, float)) else val
+                return (
+                    val // divisor
+                    if divisor != 1 and isinstance(val, (int, float))
+                    else val
+                )
             except Exception:
                 return default
 
@@ -106,9 +110,15 @@ class GPUInfo:
             "memory_used": memory.used >> 20 if memory else -1,  # Convert bytes to MiB
             "memory_total": memory.total >> 20 if memory else -1,
             "memory_free": memory.free >> 20 if memory else -1,
-            "temperature": safe_get(self.pynvml.nvmlDeviceGetTemperature, handle, temp_type),
-            "power_draw": safe_get(self.pynvml.nvmlDeviceGetPowerUsage, handle, divisor=1000),  # Convert mW to W
-            "power_limit": safe_get(self.pynvml.nvmlDeviceGetEnforcedPowerLimit, handle, divisor=1000),
+            "temperature": safe_get(
+                self.pynvml.nvmlDeviceGetTemperature, handle, temp_type
+            ),
+            "power_draw": safe_get(
+                self.pynvml.nvmlDeviceGetPowerUsage, handle, divisor=1000
+            ),  # Convert mW to W
+            "power_limit": safe_get(
+                self.pynvml.nvmlDeviceGetEnforcedPowerLimit, handle, divisor=1000
+            ),
         }
 
     def print_status(self):
@@ -125,16 +135,29 @@ class GPUInfo:
 
         for gpu in stats:
             u = f"{gpu['utilization']:>5}%" if gpu["utilization"] >= 0 else " N/A "
-            m = f"{gpu['memory_used']:>6}/{gpu['memory_total']:<6}" if gpu["memory_used"] >= 0 else " N/A / N/A "
+            m = (
+                f"{gpu['memory_used']:>6}/{gpu['memory_total']:<6}"
+                if gpu["memory_used"] >= 0
+                else " N/A / N/A "
+            )
             t = f"{gpu['temperature']}C" if gpu["temperature"] >= 0 else " N/A "
-            p = f"{gpu['power_draw']:>3}/{gpu['power_limit']:<3}" if gpu["power_draw"] >= 0 else " N/A "
+            p = (
+                f"{gpu['power_draw']:>3}/{gpu['power_limit']:<3}"
+                if gpu["power_draw"] >= 0
+                else " N/A "
+            )
 
-            LOGGER.info(f"{gpu.get('index'):<3d} {gpu.get('name', 'N/A'):<{name_len}} {u:>6} {m:>15} {t:>5} {p:>10}")
+            LOGGER.info(
+                f"{gpu.get('index'):<3d} {gpu.get('name', 'N/A'):<{name_len}} {u:>6} {m:>15} {t:>5} {p:>10}"
+            )
 
         LOGGER.info(f"{'-' * len(hdr)}\n")
 
     def select_idle_gpu(
-        self, count: int = 1, min_memory_fraction: float = 0, min_util_fraction: float = 0
+        self,
+        count: int = 1,
+        min_memory_fraction: float = 0,
+        min_util_fraction: float = 0,
     ) -> List[int]:
         """
         Select the most idle GPUs based on utilization and free memory.
@@ -151,8 +174,12 @@ class GPUInfo:
              Returns fewer than 'count' if not enough qualify or exist.
              Returns basic CUDA indices if NVML fails. Empty list if no GPUs found.
         """
-        assert min_memory_fraction <= 1.0, f"min_memory_fraction must be <= 1.0, got {min_memory_fraction}"
-        assert min_util_fraction <= 1.0, f"min_util_fraction must be <= 1.0, got {min_util_fraction}"
+        assert (
+            min_memory_fraction <= 1.0
+        ), f"min_memory_fraction must be <= 1.0, got {min_memory_fraction}"
+        assert (
+            min_util_fraction <= 1.0
+        ), f"min_util_fraction must be <= 1.0, got {min_util_fraction}"
         LOGGER.info(
             f"Searching for {count} idle GPUs with free memory >= {min_memory_fraction * 100:.1f}% and free utilization >= {min_util_fraction * 100:.1f}%..."
         )
@@ -169,10 +196,13 @@ class GPUInfo:
         eligible_gpus = [
             gpu
             for gpu in self.gpu_stats
-            if gpu.get("memory_free", 0) / gpu.get("memory_total", 1) >= min_memory_fraction
+            if gpu.get("memory_free", 0) / gpu.get("memory_total", 1)
+            >= min_memory_fraction
             and (100 - gpu.get("utilization", 100)) >= min_util_fraction * 100
         ]
-        eligible_gpus.sort(key=lambda x: (x.get("utilization", 101), -x.get("memory_free", 0)))
+        eligible_gpus.sort(
+            key=lambda x: (x.get("utilization", 101), -x.get("memory_free", 0))
+        )
 
         # Select top 'count' indices
         selected = [gpu["index"] for gpu in eligible_gpus[:count]]

@@ -75,7 +75,9 @@ class MemoryAttentionLayer(nn.Module):
         self.d_model = d_model
         self.dim_feedforward = dim_feedforward
         self.dropout_value = dropout
-        self.self_attn = RoPEAttention(embedding_dim=256, num_heads=1, downsample_rate=1)
+        self.self_attn = RoPEAttention(
+            embedding_dim=256, num_heads=1, downsample_rate=1
+        )
         self.cross_attn_image = RoPEAttention(
             rope_k_repeat=True,
             embedding_dim=256,
@@ -276,7 +278,9 @@ class MemoryAttention(nn.Module):
             assert len(curr) == len(curr_pos) == 1
             curr, curr_pos = curr[0], curr_pos[0]
 
-        assert curr.shape[1] == memory.shape[1], "Batch size must be the same for curr and memory"
+        assert (
+            curr.shape[1] == memory.shape[1]
+        ), "Batch size must be the same for curr and memory"
 
         output = curr
         if self.pos_enc_at_input and curr_pos is not None:

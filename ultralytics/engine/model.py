@@ -10,7 +10,11 @@ from PIL import Image
 
 from ultralytics.cfg import TASK2DATA, get_cfg, get_save_dir
 from ultralytics.engine.results import Results
-from ultralytics.nn.tasks import attempt_load_one_weight, guess_model_task, yaml_model_load
+from ultralytics.nn.tasks import (
+    attempt_load_one_weight,
+    guess_model_task,
+    yaml_model_load,
+)
 from ultralytics.utils import (
     ARGV,
     ASSETS,
@@ -140,11 +144,15 @@ class Model(torch.nn.Module):
         # Check if Triton Server model
         elif self.is_triton_model(model):
             self.model_name = self.model = model
-            self.overrides["task"] = task or "detect"  # set `task=detect` if not explicitly set
+            self.overrides["task"] = (
+                task or "detect"
+            )  # set `task=detect` if not explicitly set
             return
 
         # Load or create new YOLO model
-        __import__("os").environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"  # to avoid deterministic warnings
+        __import__("os").environ[
+            "CUBLAS_WORKSPACE_CONFIG"
+        ] = ":4096:8"  # to avoid deterministic warnings
         if str(model).endswith((".yaml", ".yml")):
             self._new(model, task=task, verbose=verbose)
         else:
@@ -155,7 +163,9 @@ class Model(torch.nn.Module):
 
     def __call__(
         self,
-        source: Union[str, Path, int, Image.Image, list, tuple, np.ndarray, torch.Tensor] = None,
+        source: Union[
+            str, Path, int, Image.Image, list, tuple, np.ndarray, torch.Tensor
+        ] = None,
         stream: bool = False,
         **kwargs: Any,
     ) -> list:
@@ -258,12 +268,17 @@ class Model(torch.nn.Module):
         cfg_dict = yaml_model_load(cfg)
         self.cfg = cfg
         self.task = task or guess_model_task(cfg_dict)
-        self.model = (model or self._smart_load("model"))(cfg_dict, verbose=verbose and RANK == -1)  # build model
+        self.model = (model or self._smart_load("model"))(
+            cfg_dict, verbose=verbose and RANK == -1
+        )  # build model
         self.overrides["model"] = self.cfg
         self.overrides["task"] = self.task
 
         # Below added to allow export from YAMLs
-        self.model.args = {**DEFAULT_CFG_DICT, **self.overrides}  # combine default and model args (prefer model args)
+        self.model.args = {
+            **DEFAULT_CFG_DICT,
+            **self.overrides,
+        }  # combine default and model args (prefer model args)
         self.model.task = self.task
         self.model_name = cfg
 
@@ -287,9 +302,15 @@ class Model(torch.nn.Module):
             >>> model._load("yolo11n.pt")
             >>> model._load("path/to/weights.pth", task="detect")
         """
-        if weights.lower().startswith(("https://", "http://", "rtsp://", "rtmp://", "tcp://")):
-            weights = checks.check_file(weights, download_dir=SETTINGS["weights_dir"])  # download and return local file
-        weights = checks.check_model_file_from_stem(weights)  # add suffix, i.e. yolo11n -> yolo11n.pt
+        if weights.lower().startswith(
+            ("https://", "http://", "rtsp://", "rtmp://", "tcp://")
+        ):
+            weights = checks.check_file(
+                weights, download_dir=SETTINGS["weights_dir"]
+            )  # download and return local file
+        weights = checks.check_model_file_from_stem(
+            weights
+        )  # add suffix, i.e. yolo11n -> yolo11n.pt
 
         if str(weights).rpartition(".")[-1] == "pt":
             self.model, self.ckpt = attempt_load_one_weight(weights)
@@ -297,7 +318,9 @@ class Model(torch.nn.Module):
             self.overrides = self.model.args = self._reset_ckpt_args(self.model.args)
             self.ckpt_path = self.model.pt_path
         else:
-            weights = checks.check_file(weights)  # runs in all cases, not redundant with above call
+            weights = checks.check_file(
+                weights
+            )  # runs in all cases, not redundant with above call
             self.model, self.ckpt = weights, None
             self.task = task or guess_model_task(weights)
             self.ckpt_path = weights
@@ -322,7 +345,10 @@ class Model(torch.nn.Module):
             >>> model = Model("yolo11n.onnx")
             >>> model._check_is_pytorch_model()  # Raises TypeError
         """
-        pt_str = isinstance(self.model, (str, Path)) and str(self.model).rpartition(".")[-1] == "pt"
+        pt_str = (
+            isinstance(self.model, (str, Path))
+            and str(self.model).rpartition(".")[-1] == "pt"
+        )
         pt_module = isinstance(self.model, torch.nn.Module)
         if not (pt_module or pt_str):
             raise TypeError(
@@ -382,7 +408,9 @@ class Model(torch.nn.Module):
         """
         self._check_is_pytorch_model()
         if isinstance(weights, (str, Path)):
-            self.overrides["pretrained"] = weights  # remember the weights for DDP training
+            self.overrides["pretrained"] = (
+                weights  # remember the weights for DDP training
+            )
             weights, self.ckpt = attempt_load_one_weight(weights)
         self.model.load(weights)
         return self
@@ -411,7 +439,11 @@ class Model(torch.nn.Module):
         from ultralytics import __version__
 
         updates = {
-            "model": deepcopy(self.model).half() if isinstance(self.model, torch.nn.Module) else self.model,
+            "model": (
+                deepcopy(self.model).half()
+                if isinstance(self.model, torch.nn.Module)
+                else self.model
+            ),
             "date": datetime.now().isoformat(),
             "version": __version__,
             "license": "AGPL-3.0 License (https://ultralytics.com/license)",
@@ -490,12 +522,16 @@ class Model(torch.nn.Module):
             >>> print(embeddings[0].shape)
         """
         if not kwargs.get("embed"):
-            kwargs["embed"] = [len(self.model.model) - 2]  # embed second-to-last layer if no indices passed
+            kwargs["embed"] = [
+                len(self.model.model) - 2
+            ]  # embed second-to-last layer if no indices passed
         return self.predict(source, stream, **kwargs)
 
     def predict(
         self,
-        source: Union[str, Path, int, Image.Image, list, tuple, np.ndarray, torch.Tensor] = None,
+        source: Union[
+            str, Path, int, Image.Image, list, tuple, np.ndarray, torch.Tensor
+        ] = None,
         stream: bool = False,
         predictor=None,
         **kwargs: Any,
@@ -532,19 +568,35 @@ class Model(torch.nn.Module):
             - For SAM-type models, 'prompts' can be passed as a keyword argument.
         """
         if source is None:
-            source = "https://ultralytics.com/images/boats.jpg" if self.task == "obb" else ASSETS
+            source = (
+                "https://ultralytics.com/images/boats.jpg"
+                if self.task == "obb"
+                else ASSETS
+            )
             LOGGER.warning(f"'source' is missing. Using 'source={source}'.")
 
         is_cli = (ARGV[0].endswith("yolo") or ARGV[0].endswith("ultralytics")) and any(
             x in ARGV for x in ("predict", "track", "mode=predict", "mode=track")
         )
 
-        custom = {"conf": 0.25, "batch": 1, "save": is_cli, "mode": "predict", "rect": True}  # method defaults
-        args = {**self.overrides, **custom, **kwargs}  # highest priority args on the right
+        custom = {
+            "conf": 0.25,
+            "batch": 1,
+            "save": is_cli,
+            "mode": "predict",
+            "rect": True,
+        }  # method defaults
+        args = {
+            **self.overrides,
+            **custom,
+            **kwargs,
+        }  # highest priority args on the right
         prompts = args.pop("prompts", None)  # for SAM-type models
 
         if not self.predictor:
-            self.predictor = (predictor or self._smart_load("predictor"))(overrides=args, _callbacks=self.callbacks)
+            self.predictor = (predictor or self._smart_load("predictor"))(
+                overrides=args, _callbacks=self.callbacks
+            )
             self.predictor.setup_model(model=self.model, verbose=is_cli)
         else:  # only update args if predictor is already setup
             self.predictor.args = get_cfg(self.predictor.args, args)
@@ -552,7 +604,11 @@ class Model(torch.nn.Module):
                 self.predictor.save_dir = get_save_dir(self.predictor.args)
         if prompts and hasattr(self.predictor, "set_prompts"):  # for SAM-type models
             self.predictor.set_prompts(prompts)
-        return self.predictor.predict_cli(source=source) if is_cli else self.predictor(source=source, stream=stream)
+        return (
+            self.predictor.predict_cli(source=source)
+            if is_cli
+            else self.predictor(source=source, stream=stream)
+        )
 
     def track(
         self,
@@ -593,8 +649,12 @@ class Model(torch.nn.Module):
             from ultralytics.trackers import register_tracker
 
             register_tracker(self, persist)
-        kwargs["conf"] = kwargs.get("conf") or 0.1  # ByteTrack-based method needs low confidence predictions as input
-        kwargs["batch"] = kwargs.get("batch") or 1  # batch-size 1 for tracking in videos
+        kwargs["conf"] = (
+            kwargs.get("conf") or 0.1
+        )  # ByteTrack-based method needs low confidence predictions as input
+        kwargs["batch"] = (
+            kwargs.get("batch") or 1
+        )  # batch-size 1 for tracking in videos
         kwargs["mode"] = "track"
         return self.predict(source=source, stream=stream, **kwargs)
 
@@ -627,9 +687,16 @@ class Model(torch.nn.Module):
             >>> print(results.box.map)  # Print mAP50-95
         """
         custom = {"rect": True}  # method defaults
-        args = {**self.overrides, **custom, **kwargs, "mode": "val"}  # highest priority args on the right
+        args = {
+            **self.overrides,
+            **custom,
+            **kwargs,
+            "mode": "val",
+        }  # highest priority args on the right
 
-        validator = (validator or self._smart_load("validator"))(args=args, _callbacks=self.callbacks)
+        validator = (validator or self._smart_load("validator"))(
+            args=args, _callbacks=self.callbacks
+        )
         validator(model=self.model)
         self.metrics = validator.metrics
         return validator.metrics
@@ -671,9 +738,17 @@ class Model(torch.nn.Module):
         from .exporter import export_formats
 
         custom = {"verbose": False}  # method defaults
-        args = {**DEFAULT_CFG_DICT, **self.model.args, **custom, **kwargs, "mode": "benchmark"}
+        args = {
+            **DEFAULT_CFG_DICT,
+            **self.model.args,
+            **custom,
+            **kwargs,
+            "mode": "benchmark",
+        }
         fmts = export_formats()
-        export_args = set(dict(zip(fmts["Argument"], fmts["Arguments"])).get(format, [])) - {"batch"}
+        export_args = set(
+            dict(zip(fmts["Argument"], fmts["Arguments"])).get(format, [])
+        ) - {"batch"}
         export_kwargs = {k: v for k, v in args.items() if k in export_args}
         return benchmark(
             model=self,
@@ -730,7 +805,12 @@ class Model(torch.nn.Module):
             "device": None,  # reset to avoid multi-GPU errors
             "verbose": False,
         }  # method defaults
-        args = {**self.overrides, **custom, **kwargs, "mode": "export"}  # highest priority args on the right
+        args = {
+            **self.overrides,
+            **custom,
+            **kwargs,
+            "mode": "export",
+        }  # highest priority args on the right
         return Exporter(overrides=args, _callbacks=self.callbacks)(model=self.model)
 
     def train(
@@ -770,29 +850,48 @@ class Model(torch.nn.Module):
             >>> results = model.train(data="coco8.yaml", epochs=3)
         """
         self._check_is_pytorch_model()
-        if hasattr(self.session, "model") and self.session.model.id:  # Ultralytics HUB session with loaded model
+        if (
+            hasattr(self.session, "model") and self.session.model.id
+        ):  # Ultralytics HUB session with loaded model
             if any(kwargs):
-                LOGGER.warning("using HUB training arguments, ignoring local training arguments.")
+                LOGGER.warning(
+                    "using HUB training arguments, ignoring local training arguments."
+                )
             kwargs = self.session.train_args  # overwrite kwargs
 
         checks.check_pip_update_available()
 
         if isinstance(kwargs.get("pretrained", None), (str, Path)):
             self.load(kwargs["pretrained"])  # load pretrained weights if provided
-        overrides = YAML.load(checks.check_yaml(kwargs["cfg"])) if kwargs.get("cfg") else self.overrides
+        overrides = (
+            YAML.load(checks.check_yaml(kwargs["cfg"]))
+            if kwargs.get("cfg")
+            else self.overrides
+        )
         custom = {
             # NOTE: handle the case when 'cfg' includes 'data'.
-            "data": overrides.get("data") or DEFAULT_CFG_DICT["data"] or TASK2DATA[self.task],
+            "data": overrides.get("data")
+            or DEFAULT_CFG_DICT["data"]
+            or TASK2DATA[self.task],
             "model": self.overrides["model"],
             "task": self.task,
         }  # method defaults
-        args = {**overrides, **custom, **kwargs, "mode": "train"}  # highest priority args on the right
+        args = {
+            **overrides,
+            **custom,
+            **kwargs,
+            "mode": "train",
+        }  # highest priority args on the right
         if args.get("resume"):
             args["resume"] = self.ckpt_path
         if self.trainer is None:
-            self.trainer = (trainer or self._smart_load("trainer"))(overrides=args, _callbacks=self.callbacks)
+            self.trainer = (trainer or self._smart_load("trainer"))(
+                overrides=args, _callbacks=self.callbacks
+            )
         if not args.get("resume"):  # manually set model only if not resuming
-            self.trainer.model = self.trainer.get_model(weights=self.model if self.ckpt else None, cfg=self.model.yaml)
+            self.trainer.model = self.trainer.get_model(
+                weights=self.model if self.ckpt else None, cfg=self.model.yaml
+            )
             self.model = self.trainer.model
 
         self.trainer.hub_session = self.session  # attach optional HUB session
@@ -802,10 +901,14 @@ class Model(torch.nn.Module):
         self.trainer.train()
         # Update model and cfg after training
         if RANK in {-1, 0}:
-            ckpt = self.trainer.best if self.trainer.best.exists() else self.trainer.last
+            ckpt = (
+                self.trainer.best if self.trainer.best.exists() else self.trainer.last
+            )
             self.model, self.ckpt = attempt_load_one_weight(ckpt)
             self.overrides = self.model.args
-            self.metrics = getattr(self.trainer.validator, "metrics", None)  # TODO: no metrics returned by DDP
+            self.metrics = getattr(
+                self.trainer.validator, "metrics", None
+            )  # TODO: no metrics returned by DDP
         return self.metrics
 
     def tune(
@@ -853,8 +956,15 @@ class Model(torch.nn.Module):
             from .tuner import Tuner
 
             custom = {}  # method defaults
-            args = {**self.overrides, **custom, **kwargs, "mode": "train"}  # highest priority args on the right
-            return Tuner(args=args, _callbacks=self.callbacks)(model=self, iterations=iterations)
+            args = {
+                **self.overrides,
+                **custom,
+                **kwargs,
+                "mode": "train",
+            }  # highest priority args on the right
+            return Tuner(args=args, _callbacks=self.callbacks)(
+                model=self, iterations=iterations
+            )
 
     def _apply(self, fn) -> "Model":
         """
@@ -881,7 +991,9 @@ class Model(torch.nn.Module):
         self._check_is_pytorch_model()
         self = super()._apply(fn)  # noqa
         self.predictor = None  # reset predictor as device may have changed
-        self.overrides["device"] = self.device  # was str(self.device) i.e. device(type='cuda', index=0) -> 'cuda:0'
+        self.overrides["device"] = (
+            self.device
+        )  # was str(self.device) i.e. device(type='cuda', index=0) -> 'cuda:0'
         return self
 
     @property
@@ -909,8 +1021,12 @@ class Model(torch.nn.Module):
 
         if hasattr(self.model, "names"):
             return check_class_names(self.model.names)
-        if not self.predictor:  # export formats will not have predictor defined until predict() is called
-            self.predictor = self._smart_load("predictor")(overrides=self.overrides, _callbacks=self.callbacks)
+        if (
+            not self.predictor
+        ):  # export formats will not have predictor defined until predict() is called
+            self.predictor = self._smart_load("predictor")(
+                overrides=self.overrides, _callbacks=self.callbacks
+            )
             self.predictor.setup_model(model=self.model, verbose=False)
         return self.predictor.model.names
 
@@ -936,7 +1052,11 @@ class Model(torch.nn.Module):
             >>> print(model.device)
             device(type='cpu')
         """
-        return next(self.model.parameters()).device if isinstance(self.model, torch.nn.Module) else None
+        return (
+            next(self.model.parameters()).device
+            if isinstance(self.model, torch.nn.Module)
+            else None
+        )
 
     @property
     def transforms(self):
@@ -1058,7 +1178,12 @@ class Model(torch.nn.Module):
             >>> print(reset_args)
             {'imgsz': 640, 'data': 'coco.yaml', 'task': 'detect'}
         """
-        include = {"imgsz", "data", "task", "single_cls"}  # only remember these arguments when loading a PyTorch model
+        include = {
+            "imgsz",
+            "data",
+            "task",
+            "single_cls",
+        }  # only remember these arguments when loading a PyTorch model
         return {k: v for k, v in args.items() if k in include}
 
     # def __getattr__(self, attr):
@@ -1093,7 +1218,9 @@ class Model(torch.nn.Module):
         except Exception as e:
             name = self.__class__.__name__
             mode = inspect.stack()[1][3]  # get the function name.
-            raise NotImplementedError(f"'{name}' model does not support '{mode}' mode for '{self.task}' task.") from e
+            raise NotImplementedError(
+                f"'{name}' model does not support '{mode}' mode for '{self.task}' task."
+            ) from e
 
     @property
     def task_map(self) -> dict:

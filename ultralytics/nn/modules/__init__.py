@@ -62,7 +62,7 @@ from .block import (
     TorchVision,
 )
 from .conv import (
-    MP, 
+    MP,
     CBAM,
     ChannelAttention,
     Concat,

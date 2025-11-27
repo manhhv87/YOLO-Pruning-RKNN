@@ -11,7 +11,11 @@ from ultralytics.models import yolo
 from ultralytics.nn.tasks import ClassificationModel
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.plotting import plot_images, plot_results
-from ultralytics.utils.torch_utils import is_parallel, strip_optimizer, torch_distributed_zero_first
+from ultralytics.utils.torch_utils import (
+    is_parallel,
+    strip_optimizer,
+    torch_distributed_zero_first,
+)
 
 
 class ClassificationTrainer(BaseTrainer):
@@ -49,7 +53,12 @@ class ClassificationTrainer(BaseTrainer):
         >>> trainer.train()
     """
 
-    def __init__(self, cfg=DEFAULT_CFG, overrides: Optional[Dict[str, Any]] = None, _callbacks=None):
+    def __init__(
+        self,
+        cfg=DEFAULT_CFG,
+        overrides: Optional[Dict[str, Any]] = None,
+        _callbacks=None,
+    ):
         """
         Initialize a ClassificationTrainer object.
 
@@ -91,7 +100,12 @@ class ClassificationTrainer(BaseTrainer):
         Returns:
             (ClassificationModel): Configured PyTorch model for classification.
         """
-        model = ClassificationModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
+        model = ClassificationModel(
+            cfg,
+            nc=self.data["nc"],
+            ch=self.data["channels"],
+            verbose=verbose and RANK == -1,
+        )
         if weights:
             model.load(weights)
 
@@ -135,9 +149,17 @@ class ClassificationTrainer(BaseTrainer):
         Returns:
             (ClassificationDataset): Dataset for the specified mode.
         """
-        return ClassificationDataset(root=img_path, args=self.args, augment=mode == "train", prefix=mode)
+        return ClassificationDataset(
+            root=img_path, args=self.args, augment=mode == "train", prefix=mode
+        )
 
-    def get_dataloader(self, dataset_path: str, batch_size: int = 16, rank: int = 0, mode: str = "train"):
+    def get_dataloader(
+        self,
+        dataset_path: str,
+        batch_size: int = 16,
+        rank: int = 0,
+        mode: str = "train",
+    ):
         """
         Return PyTorch DataLoader with transforms to preprocess images.
 
@@ -150,7 +172,9 @@ class ClassificationTrainer(BaseTrainer):
         Returns:
             (torch.utils.data.DataLoader): DataLoader for the specified dataset and mode.
         """
-        with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
+        with torch_distributed_zero_first(
+            rank
+        ):  # init dataset *.cache only once if DDP
             dataset = self.build_dataset(dataset_path, mode)
 
         loader = build_dataloader(dataset, batch_size, self.args.workers, rank=rank)
@@ -162,7 +186,9 @@ class ClassificationTrainer(BaseTrainer):
                 self.model.transforms = loader.dataset.torch_transforms
         return loader
 
-    def preprocess_batch(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def preprocess_batch(
+        self, batch: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
         """Preprocess a batch of images and classes."""
         batch["img"] = batch["img"].to(self.device)
         batch["cls"] = batch["cls"].to(self.device)
@@ -182,10 +208,15 @@ class ClassificationTrainer(BaseTrainer):
         """Return an instance of ClassificationValidator for validation."""
         self.loss_names = ["loss"]
         return yolo.classify.ClassificationValidator(
-            self.test_loader, self.save_dir, args=copy(self.args), _callbacks=self.callbacks
+            self.test_loader,
+            self.save_dir,
+            args=copy(self.args),
+            _callbacks=self.callbacks,
         )
 
-    def label_loss_items(self, loss_items: Optional[torch.Tensor] = None, prefix: str = "train"):
+    def label_loss_items(
+        self, loss_items: Optional[torch.Tensor] = None, prefix: str = "train"
+    ):
         """
         Return a loss dict with labelled training loss items tensor.
 
@@ -205,7 +236,9 @@ class ClassificationTrainer(BaseTrainer):
 
     def plot_metrics(self):
         """Plot metrics from a CSV file."""
-        plot_results(file=self.csv, classify=True, on_plot=self.on_plot)  # save results.png
+        plot_results(
+            file=self.csv, classify=True, on_plot=self.on_plot
+        )  # save results.png
 
     def final_eval(self):
         """Evaluate trained model and save validation results."""
@@ -228,7 +261,9 @@ class ClassificationTrainer(BaseTrainer):
             batch (Dict[str, torch.Tensor]): Batch containing images and class labels.
             ni (int): Number of iterations.
         """
-        batch["batch_idx"] = torch.arange(len(batch["img"]))  # add batch index for plotting
+        batch["batch_idx"] = torch.arange(
+            len(batch["img"])
+        )  # add batch index for plotting
         plot_images(
             labels=batch,
             fname=self.save_dir / f"train_batch{ni}.jpg",

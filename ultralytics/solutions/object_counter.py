@@ -3,7 +3,11 @@
 from collections import defaultdict
 from typing import Any, Optional, Tuple
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 from ultralytics.utils.plotting import colors
 
 
@@ -43,12 +47,18 @@ class ObjectCounter(BaseSolution):
         self.in_count = 0  # Counter for objects moving inward
         self.out_count = 0  # Counter for objects moving outward
         self.counted_ids = []  # List of IDs of objects that have been counted
-        self.classwise_count = defaultdict(lambda: {"IN": 0, "OUT": 0})  # Dictionary for counts, categorized by class
-        self.region_initialized = False  # Flag indicating whether the region has been initialized
+        self.classwise_count = defaultdict(
+            lambda: {"IN": 0, "OUT": 0}
+        )  # Dictionary for counts, categorized by class
+        self.region_initialized = (
+            False  # Flag indicating whether the region has been initialized
+        )
 
         self.show_in = self.CFG["show_in"]
         self.show_out = self.CFG["show_out"]
-        self.margin = self.line_width * 2  # Scales the background rectangle size to display counts properly
+        self.margin = (
+            self.line_width * 2
+        )  # Scales the background rectangle size to display counts properly
 
     def count_objects(
         self,
@@ -81,7 +91,9 @@ class ObjectCounter(BaseSolution):
         if len(self.region) == 2:  # Linear region (defined as a line segment)
             if self.r_s.intersects(self.LineString([prev_position, current_centroid])):
                 # Determine orientation of the region (vertical or horizontal)
-                if abs(self.region[0][0] - self.region[1][0]) < abs(self.region[0][1] - self.region[1][1]):
+                if abs(self.region[0][0] - self.region[1][0]) < abs(
+                    self.region[0][1] - self.region[1][1]
+                ):
                     # Vertical region: Compare x-coordinates to determine direction
                     if current_centroid[0] > prev_position[0]:  # Moving right
                         self.in_count += 1
@@ -101,8 +113,12 @@ class ObjectCounter(BaseSolution):
         elif len(self.region) > 2:  # Polygonal region
             if self.r_s.contains(self.Point(current_centroid)):
                 # Determine motion direction for vertical or horizontal polygons
-                region_width = max(p[0] for p in self.region) - min(p[0] for p in self.region)
-                region_height = max(p[1] for p in self.region) - min(p[1] for p in self.region)
+                region_width = max(p[0] for p in self.region) - min(
+                    p[0] for p in self.region
+                )
+                region_height = max(p[1] for p in self.region) - min(
+                    p[1] for p in self.region
+                )
 
                 if (
                     region_width < region_height
@@ -136,7 +152,9 @@ class ObjectCounter(BaseSolution):
             if value["IN"] != 0 or value["OUT"] != 0 and (self.show_in or self.show_out)
         }
         if labels_dict:
-            self.annotator.display_analytics(plot_im, labels_dict, (104, 31, 17), (255, 255, 255), self.margin)
+            self.annotator.display_analytics(
+                plot_im, labels_dict, (104, 31, 17), (255, 255, 255), self.margin
+            )
 
     def process(self, im0) -> SolutionResults:
         """
@@ -163,23 +181,33 @@ class ObjectCounter(BaseSolution):
             self.region_initialized = True
 
         self.extract_tracks(im0)  # Extract tracks
-        self.annotator = SolutionAnnotator(im0, line_width=self.line_width)  # Initialize annotator
+        self.annotator = SolutionAnnotator(
+            im0, line_width=self.line_width
+        )  # Initialize annotator
 
         self.annotator.draw_region(
             reg_pts=self.region, color=(104, 0, 123), thickness=self.line_width * 2
         )  # Draw region
 
         # Iterate over bounding boxes, track ids and classes index
-        for box, track_id, cls, conf in zip(self.boxes, self.track_ids, self.clss, self.confs):
+        for box, track_id, cls, conf in zip(
+            self.boxes, self.track_ids, self.clss, self.confs
+        ):
             # Draw bounding box and counting region
-            self.annotator.box_label(box, label=self.adjust_box_label(cls, conf, track_id), color=colors(cls, True))
+            self.annotator.box_label(
+                box,
+                label=self.adjust_box_label(cls, conf, track_id),
+                color=colors(cls, True),
+            )
             self.store_tracking_history(track_id, box)  # Store track history
 
             # Store previous position of track for object counting
             prev_position = None
             if len(self.track_history[track_id]) > 1:
                 prev_position = self.track_history[track_id][-2]
-            self.count_objects(self.track_history[track_id][-1], track_id, prev_position, cls)  # object counting
+            self.count_objects(
+                self.track_history[track_id][-1], track_id, prev_position, cls
+            )  # object counting
 
         plot_im = self.annotator.result()
         self.display_counts(plot_im)  # Display the counts on the frame

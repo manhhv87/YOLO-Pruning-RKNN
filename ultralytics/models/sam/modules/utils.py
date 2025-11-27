@@ -6,7 +6,9 @@ import torch
 import torch.nn.functional as F
 
 
-def select_closest_cond_frames(frame_idx: int, cond_frame_outputs: Dict[int, Any], max_cond_frame_num: int):
+def select_closest_cond_frames(
+    frame_idx: int, cond_frame_outputs: Dict[int, Any], max_cond_frame_num: int
+):
     """
     Select the closest conditioning frames to a given frame index.
 
@@ -54,7 +56,9 @@ def select_closest_cond_frames(frame_idx: int, cond_frame_outputs: Dict[int, Any
             key=lambda x: abs(x - frame_idx),
         )[:num_remain]
         selected_outputs.update((t, cond_frame_outputs[t]) for t in inds_remain)
-        unselected_outputs = {t: v for t, v in cond_frame_outputs.items() if t not in selected_outputs}
+        unselected_outputs = {
+            t: v for t, v in cond_frame_outputs.items() if t not in selected_outputs
+        }
 
     return selected_outputs, unselected_outputs
 
@@ -203,7 +207,11 @@ def apply_rotary_enc(
         >>> q_encoded, k_encoded = apply_rotary_enc(xq, xk, freqs_cis)
     """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
-    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2)) if xk.shape[-2] != 0 else None
+    xk_ = (
+        torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
+        if xk.shape[-2] != 0
+        else None
+    )
     freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
     if xk_ is None:
@@ -244,11 +252,18 @@ def window_partition(x: torch.Tensor, window_size: int):
     Hp, Wp = H + pad_h, W + pad_w
 
     x = x.view(B, Hp // window_size, window_size, Wp // window_size, window_size, C)
-    windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
+    windows = (
+        x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
+    )
     return windows, (Hp, Wp)
 
 
-def window_unpartition(windows: torch.Tensor, window_size: int, pad_hw: Tuple[int, int], hw: Tuple[int, int]):
+def window_unpartition(
+    windows: torch.Tensor,
+    window_size: int,
+    pad_hw: Tuple[int, int],
+    hw: Tuple[int, int],
+):
     """
     Unpartition windowed sequences into original sequences and remove padding.
 
@@ -278,7 +293,9 @@ def window_unpartition(windows: torch.Tensor, window_size: int, pad_hw: Tuple[in
     Hp, Wp = pad_hw
     H, W = hw
     B = windows.shape[0] // (Hp * Wp // window_size // window_size)
-    x = windows.view(B, Hp // window_size, Wp // window_size, window_size, window_size, -1)
+    x = windows.view(
+        B, Hp // window_size, Wp // window_size, window_size, window_size, -1
+    )
     x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, Hp, Wp, -1)
 
     if Hp > H or Wp > W:
@@ -379,8 +396,10 @@ def add_decomposed_rel_pos(
     rel_h = torch.einsum("bhwc,hkc->bhwk", r_q, Rh)
     rel_w = torch.einsum("bhwc,wkc->bhwk", r_q, Rw)
 
-    attn = (attn.view(B, q_h, q_w, k_h, k_w) + rel_h[:, :, :, :, None] + rel_w[:, :, :, None, :]).view(
-        B, q_h * q_w, k_h * k_w
-    )
+    attn = (
+        attn.view(B, q_h, q_w, k_h, k_w)
+        + rel_h[:, :, :, :, None]
+        + rel_w[:, :, :, None, :]
+    ).view(B, q_h * q_w, k_h * k_w)
 
     return attn

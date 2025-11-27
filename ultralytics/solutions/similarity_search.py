@@ -60,7 +60,9 @@ class VisualAISearch(BaseSolution):
         if not self.data_dir.exists():
             from ultralytics.utils import ASSETS_URL
 
-            self.LOGGER.warning(f"{self.data_dir} not found. Downloading images.zip from {ASSETS_URL}/images.zip")
+            self.LOGGER.warning(
+                f"{self.data_dir} not found. Downloading images.zip from {ASSETS_URL}/images.zip"
+            )
             from ultralytics.utils.downloads import safe_download
 
             safe_download(url=f"{ASSETS_URL}/images.zip", unzip=True, retry=3)
@@ -92,8 +94,12 @@ class VisualAISearch(BaseSolution):
         # Check if the FAISS index and corresponding image paths already exist
         if Path(self.faiss_index).exists() and Path(self.data_path_npy).exists():
             self.LOGGER.info("Loading existing FAISS index...")
-            self.index = self.faiss.read_index(self.faiss_index)  # Load the FAISS index from disk
-            self.image_paths = np.load(self.data_path_npy)  # Load the saved image path list
+            self.index = self.faiss.read_index(
+                self.faiss_index
+            )  # Load the FAISS index from disk
+            self.image_paths = np.load(
+                self.data_path_npy
+            )  # Load the saved image path list
             return  # Exit the function as the index is successfully loaded
 
         # If the index doesn't exist, start building it from scratch
@@ -116,17 +122,29 @@ class VisualAISearch(BaseSolution):
         if not vectors:
             raise RuntimeError("No image embeddings could be generated.")
 
-        vectors = np.vstack(vectors).astype("float32")  # Stack all vectors into a NumPy array and convert to float32
-        self.faiss.normalize_L2(vectors)  # Normalize vectors to unit length for cosine similarity
+        vectors = np.vstack(vectors).astype(
+            "float32"
+        )  # Stack all vectors into a NumPy array and convert to float32
+        self.faiss.normalize_L2(
+            vectors
+        )  # Normalize vectors to unit length for cosine similarity
 
-        self.index = self.faiss.IndexFlatIP(vectors.shape[1])  # Create a new FAISS index using inner product
+        self.index = self.faiss.IndexFlatIP(
+            vectors.shape[1]
+        )  # Create a new FAISS index using inner product
         self.index.add(vectors)  # Add the normalized vectors to the FAISS index
-        self.faiss.write_index(self.index, self.faiss_index)  # Save the newly built FAISS index to disk
-        np.save(self.data_path_npy, np.array(self.image_paths))  # Save the list of image paths to disk
+        self.faiss.write_index(
+            self.index, self.faiss_index
+        )  # Save the newly built FAISS index to disk
+        np.save(
+            self.data_path_npy, np.array(self.image_paths)
+        )  # Save the list of image paths to disk
 
         self.LOGGER.info(f"Indexed {len(self.image_paths)} images.")
 
-    def search(self, query: str, k: int = 30, similarity_thresh: float = 0.1) -> List[str]:
+    def search(
+        self, query: str, k: int = 30, similarity_thresh: float = 0.1
+    ) -> List[str]:
         """
         Return top-k semantically similar images to the given query.
 
@@ -148,7 +166,9 @@ class VisualAISearch(BaseSolution):
 
         D, index = self.index.search(text_feat, k)
         results = [
-            (self.image_paths[i], float(D[0][idx])) for idx, i in enumerate(index[0]) if D[0][idx] >= similarity_thresh
+            (self.image_paths[i], float(D[0][idx]))
+            for idx, i in enumerate(index[0])
+            if D[0][idx] >= similarity_thresh
         ]
         results.sort(key=lambda x: x[1], reverse=True)
 

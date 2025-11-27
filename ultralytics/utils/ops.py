@@ -89,7 +89,10 @@ def segment2box(segment, width: int = 640, height: int = 640):
     """
     x, y = segment.T  # segment xy
     # Clip coordinates if 3 out of 4 sides are outside the image
-    if np.array([x.min() < 0, y.min() < 0, x.max() > width, y.max() > height]).sum() >= 3:
+    if (
+        np.array([x.min() < 0, y.min() < 0, x.max() > width, y.max() > height]).sum()
+        >= 3
+    ):
         x = x.clip(0, width)
         y = y.clip(0, height)
     inside = (x >= 0) & (y >= 0) & (x <= width) & (y <= height)
@@ -102,7 +105,14 @@ def segment2box(segment, width: int = 640, height: int = 640):
     )  # xyxy
 
 
-def scale_boxes(img1_shape, boxes, img0_shape, ratio_pad=None, padding: bool = True, xywh: bool = False):
+def scale_boxes(
+    img1_shape,
+    boxes,
+    img0_shape,
+    ratio_pad=None,
+    padding: bool = True,
+    xywh: bool = False,
+):
     """
     Rescale bounding boxes from one image shape to another.
 
@@ -121,7 +131,9 @@ def scale_boxes(img1_shape, boxes, img0_shape, ratio_pad=None, padding: bool = T
         (torch.Tensor): Rescaled bounding boxes in the same format as input.
     """
     if ratio_pad is None:  # calculate from img0_shape
-        gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])  # gain  = old / new
+        gain = min(
+            img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1]
+        )  # gain  = old / new
         pad = (
             round((img1_shape[1] - img0_shape[1] * gain) / 2 - 0.1),
             round((img1_shape[0] - img0_shape[0] * gain) / 2 - 0.1),
@@ -240,9 +252,15 @@ def non_max_suppression(
     import torchvision  # scope for faster 'import ultralytics'
 
     # Checks
-    assert 0 <= conf_thres <= 1, f"Invalid Confidence threshold {conf_thres}, valid values are between 0.0 and 1.0"
-    assert 0 <= iou_thres <= 1, f"Invalid IoU {iou_thres}, valid values are between 0.0 and 1.0"
-    if isinstance(prediction, (list, tuple)):  # YOLOv8 model in validation model, output = (inference_out, loss_out)
+    assert (
+        0 <= conf_thres <= 1
+    ), f"Invalid Confidence threshold {conf_thres}, valid values are between 0.0 and 1.0"
+    assert (
+        0 <= iou_thres <= 1
+    ), f"Invalid IoU {iou_thres}, valid values are between 0.0 and 1.0"
+    if isinstance(
+        prediction, (list, tuple)
+    ):  # YOLOv8 model in validation model, output = (inference_out, loss_out)
         prediction = prediction[0]  # select only inference output
     if classes is not None:
         classes = torch.tensor(classes, device=prediction.device)
@@ -258,7 +276,9 @@ def non_max_suppression(
     extra = prediction.shape[1] - nc - 4  # number of extra info
     mi = 4 + nc  # mask start index
     xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates
-    xinds = torch.stack([torch.arange(len(i), device=prediction.device) for i in xc])[..., None]  # to track idxs
+    xinds = torch.stack([torch.arange(len(i), device=prediction.device) for i in xc])[
+        ..., None
+    ]  # to track idxs
 
     # Settings
     # min_wh = 2  # (pixels) minimum box width and height
@@ -270,12 +290,18 @@ def non_max_suppression(
         if in_place:
             prediction[..., :4] = xywh2xyxy(prediction[..., :4])  # xywh to xyxy
         else:
-            prediction = torch.cat((xywh2xyxy(prediction[..., :4]), prediction[..., 4:]), dim=-1)  # xywh to xyxy
+            prediction = torch.cat(
+                (xywh2xyxy(prediction[..., :4]), prediction[..., 4:]), dim=-1
+            )  # xywh to xyxy
 
     t = time.time()
     output = [torch.zeros((0, 6 + extra), device=prediction.device)] * bs
-    keepi = [torch.zeros((0, 1), device=prediction.device)] * bs  # to store the kept idxs
-    for xi, (x, xk) in enumerate(zip(prediction, xinds)):  # image index, (preds, preds indices)
+    keepi = [
+        torch.zeros((0, 1), device=prediction.device)
+    ] * bs  # to store the kept idxs
+    for xi, (x, xk) in enumerate(
+        zip(prediction, xinds)
+    ):  # image index, (preds, preds indices)
         # Apply constraints
         # x[((x[:, 2:4] < min_wh) | (x[:, 2:4] > max_wh)).any(1), 4] = 0  # width-height
         filt = xc[xi]  # confidence
@@ -316,7 +342,9 @@ def non_max_suppression(
         if not n:  # no boxes
             continue
         if n > max_nms:  # excess boxes
-            filt = x[:, 4].argsort(descending=True)[:max_nms]  # sort by confidence and remove excess boxes
+            filt = x[:, 4].argsort(descending=True)[
+                :max_nms
+            ]  # sort by confidence and remove excess boxes
             x, xk = x[filt], xk[filt]
 
         # Batched NMS
@@ -349,7 +377,9 @@ def clip_boxes(boxes, shape):
     Returns:
         (torch.Tensor | numpy.ndarray): Clipped bounding boxes.
     """
-    if isinstance(boxes, torch.Tensor):  # faster individually (WARNING: inplace .clamp_() Apple MPS bug)
+    if isinstance(
+        boxes, torch.Tensor
+    ):  # faster individually (WARNING: inplace .clamp_() Apple MPS bug)
         boxes[..., 0] = boxes[..., 0].clamp(0, shape[1])  # x1
         boxes[..., 1] = boxes[..., 1].clamp(0, shape[0])  # y1
         boxes[..., 2] = boxes[..., 2].clamp(0, shape[1])  # x2
@@ -371,7 +401,9 @@ def clip_coords(coords, shape):
     Returns:
         (torch.Tensor | numpy.ndarray): Clipped coordinates.
     """
-    if isinstance(coords, torch.Tensor):  # faster individually (WARNING: inplace .clamp_() Apple MPS bug)
+    if isinstance(
+        coords, torch.Tensor
+    ):  # faster individually (WARNING: inplace .clamp_() Apple MPS bug)
         coords[..., 0] = coords[..., 0].clamp(0, shape[1])  # x
         coords[..., 1] = coords[..., 1].clamp(0, shape[0])  # y
     else:  # np.array (faster grouped)
@@ -400,8 +432,12 @@ def scale_image(masks, im0_shape, ratio_pad=None):
     if im1_shape[:2] == im0_shape[:2]:
         return masks
     if ratio_pad is None:  # calculate from im0_shape
-        gain = min(im1_shape[0] / im0_shape[0], im1_shape[1] / im0_shape[1])  # gain  = old / new
-        pad = (im1_shape[1] - im0_shape[1] * gain) / 2, (im1_shape[0] - im0_shape[0] * gain) / 2  # wh padding
+        gain = min(
+            im1_shape[0] / im0_shape[0], im1_shape[1] / im0_shape[1]
+        )  # gain  = old / new
+        pad = (im1_shape[1] - im0_shape[1] * gain) / 2, (
+            im1_shape[0] - im0_shape[0] * gain
+        ) / 2  # wh padding
     else:
         pad = ratio_pad[1]
 
@@ -412,7 +448,9 @@ def scale_image(masks, im0_shape, ratio_pad=None):
     )
 
     if len(masks.shape) < 2:
-        raise ValueError(f'"len of masks shape" should be 2 or 3, but got {len(masks.shape)}')
+        raise ValueError(
+            f'"len of masks shape" should be 2 or 3, but got {len(masks.shape)}'
+        )
     masks = masks[top:bottom, left:right]
     masks = cv2.resize(masks, (im0_shape[1], im0_shape[0]))
     if len(masks.shape) == 2:
@@ -432,7 +470,9 @@ def xyxy2xywh(x):
     Returns:
         (np.ndarray | torch.Tensor): Bounding box coordinates in (x, y, width, height) format.
     """
-    assert x.shape[-1] == 4, f"input shape last dimension expected 4 but input shape is {x.shape}"
+    assert (
+        x.shape[-1] == 4
+    ), f"input shape last dimension expected 4 but input shape is {x.shape}"
     y = empty_like(x)  # faster than clone/copy
     y[..., 0] = (x[..., 0] + x[..., 2]) / 2  # x center
     y[..., 1] = (x[..., 1] + x[..., 3]) / 2  # y center
@@ -452,7 +492,9 @@ def xywh2xyxy(x):
     Returns:
         (np.ndarray | torch.Tensor): Bounding box coordinates in (x1, y1, x2, y2) format.
     """
-    assert x.shape[-1] == 4, f"input shape last dimension expected 4 but input shape is {x.shape}"
+    assert (
+        x.shape[-1] == 4
+    ), f"input shape last dimension expected 4 but input shape is {x.shape}"
     y = empty_like(x)  # faster than clone/copy
     xy = x[..., :2]  # centers
     wh = x[..., 2:] / 2  # half width-height
@@ -476,7 +518,9 @@ def xywhn2xyxy(x, w: int = 640, h: int = 640, padw: int = 0, padh: int = 0):
         y (np.ndarray | torch.Tensor): The coordinates of the bounding box in the format [x1, y1, x2, y2] where
             x1,y1 is the top-left corner, x2,y2 is the bottom-right corner of the bounding box.
     """
-    assert x.shape[-1] == 4, f"input shape last dimension expected 4 but input shape is {x.shape}"
+    assert (
+        x.shape[-1] == 4
+    ), f"input shape last dimension expected 4 but input shape is {x.shape}"
     y = empty_like(x)  # faster than clone/copy
     y[..., 0] = w * (x[..., 0] - x[..., 2] / 2) + padw  # top left x
     y[..., 1] = h * (x[..., 1] - x[..., 3] / 2) + padh  # top left y
@@ -502,7 +546,9 @@ def xyxy2xywhn(x, w: int = 640, h: int = 640, clip: bool = False, eps: float = 0
     """
     if clip:
         x = clip_boxes(x, (h - eps, w - eps))
-    assert x.shape[-1] == 4, f"input shape last dimension expected 4 but input shape is {x.shape}"
+    assert (
+        x.shape[-1] == 4
+    ), f"input shape last dimension expected 4 but input shape is {x.shape}"
     y = empty_like(x)  # faster than clone/copy
     y[..., 0] = ((x[..., 0] + x[..., 2]) / 2) / w  # x center
     y[..., 1] = ((x[..., 1] + x[..., 3]) / 2) / h  # y center
@@ -579,7 +625,11 @@ def xyxyxyxy2xywhr(x):
         # especially some objects are cut off by augmentations in dataloader.
         (cx, cy), (w, h), angle = cv2.minAreaRect(pts)
         rboxes.append([cx, cy, w, h, angle / 180 * np.pi])
-    return torch.tensor(rboxes, device=x.device, dtype=x.dtype) if is_torch else np.asarray(rboxes)
+    return (
+        torch.tensor(rboxes, device=x.device, dtype=x.dtype)
+        if is_torch
+        else np.asarray(rboxes)
+    )
 
 
 def xywhr2xyxyxyxy(x):
@@ -665,7 +715,11 @@ def resample_segments(segments, n: int = 1000):
         xp = np.arange(len(s))
         x = np.insert(x, np.searchsorted(x, xp), xp) if len(s) < n else x
         segments[i] = (
-            np.concatenate([np.interp(x, xp, s[:, i]) for i in range(2)], dtype=np.float32).reshape(2, -1).T
+            np.concatenate(
+                [np.interp(x, xp, s[:, i]) for i in range(2)], dtype=np.float32
+            )
+            .reshape(2, -1)
+            .T
         )  # segment xy
     return segments
 
@@ -683,8 +737,12 @@ def crop_mask(masks, boxes):
     """
     _, h, w = masks.shape
     x1, y1, x2, y2 = torch.chunk(boxes[:, :, None], 4, 1)  # x1 shape(n,1,1)
-    r = torch.arange(w, device=masks.device, dtype=x1.dtype)[None, None, :]  # rows shape(1,1,w)
-    c = torch.arange(h, device=masks.device, dtype=x1.dtype)[None, :, None]  # cols shape(1,h,1)
+    r = torch.arange(w, device=masks.device, dtype=x1.dtype)[
+        None, None, :
+    ]  # rows shape(1,1,w)
+    c = torch.arange(h, device=masks.device, dtype=x1.dtype)[
+        None, :, None
+    ]  # cols shape(1,h,1)
 
     return masks * ((r >= x1) * (r < x2) * (c >= y1) * (c < y2))
 
@@ -718,7 +776,9 @@ def process_mask(protos, masks_in, bboxes, shape, upsample: bool = False):
 
     masks = crop_mask(masks, downsampled_bboxes)  # CHW
     if upsample:
-        masks = F.interpolate(masks[None], shape, mode="bilinear", align_corners=False)[0]  # CHW
+        masks = F.interpolate(masks[None], shape, mode="bilinear", align_corners=False)[
+            0
+        ]  # CHW
     return masks.gt_(0.0)
 
 
@@ -760,7 +820,9 @@ def scale_masks(masks, shape, padding: bool = True):
     if padding:
         pad[0] /= 2
         pad[1] /= 2
-    top, left = (int(round(pad[1] - 0.1)), int(round(pad[0] - 0.1))) if padding else (0, 0)  # y, x
+    top, left = (
+        (int(round(pad[1] - 0.1)), int(round(pad[0] - 0.1))) if padding else (0, 0)
+    )  # y, x
     bottom, right = (
         mh - int(round(pad[1] + 0.1)),
         mw - int(round(pad[0] + 0.1)),
@@ -771,7 +833,14 @@ def scale_masks(masks, shape, padding: bool = True):
     return masks
 
 
-def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None, normalize: bool = False, padding: bool = True):
+def scale_coords(
+    img1_shape,
+    coords,
+    img0_shape,
+    ratio_pad=None,
+    normalize: bool = False,
+    padding: bool = True,
+):
     """
     Rescale segment coordinates from img1_shape to img0_shape.
 
@@ -787,8 +856,12 @@ def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None, normalize: bool
         (torch.Tensor): Scaled coordinates.
     """
     if ratio_pad is None:  # calculate from img0_shape
-        gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])  # gain  = old / new
-        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2  # wh padding
+        gain = min(
+            img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1]
+        )  # gain  = old / new
+        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (
+            img1_shape[0] - img0_shape[0] * gain
+        ) / 2  # wh padding
     else:
         gain = ratio_pad[0][0]
         pad = ratio_pad[1]
@@ -865,7 +938,13 @@ def convert_torch2numpy_batch(batch: torch.Tensor) -> np.ndarray:
     Returns:
         (np.ndarray): Output NumPy array batch with shape (Batch, Height, Width, Channels) and dtype uint8.
     """
-    return (batch.permute(0, 2, 3, 1).contiguous() * 255).clamp(0, 255).to(torch.uint8).cpu().numpy()
+    return (
+        (batch.permute(0, 2, 3, 1).contiguous() * 255)
+        .clamp(0, 255)
+        .to(torch.uint8)
+        .cpu()
+        .numpy()
+    )
 
 
 def clean_str(s):
@@ -884,5 +963,7 @@ def clean_str(s):
 def empty_like(x):
     """Create empty torch.Tensor or np.ndarray with same shape as input and float32 dtype."""
     return (
-        torch.empty_like(x, dtype=torch.float32) if isinstance(x, torch.Tensor) else np.empty_like(x, dtype=np.float32)
+        torch.empty_like(x, dtype=torch.float32)
+        if isinstance(x, torch.Tensor)
+        else np.empty_like(x, dtype=np.float32)
     )

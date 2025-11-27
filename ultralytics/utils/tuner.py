@@ -1,7 +1,14 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 from ultralytics.cfg import TASK2DATA, TASK2METRIC, get_cfg, get_save_dir
-from ultralytics.utils import DEFAULT_CFG, DEFAULT_CFG_DICT, LOGGER, NUM_THREADS, checks, colorstr
+from ultralytics.utils import (
+    DEFAULT_CFG,
+    DEFAULT_CFG_DICT,
+    LOGGER,
+    NUM_THREADS,
+    checks,
+    colorstr,
+)
 
 
 def run_ray_tune(
@@ -33,7 +40,9 @@ def run_ray_tune(
         Start tuning hyperparameters for YOLO11n training on the COCO8 dataset
         >>> result_grid = model.tune(data="coco8.yaml", use_ray=True)
     """
-    LOGGER.info("💡 Learn about RayTune at https://docs.ultralytics.com/integrations/ray-tune")
+    LOGGER.info(
+        "💡 Learn about RayTune at https://docs.ultralytics.com/integrations/ray-tune"
+    )
     if train_args is None:
         train_args = {}
 
@@ -46,7 +55,9 @@ def run_ray_tune(
         from ray.air.integrations.wandb import WandbLoggerCallback
         from ray.tune.schedulers import ASHAScheduler
     except ImportError:
-        raise ModuleNotFoundError('Ray Tune required but not found. To install run: pip install "ray[tune]"')
+        raise ModuleNotFoundError(
+            'Ray Tune required but not found. To install run: pip install "ray[tune]"'
+        )
 
     try:
         import wandb
@@ -73,7 +84,9 @@ def run_ray_tune(
         "translate": tune.uniform(0.0, 0.9),  # image translation (+/- fraction)
         "scale": tune.uniform(0.0, 0.9),  # image scale (+/- gain)
         "shear": tune.uniform(0.0, 10.0),  # image shear (+/- deg)
-        "perspective": tune.uniform(0.0, 0.001),  # image perspective (+/- fraction), range 0-0.001
+        "perspective": tune.uniform(
+            0.0, 0.001
+        ),  # image perspective (+/- fraction), range 0-0.001
         "flipud": tune.uniform(0.0, 1.0),  # image flip up-down (probability)
         "fliplr": tune.uniform(0.0, 1.0),  # image flip left-right (probability)
         "bgr": tune.uniform(0.0, 1.0),  # image channel BGR (probability)
@@ -89,7 +102,9 @@ def run_ray_tune(
 
     def _tune(config):
         """Train the YOLO model with the specified hyperparameters and return results."""
-        model_to_train = ray.get(model_in_store)  # get the model from ray store for tuning
+        model_to_train = ray.get(
+            model_in_store
+        )  # get the model from ray store for tuning
         model_to_train.reset_callbacks()
         config.update(train_args)
         results = model_to_train.train(**config)
@@ -107,7 +122,9 @@ def run_ray_tune(
         LOGGER.warning(f'Data not provided, using default "data={data}".')
 
     # Define the trainable function with allocated resources
-    trainable_with_resources = tune.with_resources(_tune, {"cpu": NUM_THREADS, "gpu": gpu_per_trial or 0})
+    trainable_with_resources = tune.with_resources(
+        _tune, {"cpu": NUM_THREADS, "gpu": gpu_per_trial or 0}
+    )
 
     # Define the ASHA scheduler for hyperparameter search
     asha_scheduler = ASHAScheduler(
@@ -126,14 +143,19 @@ def run_ray_tune(
     tune_dir = get_save_dir(
         get_cfg(
             DEFAULT_CFG,
-            {**train_args, **{"exist_ok": train_args.pop("resume", False)}},  # resume w/ same tune_dir
+            {
+                **train_args,
+                **{"exist_ok": train_args.pop("resume", False)},
+            },  # resume w/ same tune_dir
         ),
         name=train_args.pop("name", "tune"),  # runs/{task}/{tune_dir}
     ).resolve()  # must be absolute dir
     tune_dir.mkdir(parents=True, exist_ok=True)
     if tune.Tuner.can_restore(tune_dir):
         LOGGER.info(f"{colorstr('Tuner: ')} Resuming tuning run {tune_dir}...")
-        tuner = tune.Tuner.restore(str(tune_dir), trainable=trainable_with_resources, resume_errored=True)
+        tuner = tune.Tuner.restore(
+            str(tune_dir), trainable=trainable_with_resources, resume_errored=True
+        )
     else:
         tuner = tune.Tuner(
             trainable_with_resources,
@@ -144,7 +166,11 @@ def run_ray_tune(
                 trial_name_creator=lambda trial: f"{trial.trainable_name}_{trial.trial_id}",
                 trial_dirname_creator=lambda trial: f"{trial.trainable_name}_{trial.trial_id}",
             ),
-            run_config=RunConfig(callbacks=tuner_callbacks, storage_path=tune_dir.parent, name=tune_dir.name),
+            run_config=RunConfig(
+                callbacks=tuner_callbacks,
+                storage_path=tune_dir.parent,
+                name=tune_dir.name,
+            ),
         )
 
     # Run the hyperparameter search

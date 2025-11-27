@@ -64,19 +64,32 @@ class GMC:
             self.matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
 
         elif self.method == "sift":
-            self.detector = cv2.SIFT_create(nOctaveLayers=3, contrastThreshold=0.02, edgeThreshold=20)
-            self.extractor = cv2.SIFT_create(nOctaveLayers=3, contrastThreshold=0.02, edgeThreshold=20)
+            self.detector = cv2.SIFT_create(
+                nOctaveLayers=3, contrastThreshold=0.02, edgeThreshold=20
+            )
+            self.extractor = cv2.SIFT_create(
+                nOctaveLayers=3, contrastThreshold=0.02, edgeThreshold=20
+            )
             self.matcher = cv2.BFMatcher(cv2.NORM_L2)
 
         elif self.method == "ecc":
             number_of_iterations = 5000
             termination_eps = 1e-6
             self.warp_mode = cv2.MOTION_EUCLIDEAN
-            self.criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations, termination_eps)
+            self.criteria = (
+                cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
+                number_of_iterations,
+                termination_eps,
+            )
 
         elif self.method == "sparseOptFlow":
             self.feature_params = dict(
-                maxCorners=1000, qualityLevel=0.01, minDistance=1, blockSize=3, useHarrisDetector=False, k=0.04
+                maxCorners=1000,
+                qualityLevel=0.01,
+                minDistance=1,
+                blockSize=3,
+                useHarrisDetector=False,
+                k=0.04,
             )
 
         elif self.method in {"none", "None", None}:
@@ -89,7 +102,9 @@ class GMC:
         self.prevDescriptors = None
         self.initializedFirstFrame = False
 
-    def apply(self, raw_frame: np.ndarray, detections: Optional[List] = None) -> np.ndarray:
+    def apply(
+        self, raw_frame: np.ndarray, detections: Optional[List] = None
+    ) -> np.ndarray:
         """
         Apply object detection on a raw frame using the specified method.
 
@@ -140,7 +155,9 @@ class GMC:
         # Downscale image for computational efficiency
         if self.downscale > 1.0:
             frame = cv2.GaussianBlur(frame, (3, 3), 1.5)
-            frame = cv2.resize(frame, (width // self.downscale, height // self.downscale))
+            frame = cv2.resize(
+                frame, (width // self.downscale, height // self.downscale)
+            )
 
         # Handle first frame initialization
         if not self.initializedFirstFrame:
@@ -150,13 +167,17 @@ class GMC:
 
         # Run the ECC algorithm to find transformation matrix
         try:
-            (_, H) = cv2.findTransformECC(self.prevFrame, frame, H, self.warp_mode, self.criteria, None, 1)
+            (_, H) = cv2.findTransformECC(
+                self.prevFrame, frame, H, self.warp_mode, self.criteria, None, 1
+            )
         except Exception as e:
             LOGGER.warning(f"find transform failed. Set warp as identity {e}")
 
         return H
 
-    def apply_features(self, raw_frame: np.ndarray, detections: Optional[List] = None) -> np.ndarray:
+    def apply_features(
+        self, raw_frame: np.ndarray, detections: Optional[List] = None
+    ) -> np.ndarray:
         """
         Apply feature-based methods like ORB or SIFT to a raw frame.
 
@@ -180,13 +201,18 @@ class GMC:
 
         # Downscale image for computational efficiency
         if self.downscale > 1.0:
-            frame = cv2.resize(frame, (width // self.downscale, height // self.downscale))
+            frame = cv2.resize(
+                frame, (width // self.downscale, height // self.downscale)
+            )
             width = width // self.downscale
             height = height // self.downscale
 
         # Create mask for keypoint detection, excluding border regions
         mask = np.zeros_like(frame)
-        mask[int(0.02 * height) : int(0.98 * height), int(0.02 * width) : int(0.98 * width)] = 255
+        mask[
+            int(0.02 * height) : int(0.98 * height),
+            int(0.02 * width) : int(0.98 * width),
+        ] = 255
 
         # Exclude detection regions from mask to avoid tracking detected objects
         if detections is not None:
@@ -297,7 +323,9 @@ class GMC:
 
         # Downscale image for computational efficiency
         if self.downscale > 1.0:
-            frame = cv2.resize(frame, (width // self.downscale, height // self.downscale))
+            frame = cv2.resize(
+                frame, (width // self.downscale, height // self.downscale)
+            )
 
         # Find good features to track
         keypoints = cv2.goodFeaturesToTrack(frame, mask=None, **self.feature_params)
@@ -310,7 +338,9 @@ class GMC:
             return H
 
         # Calculate optical flow using Lucas-Kanade method
-        matchedKeypoints, status, _ = cv2.calcOpticalFlowPyrLK(self.prevFrame, frame, self.prevKeyPoints, None)
+        matchedKeypoints, status, _ = cv2.calcOpticalFlowPyrLK(
+            self.prevFrame, frame, self.prevKeyPoints, None
+        )
 
         # Extract successfully tracked points
         prevPoints = []

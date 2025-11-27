@@ -41,7 +41,12 @@ class RTDETRTrainer(DetectionTrainer):
         >>> trainer.train()
     """
 
-    def get_model(self, cfg: Optional[dict] = None, weights: Optional[str] = None, verbose: bool = True):
+    def get_model(
+        self,
+        cfg: Optional[dict] = None,
+        weights: Optional[str] = None,
+        verbose: bool = True,
+    ):
         """
         Initialize and return an RT-DETR model for object detection tasks.
 
@@ -53,12 +58,19 @@ class RTDETRTrainer(DetectionTrainer):
         Returns:
             (RTDETRDetectionModel): Initialized model.
         """
-        model = RTDETRDetectionModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
+        model = RTDETRDetectionModel(
+            cfg,
+            nc=self.data["nc"],
+            ch=self.data["channels"],
+            verbose=verbose and RANK == -1,
+        )
         if weights:
             model.load(weights)
         return model
 
-    def build_dataset(self, img_path: str, mode: str = "val", batch: Optional[int] = None):
+    def build_dataset(
+        self, img_path: str, mode: str = "val", batch: Optional[int] = None
+    ):
         """
         Build and return an RT-DETR dataset for training or validation.
 
@@ -88,4 +100,6 @@ class RTDETRTrainer(DetectionTrainer):
     def get_validator(self):
         """Return a DetectionValidator suitable for RT-DETR model validation."""
         self.loss_names = "giou_loss", "cls_loss", "l1_loss"
-        return RTDETRValidator(self.test_loader, save_dir=self.save_dir, args=copy(self.args))
+        return RTDETRValidator(
+            self.test_loader, save_dir=self.save_dir, args=copy(self.args)
+        )

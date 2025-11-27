@@ -46,7 +46,9 @@ class PoseValidator(DetectionValidator):
         >>> validator()
     """
 
-    def __init__(self, dataloader=None, save_dir=None, args=None, _callbacks=None) -> None:
+    def __init__(
+        self, dataloader=None, save_dir=None, args=None, _callbacks=None
+    ) -> None:
         """
         Initialize a PoseValidator object for pose estimation validation.
 
@@ -143,7 +145,9 @@ class PoseValidator(DetectionValidator):
         """
         preds = super().postprocess(preds)
         for pred in preds:
-            pred["keypoints"] = pred.pop("extra").view(-1, *self.kpt_shape)  # remove extra if exists
+            pred["keypoints"] = pred.pop("extra").view(
+                -1, *self.kpt_shape
+            )  # remove extra if exists
         return preds
 
     def _prepare_batch(self, si: int, batch: Dict[str, Any]) -> Dict[str, Any]:
@@ -167,11 +171,15 @@ class PoseValidator(DetectionValidator):
         kpts = kpts.clone()
         kpts[..., 0] *= w
         kpts[..., 1] *= h
-        kpts = ops.scale_coords(pbatch["imgsz"], kpts, pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"])
+        kpts = ops.scale_coords(
+            pbatch["imgsz"], kpts, pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
+        )
         pbatch["keypoints"] = kpts
         return pbatch
 
-    def _prepare_pred(self, pred: Dict[str, Any], pbatch: Dict[str, Any]) -> Dict[str, Any]:
+    def _prepare_pred(
+        self, pred: Dict[str, Any], pbatch: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Prepare and scale keypoints in predictions for pose processing.
 
@@ -191,11 +199,16 @@ class PoseValidator(DetectionValidator):
         """
         predn = super()._prepare_pred(pred, pbatch)
         predn["keypoints"] = ops.scale_coords(
-            pbatch["imgsz"], pred.get("keypoints").clone(), pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
+            pbatch["imgsz"],
+            pred.get("keypoints").clone(),
+            pbatch["ori_shape"],
+            ratio_pad=pbatch["ratio_pad"],
         )
         return predn
 
-    def _process_batch(self, preds: Dict[str, torch.Tensor], batch: Dict[str, Any]) -> Dict[str, np.ndarray]:
+    def _process_batch(
+        self, preds: Dict[str, torch.Tensor], batch: Dict[str, Any]
+    ) -> Dict[str, np.ndarray]:
         """
         Return correct prediction matrix by computing Intersection over Union (IoU) between detections and ground truth.
 
@@ -220,12 +233,20 @@ class PoseValidator(DetectionValidator):
         else:
             # `0.53` is from https://github.com/jin-s13/xtcocoapi/blob/master/xtcocotools/cocoeval.py#L384
             area = ops.xyxy2xywh(batch["bboxes"])[:, 2:].prod(1) * 0.53
-            iou = kpt_iou(batch["keypoints"], preds["keypoints"], sigma=self.sigma, area=area)
+            iou = kpt_iou(
+                batch["keypoints"], preds["keypoints"], sigma=self.sigma, area=area
+            )
             tp_p = self.match_predictions(preds["cls"], gt_cls, iou).cpu().numpy()
         tp.update({"tp_p": tp_p})  # update tp with kpts IoU
         return tp
 
-    def save_one_txt(self, predn: Dict[str, torch.Tensor], save_conf: bool, shape: Tuple[int, int], file: Path) -> None:
+    def save_one_txt(
+        self,
+        predn: Dict[str, torch.Tensor],
+        save_conf: bool,
+        shape: Tuple[int, int],
+        file: Path,
+    ) -> None:
         """
         Save YOLO pose detections to a text file in normalized coordinates.
 
@@ -245,7 +266,14 @@ class PoseValidator(DetectionValidator):
             np.zeros((shape[0], shape[1]), dtype=np.uint8),
             path=None,
             names=self.names,
-            boxes=torch.cat([predn["bboxes"], predn["conf"].unsqueeze(-1), predn["cls"].unsqueeze(-1)], dim=1),
+            boxes=torch.cat(
+                [
+                    predn["bboxes"],
+                    predn["conf"].unsqueeze(-1),
+                    predn["cls"].unsqueeze(-1),
+                ],
+                dim=1,
+            ),
             keypoints=predn["keypoints"],
         ).save_txt(file, save_conf=save_conf)
 
@@ -288,6 +316,10 @@ class PoseValidator(DetectionValidator):
 
     def eval_json(self, stats: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate object detection model using COCO JSON format."""
-        anno_json = self.data["path"] / "annotations/person_keypoints_val2017.json"  # annotations
+        anno_json = (
+            self.data["path"] / "annotations/person_keypoints_val2017.json"
+        )  # annotations
         pred_json = self.save_dir / "predictions.json"  # predictions
-        return super().coco_evaluate(stats, pred_json, anno_json, ["bbox", "keypoints"], suffix=["Box", "Pose"])
+        return super().coco_evaluate(
+            stats, pred_json, anno_json, ["bbox", "keypoints"], suffix=["Box", "Pose"]
+        )

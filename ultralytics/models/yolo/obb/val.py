@@ -40,7 +40,9 @@ class OBBValidator(DetectionValidator):
         >>> validator(model=args["model"])
     """
 
-    def __init__(self, dataloader=None, save_dir=None, args=None, _callbacks=None) -> None:
+    def __init__(
+        self, dataloader=None, save_dir=None, args=None, _callbacks=None
+    ) -> None:
         """
         Initialize OBBValidator and set task to 'obb', metrics to OBBMetrics.
 
@@ -66,9 +68,13 @@ class OBBValidator(DetectionValidator):
         """
         super().init_metrics(model)
         val = self.data.get(self.args.split, "")  # validation path
-        self.is_dota = isinstance(val, str) and "DOTA" in val  # check if dataset is DOTA format
+        self.is_dota = (
+            isinstance(val, str) and "DOTA" in val
+        )  # check if dataset is DOTA format
 
-    def _process_batch(self, preds: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]) -> Dict[str, np.ndarray]:
+    def _process_batch(
+        self, preds: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]
+    ) -> Dict[str, np.ndarray]:
         """
         Compute the correct prediction matrix for a batch of detections and ground truth bounding boxes.
 
@@ -92,7 +98,9 @@ class OBBValidator(DetectionValidator):
         if len(batch["cls"]) == 0 or len(preds["cls"]) == 0:
             return {"tp": np.zeros((len(preds["cls"]), self.niou), dtype=bool)}
         iou = batch_probiou(batch["bboxes"], preds["bboxes"])
-        return {"tp": self.match_predictions(preds["cls"], batch["cls"], iou).cpu().numpy()}
+        return {
+            "tp": self.match_predictions(preds["cls"], batch["cls"], iou).cpu().numpy()
+        }
 
     def postprocess(self, preds: torch.Tensor) -> List[Dict[str, torch.Tensor]]:
         """
@@ -104,7 +112,9 @@ class OBBValidator(DetectionValidator):
         """
         preds = super().postprocess(preds)
         for pred in preds:
-            pred["bboxes"] = torch.cat([pred["bboxes"], pred.pop("extra")], dim=-1)  # concatenate angle
+            pred["bboxes"] = torch.cat(
+                [pred["bboxes"], pred.pop("extra")], dim=-1
+            )  # concatenate angle
         return preds
 
     def _prepare_batch(self, si: int, batch: Dict[str, Any]) -> Dict[str, Any]:
@@ -131,11 +141,23 @@ class OBBValidator(DetectionValidator):
         imgsz = batch["img"].shape[2:]
         ratio_pad = batch["ratio_pad"][si]
         if len(cls):
-            bbox[..., :4].mul_(torch.tensor(imgsz, device=self.device)[[1, 0, 1, 0]])  # target boxes
-            ops.scale_boxes(imgsz, bbox, ori_shape, ratio_pad=ratio_pad, xywh=True)  # native-space labels
-        return {"cls": cls, "bboxes": bbox, "ori_shape": ori_shape, "imgsz": imgsz, "ratio_pad": ratio_pad}
+            bbox[..., :4].mul_(
+                torch.tensor(imgsz, device=self.device)[[1, 0, 1, 0]]
+            )  # target boxes
+            ops.scale_boxes(
+                imgsz, bbox, ori_shape, ratio_pad=ratio_pad, xywh=True
+            )  # native-space labels
+        return {
+            "cls": cls,
+            "bboxes": bbox,
+            "ori_shape": ori_shape,
+            "imgsz": imgsz,
+            "ratio_pad": ratio_pad,
+        }
 
-    def _prepare_pred(self, pred: Dict[str, torch.Tensor], pbatch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+    def _prepare_pred(
+        self, pred: Dict[str, torch.Tensor], pbatch: Dict[str, Any]
+    ) -> Dict[str, torch.Tensor]:
         """
         Prepare predictions by scaling bounding boxes to original image dimensions.
 
@@ -156,11 +178,17 @@ class OBBValidator(DetectionValidator):
         if self.args.single_cls:
             cls *= 0
         bboxes = ops.scale_boxes(
-            pbatch["imgsz"], pred["bboxes"].clone(), pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"], xywh=True
+            pbatch["imgsz"],
+            pred["bboxes"].clone(),
+            pbatch["ori_shape"],
+            ratio_pad=pbatch["ratio_pad"],
+            xywh=True,
         )  # native-space pred
         return {"bboxes": bboxes, "conf": pred["conf"], "cls": cls}
 
-    def plot_predictions(self, batch: Dict[str, Any], preds: List[torch.Tensor], ni: int) -> None:
+    def plot_predictions(
+        self, batch: Dict[str, Any], preds: List[torch.Tensor], ni: int
+    ) -> None:
         """
         Plot predicted bounding boxes on input images and save the result.
 
@@ -177,10 +205,14 @@ class OBBValidator(DetectionValidator):
         """
         for p in preds:
             # TODO: fix this duplicated `xywh2xyxy`
-            p["bboxes"][:, :4] = ops.xywh2xyxy(p["bboxes"][:, :4])  # convert to xyxy format for plotting
+            p["bboxes"][:, :4] = ops.xywh2xyxy(
+                p["bboxes"][:, :4]
+            )  # convert to xyxy format for plotting
         super().plot_predictions(batch, preds, ni)  # plot bboxes
 
-    def pred_to_json(self, predn: Dict[str, torch.Tensor], filename: Union[str, Path]) -> None:
+    def pred_to_json(
+        self, predn: Dict[str, torch.Tensor], filename: Union[str, Path]
+    ) -> None:
         """
         Convert YOLO predictions to COCO JSON format with rotated bounding box information.
 
@@ -198,7 +230,9 @@ class OBBValidator(DetectionValidator):
         image_id = int(stem) if stem.isnumeric() else stem
         rbox = predn["bboxes"]
         poly = ops.xywhr2xyxyxyxy(rbox).view(-1, 8)
-        for r, b, s, c in zip(rbox.tolist(), poly.tolist(), predn["conf"].tolist(), predn["cls"].tolist()):
+        for r, b, s, c in zip(
+            rbox.tolist(), poly.tolist(), predn["conf"].tolist(), predn["cls"].tolist()
+        ):
             self.jdict.append(
                 {
                     "image_id": image_id,
@@ -209,7 +243,13 @@ class OBBValidator(DetectionValidator):
                 }
             )
 
-    def save_one_txt(self, predn: Dict[str, torch.Tensor], save_conf: bool, shape: Tuple[int, int], file: Path) -> None:
+    def save_one_txt(
+        self,
+        predn: Dict[str, torch.Tensor],
+        save_conf: bool,
+        shape: Tuple[int, int],
+        file: Path,
+    ) -> None:
         """
         Save YOLO OBB detections to a text file in normalized coordinates.
 
@@ -233,7 +273,14 @@ class OBBValidator(DetectionValidator):
             np.zeros((shape[0], shape[1]), dtype=np.uint8),
             path=None,
             names=self.names,
-            obb=torch.cat([predn["bboxes"], predn["conf"].unsqueeze(-1), predn["cls"].unsqueeze(-1)], dim=1),
+            obb=torch.cat(
+                [
+                    predn["bboxes"],
+                    predn["conf"].unsqueeze(-1),
+                    predn["cls"].unsqueeze(-1),
+                ],
+                dim=1,
+            ),
         ).save_txt(file, save_conf=save_conf)
 
     def eval_json(self, stats: Dict[str, Any]) -> Dict[str, Any]:
@@ -263,18 +310,26 @@ class OBBValidator(DetectionValidator):
                 classname = self.names[d["category_id"] - 1].replace(" ", "-")
                 p = d["poly"]
 
-                with open(f"{pred_txt / f'Task1_{classname}'}.txt", "a", encoding="utf-8") as f:
-                    f.writelines(f"{image_id} {score} {p[0]} {p[1]} {p[2]} {p[3]} {p[4]} {p[5]} {p[6]} {p[7]}\n")
+                with open(
+                    f"{pred_txt / f'Task1_{classname}'}.txt", "a", encoding="utf-8"
+                ) as f:
+                    f.writelines(
+                        f"{image_id} {score} {p[0]} {p[1]} {p[2]} {p[3]} {p[4]} {p[5]} {p[6]} {p[7]}\n"
+                    )
             # Save merged results, this could result slightly lower map than using official merging script,
             # because of the probiou calculation.
             pred_merged_txt = self.save_dir / "predictions_merged_txt"  # predictions
             pred_merged_txt.mkdir(parents=True, exist_ok=True)
             merged_results = defaultdict(list)
-            LOGGER.info(f"Saving merged predictions with DOTA format to {pred_merged_txt}...")
+            LOGGER.info(
+                f"Saving merged predictions with DOTA format to {pred_merged_txt}..."
+            )
             for d in data:
                 image_id = d["image_id"].split("__", 1)[0]
                 pattern = re.compile(r"\d+___\d+")
-                x, y = (int(c) for c in re.findall(pattern, d["image_id"])[0].split("___"))
+                x, y = (
+                    int(c) for c in re.findall(pattern, d["image_id"])[0].split("___")
+                )
                 bbox, score, cls = d["rbox"], d["score"], d["category_id"] - 1
                 bbox[0] += x
                 bbox[1] += y
@@ -297,7 +352,13 @@ class OBBValidator(DetectionValidator):
                     p = [round(i, 3) for i in x[:-2]]  # poly
                     score = round(x[-2], 3)
 
-                    with open(f"{pred_merged_txt / f'Task1_{classname}'}.txt", "a", encoding="utf-8") as f:
-                        f.writelines(f"{image_id} {score} {p[0]} {p[1]} {p[2]} {p[3]} {p[4]} {p[5]} {p[6]} {p[7]}\n")
+                    with open(
+                        f"{pred_merged_txt / f'Task1_{classname}'}.txt",
+                        "a",
+                        encoding="utf-8",
+                    ) as f:
+                        f.writelines(
+                            f"{image_id} {score} {p[0]} {p[1]} {p[2]} {p[3]} {p[4]} {p[5]} {p[6]} {p[7]}\n"
+                        )
 
         return stats

@@ -38,7 +38,10 @@ class FastSAM(Model):
         """Initialize the FastSAM model with the specified pre-trained weights."""
         if str(model) == "FastSAM.pt":
             model = "FastSAM-x.pt"
-        assert Path(model).suffix not in {".yaml", ".yml"}, "FastSAM models only support pre-trained models."
+        assert Path(model).suffix not in {
+            ".yaml",
+            ".yml",
+        }, "FastSAM models only support pre-trained models."
         super().__init__(model=model, task="segment")
 
     def predict(
@@ -76,4 +79,6 @@ class FastSAM(Model):
     @property
     def task_map(self) -> Dict[str, Dict[str, Any]]:
         """Returns a dictionary mapping segment task to corresponding predictor and validator classes."""
-        return {"segment": {"predictor": FastSAMPredictor, "validator": FastSAMValidator}}
+        return {
+            "segment": {"predictor": FastSAMPredictor, "validator": FastSAMValidator}
+        }

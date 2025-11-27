@@ -3,7 +3,11 @@
 from collections import defaultdict
 from typing import Any
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 
 
 class AIGym(BaseSolution):
@@ -41,12 +45,20 @@ class AIGym(BaseSolution):
         """
         kwargs["model"] = kwargs.get("model", "yolo11n-pose.pt")
         super().__init__(**kwargs)
-        self.states = defaultdict(lambda: {"angle": 0, "count": 0, "stage": "-"})  # Dict for count, angle and stage
+        self.states = defaultdict(
+            lambda: {"angle": 0, "count": 0, "stage": "-"}
+        )  # Dict for count, angle and stage
 
         # Extract details from CFG single time for usage later
-        self.up_angle = float(self.CFG["up_angle"])  # Pose up predefined angle to consider up pose
-        self.down_angle = float(self.CFG["down_angle"])  # Pose down predefined angle to consider down pose
-        self.kpts = self.CFG["kpts"]  # User selected kpts of workouts storage for further usage
+        self.up_angle = float(
+            self.CFG["up_angle"]
+        )  # Pose up predefined angle to consider up pose
+        self.down_angle = float(
+            self.CFG["down_angle"]
+        )  # Pose down predefined angle to consider down pose
+        self.kpts = self.CFG[
+            "kpts"
+        ]  # User selected kpts of workouts storage for further usage
 
     def process(self, im0) -> SolutionResults:
         """
@@ -72,7 +84,9 @@ class AIGym(BaseSolution):
             >>> results = gym.process(image)
             >>> processed_image = results.plot_im
         """
-        annotator = SolutionAnnotator(im0, line_width=self.line_width)  # Initialize annotator
+        annotator = SolutionAnnotator(
+            im0, line_width=self.line_width
+        )  # Initialize annotator
 
         self.extract_tracks(im0)  # Extract tracks (bounding boxes, classes, and masks)
 
@@ -82,7 +96,9 @@ class AIGym(BaseSolution):
             for i, k in enumerate(kpt_data):
                 state = self.states[self.track_ids[i]]  # get state details
                 # Get keypoints and estimate the angle
-                state["angle"] = annotator.estimate_pose_angle(*[k[int(idx)] for idx in self.kpts])
+                state["angle"] = annotator.estimate_pose_angle(
+                    *[k[int(idx)] for idx in self.kpts]
+                )
                 annotator.draw_specific_kpts(k, self.kpts, radius=self.line_width * 3)
 
                 # Determine stage and count logic based on angle thresholds
@@ -102,7 +118,9 @@ class AIGym(BaseSolution):
                         center_kpt=k[int(self.kpts[1])],  # center keypoint for display
                     )
         plot_im = annotator.result()
-        self.display_output(plot_im)  # Display output image, if environment support display
+        self.display_output(
+            plot_im
+        )  # Display output image, if environment support display
 
         # Return SolutionResults
         return SolutionResults(

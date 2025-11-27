@@ -45,7 +45,9 @@ def bbox_iof(polygon1: np.ndarray, bbox2: np.ndarray, eps: float = 1e-6) -> np.n
     h_overlaps = wh[..., 0] * wh[..., 1]
 
     left, top, right, bottom = (bbox2[..., i] for i in range(4))
-    polygon2 = np.stack([left, top, right, top, right, bottom, left, bottom], axis=-1).reshape(-1, 4, 2)
+    polygon2 = np.stack(
+        [left, top, right, top, right, bottom, left, bottom], axis=-1
+    ).reshape(-1, 4, 2)
 
     sg_polys1 = [Polygon(p) for p in polygon1]
     sg_polys2 = [Polygon(p) for p in polygon2]
@@ -142,7 +144,9 @@ def get_windows(
     im_in_wins = windows.copy()
     im_in_wins[:, 0::2] = np.clip(im_in_wins[:, 0::2], 0, w)
     im_in_wins[:, 1::2] = np.clip(im_in_wins[:, 1::2], 0, h)
-    im_areas = (im_in_wins[:, 2] - im_in_wins[:, 0]) * (im_in_wins[:, 3] - im_in_wins[:, 1])
+    im_areas = (im_in_wins[:, 2] - im_in_wins[:, 0]) * (
+        im_in_wins[:, 3] - im_in_wins[:, 1]
+    )
     win_areas = (windows[:, 2] - windows[:, 0]) * (windows[:, 3] - windows[:, 1])
     im_rates = im_areas / win_areas
     if not (im_rates > im_rate_thr).any():
@@ -151,7 +155,9 @@ def get_windows(
     return windows[im_rates > im_rate_thr]
 
 
-def get_window_obj(anno: Dict[str, Any], windows: np.ndarray, iof_thr: float = 0.7) -> List[np.ndarray]:
+def get_window_obj(
+    anno: Dict[str, Any], windows: np.ndarray, iof_thr: float = 0.7
+) -> List[np.ndarray]:
     """Get objects for each window based on IoF threshold."""
     h, w = anno["ori_size"]
     label = anno["label"]
@@ -160,9 +166,13 @@ def get_window_obj(anno: Dict[str, Any], windows: np.ndarray, iof_thr: float = 0
         label[:, 2::2] *= h
         iofs = bbox_iof(label[:, 1:], windows)
         # Unnormalized and misaligned coordinates
-        return [(label[iofs[:, i] >= iof_thr]) for i in range(len(windows))]  # window_anns
+        return [
+            (label[iofs[:, i] >= iof_thr]) for i in range(len(windows))
+        ]  # window_anns
     else:
-        return [np.zeros((0, 9), dtype=np.float32) for _ in range(len(windows))]  # window_anns
+        return [
+            np.zeros((0, 9), dtype=np.float32) for _ in range(len(windows))
+        ]  # window_anns
 
 
 def crop_and_save(
@@ -261,7 +271,11 @@ def split_images_and_labels(
 
 
 def split_trainval(
-    data_root: str, save_dir: str, crop_size: int = 1024, gap: int = 200, rates: Tuple[float, ...] = (1.0,)
+    data_root: str,
+    save_dir: str,
+    crop_size: int = 1024,
+    gap: int = 200,
+    rates: Tuple[float, ...] = (1.0,),
 ) -> None:
     """
     Split train and val sets of DOTA dataset with multiple scaling rates.
@@ -300,7 +314,11 @@ def split_trainval(
 
 
 def split_test(
-    data_root: str, save_dir: str, crop_size: int = 1024, gap: int = 200, rates: Tuple[float, ...] = (1.0,)
+    data_root: str,
+    save_dir: str,
+    crop_size: int = 1024,
+    gap: int = 200,
+    rates: Tuple[float, ...] = (1.0,),
 ) -> None:
     """
     Split test set of DOTA dataset, labels are not included within this set.

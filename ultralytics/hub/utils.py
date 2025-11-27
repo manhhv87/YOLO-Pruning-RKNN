@@ -99,13 +99,19 @@ def requests_with_progress(method: str, url: str, **kwargs) -> requests.Response
     if not progress:
         return requests.request(method, url, **kwargs)
     response = requests.request(method, url, stream=True, **kwargs)
-    total = int(response.headers.get("content-length", 0) if isinstance(progress, bool) else progress)  # total size
+    total = int(
+        response.headers.get("content-length", 0)
+        if isinstance(progress, bool)
+        else progress
+    )  # total size
     try:
         pbar = TQDM(total=total, unit="B", unit_scale=True, unit_divisor=1024)
         for data in response.iter_content(chunk_size=1024):
             pbar.update(len(data))
         pbar.close()
-    except requests.exceptions.ChunkedEncodingError:  # avoid 'Connection broken: IncompleteRead' warnings
+    except (
+        requests.exceptions.ChunkedEncodingError
+    ):  # avoid 'Connection broken: IncompleteRead' warnings
         response.close()
     return response
 
@@ -149,8 +155,12 @@ def smart_request(
         for i in range(retry + 1):
             if (time.time() - t0) > timeout:
                 break
-            r = requests_with_progress(func_method, func_url, **func_kwargs)  # i.e. get(url, data, json, files)
-            if r.status_code < 300:  # return codes in the 2xx range are generally considered "good" or "successful"
+            r = requests_with_progress(
+                func_method, func_url, **func_kwargs
+            )  # i.e. get(url, data, json, files)
+            if (
+                r.status_code < 300
+            ):  # return codes in the 2xx range are generally considered "good" or "successful"
                 break
             try:
                 m = r.json().get("message", "No JSON message.")
@@ -219,7 +229,11 @@ class Events:
             and RANK in {-1, 0}
             and not TESTS_RUNNING
             and ONLINE
-            and (IS_PIP_PACKAGE or get_git_origin_url() == "https://github.com/ultralytics/ultralytics.git")
+            and (
+                IS_PIP_PACKAGE
+                or get_git_origin_url()
+                == "https://github.com/ultralytics/ultralytics.git"
+            )
         )
 
     def __call__(self, cfg, device=None):
@@ -235,7 +249,9 @@ class Events:
             return
 
         # Attempt to add to events
-        if len(self.events) < 25:  # Events list limited to 25 events (drop any events past this)
+        if (
+            len(self.events) < 25
+        ):  # Events list limited to 25 events (drop any events past this)
             params = {
                 **self.metadata,
                 "task": cfg.task,
@@ -253,7 +269,10 @@ class Events:
             return
 
         # Time is over rate limiter, send now
-        data = {"client_id": SETTINGS["uuid"], "events": self.events}  # SHA-256 anonymized UUID hash and events list
+        data = {
+            "client_id": SETTINGS["uuid"],
+            "events": self.events,
+        }  # SHA-256 anonymized UUID hash and events list
 
         # POST equivalent to requests.post(self.url, json=data)
         smart_request("post", self.url, json=data, retry=0, verbose=False)

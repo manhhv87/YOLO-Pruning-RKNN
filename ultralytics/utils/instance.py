@@ -7,7 +7,15 @@ from typing import List
 
 import numpy as np
 
-from .ops import ltwh2xywh, ltwh2xyxy, resample_segments, xywh2ltwh, xywh2xyxy, xyxy2ltwh, xyxy2xywh
+from .ops import (
+    ltwh2xywh,
+    ltwh2xyxy,
+    resample_segments,
+    xywh2ltwh,
+    xywh2xyxy,
+    xyxy2ltwh,
+    xyxy2xywh,
+)
 
 
 def _ntuple(n):
@@ -67,7 +75,9 @@ class Bboxes:
             bboxes (np.ndarray): Array of bounding boxes with shape (N, 4) or (4,).
             format (str): Format of the bounding boxes, one of 'xyxy', 'xywh', or 'ltwh'.
         """
-        assert format in _formats, f"Invalid bounding box format: {format}, format must be one of {_formats}"
+        assert (
+            format in _formats
+        ), f"Invalid bounding box format: {format}, format must be one of {_formats}"
         bboxes = bboxes[None, :] if bboxes.ndim == 1 else bboxes
         assert bboxes.ndim == 2
         assert bboxes.shape[1] == 4
@@ -81,7 +91,9 @@ class Bboxes:
         Args:
             format (str): Target format for conversion, one of 'xyxy', 'xywh', or 'ltwh'.
         """
-        assert format in _formats, f"Invalid bounding box format: {format}, format must be one of {_formats}"
+        assert (
+            format in _formats
+        ), f"Invalid bounding box format: {format}, format must be one of {_formats}"
         if self.format == format:
             return
         elif self.format == "xyxy":
@@ -96,7 +108,8 @@ class Bboxes:
     def areas(self):
         """Calculate the area of bounding boxes."""
         return (
-            (self.bboxes[:, 2] - self.bboxes[:, 0]) * (self.bboxes[:, 3] - self.bboxes[:, 1])  # format xyxy
+            (self.bboxes[:, 2] - self.bboxes[:, 0])
+            * (self.bboxes[:, 3] - self.bboxes[:, 1])  # format xyxy
             if self.format == "xyxy"
             else self.bboxes[:, 3] * self.bboxes[:, 2]  # format xywh or ltwh
         )
@@ -180,7 +193,9 @@ class Bboxes:
         if isinstance(index, int):
             return Bboxes(self.bboxes[index].reshape(1, -1))
         b = self.bboxes[index]
-        assert b.ndim == 2, f"Indexing on Bboxes with {index} failed to return a matrix!"
+        assert (
+            b.ndim == 2
+        ), f"Indexing on Bboxes with {index} failed to return a matrix!"
         return Bboxes(b)
 
 
@@ -220,7 +235,9 @@ class Instances:
         ... )
     """
 
-    def __init__(self, bboxes, segments=None, keypoints=None, bbox_format="xywh", normalized=True) -> None:
+    def __init__(
+        self, bboxes, segments=None, keypoints=None, bbox_format="xywh", normalized=True
+    ) -> None:
         """
         Initialize the Instances object with bounding boxes, segments, and keypoints.
 
@@ -479,16 +496,24 @@ class Instances:
             max_len = max(seg_len)
             cat_segments = np.concatenate(
                 [
-                    resample_segments(list(b.segments), max_len)
-                    if len(b.segments)
-                    else np.zeros((0, max_len, 2), dtype=np.float32)  # re-generating empty segments
+                    (
+                        resample_segments(list(b.segments), max_len)
+                        if len(b.segments)
+                        else np.zeros((0, max_len, 2), dtype=np.float32)
+                    )  # re-generating empty segments
                     for b in instances_list
                 ],
                 axis=axis,
             )
         else:
-            cat_segments = np.concatenate([b.segments for b in instances_list], axis=axis)
-        cat_keypoints = np.concatenate([b.keypoints for b in instances_list], axis=axis) if use_keypoint else None
+            cat_segments = np.concatenate(
+                [b.segments for b in instances_list], axis=axis
+            )
+        cat_keypoints = (
+            np.concatenate([b.keypoints for b in instances_list], axis=axis)
+            if use_keypoint
+            else None
+        )
         return cls(cat_boxes, cat_segments, cat_keypoints, bbox_format, normalized)
 
     @property

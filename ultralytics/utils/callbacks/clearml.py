@@ -30,7 +30,10 @@ def _log_debug_samples(files, title: str = "Debug Samples") -> None:
                 it = re.search(r"_batch(\d+)", f.name)
                 iteration = int(it.groups()[0]) if it else 0
                 task.get_logger().report_image(
-                    title=title, series=f.name.replace(it.group(), ""), local_path=str(f), iteration=iteration
+                    title=title,
+                    series=f.name.replace(it.group(), ""),
+                    local_path=str(f),
+                    iteration=iteration,
                 )
 
 
@@ -47,7 +50,9 @@ def _log_plot(title: str, plot_path: str) -> None:
 
     img = mpimg.imread(plot_path)
     fig = plt.figure()
-    ax = fig.add_axes([0, 0, 1, 1], frameon=False, aspect="auto", xticks=[], yticks=[])  # no ticks
+    ax = fig.add_axes(
+        [0, 0, 1, 1], frameon=False, aspect="auto", xticks=[], yticks=[]
+    )  # no ticks
     ax.imshow(img)
 
     Task.current_task().get_logger().report_matplotlib_figure(
@@ -81,7 +86,9 @@ def on_pretrain_routine_start(trainer) -> None:
             )
         task.connect(vars(trainer.args), name="General")
     except Exception as e:
-        LOGGER.warning(f"ClearML installed but not initialized correctly, not logging this run. {e}")
+        LOGGER.warning(
+            f"ClearML installed but not initialized correctly, not logging this run. {e}"
+        )
 
 
 def on_train_epoch_end(trainer) -> None:
@@ -89,7 +96,9 @@ def on_train_epoch_end(trainer) -> None:
     if task := Task.current_task():
         # Log debug samples for first epoch only
         if trainer.epoch == 1:
-            _log_debug_samples(sorted(trainer.save_dir.glob("train_batch*.jpg")), "Mosaic")
+            _log_debug_samples(
+                sorted(trainer.save_dir.glob("train_batch*.jpg")), "Mosaic"
+            )
         # Report the current training progress
         for k, v in trainer.label_loss_items(trainer.tloss, prefix="train").items():
             task.get_logger().report_scalar("train", k, v, iteration=trainer.epoch)
@@ -102,7 +111,10 @@ def on_fit_epoch_end(trainer) -> None:
     if task := Task.current_task():
         # Report epoch time and validation metrics
         task.get_logger().report_scalar(
-            title="Epoch Time", series="Epoch Time", value=trainer.epoch_time, iteration=trainer.epoch
+            title="Epoch Time",
+            series="Epoch Time",
+            value=trainer.epoch_time,
+            iteration=trainer.epoch,
         )
         for k, v in trainer.metrics.items():
             task.get_logger().report_scalar("val", k, v, iteration=trainer.epoch)
@@ -130,14 +142,20 @@ def on_train_end(trainer) -> None:
             "confusion_matrix_normalized.png",
             *(f"{x}_curve.png" for x in ("F1", "PR", "P", "R")),
         ]
-        files = [(trainer.save_dir / f) for f in files if (trainer.save_dir / f).exists()]  # filter existing files
+        files = [
+            (trainer.save_dir / f) for f in files if (trainer.save_dir / f).exists()
+        ]  # filter existing files
         for f in files:
             _log_plot(title=f.stem, plot_path=f)
         # Report final metrics
         for k, v in trainer.validator.metrics.results_dict.items():
             task.get_logger().report_single_value(k, v)
         # Log the final model
-        task.update_output_model(model_path=str(trainer.best), model_name=trainer.args.name, auto_delete_file=False)
+        task.update_output_model(
+            model_path=str(trainer.best),
+            model_name=trainer.args.name,
+            auto_delete_file=False,
+        )
 
 
 callbacks = (

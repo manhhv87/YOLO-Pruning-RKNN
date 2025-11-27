@@ -24,7 +24,9 @@ class HUBModelError(Exception):
         ...     print(e)  # Displays the emoji-enhanced error message
     """
 
-    def __init__(self, message: str = "Model not found. Please check model URL and try again."):
+    def __init__(
+        self, message: str = "Model not found. Please check model URL and try again."
+    ):
         """
         Initialize a HUBModelError exception.
 

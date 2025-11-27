@@ -38,7 +38,9 @@ def on_predict_start(predictor: object, persist: bool = False) -> None:
     cfg = IterableSimpleNamespace(**YAML.load(tracker))
 
     if cfg.tracker_type not in {"bytetrack", "botsort"}:
-        raise AssertionError(f"Only 'bytetrack' and 'botsort' are supported for now, but got '{cfg.tracker_type}'")
+        raise AssertionError(
+            f"Only 'bytetrack' and 'botsort' are supported for now, but got '{cfg.tracker_type}'"
+        )
 
     predictor._feats = None  # reset in case used earlier
     if hasattr(predictor, "_hook"):
@@ -55,9 +57,13 @@ def on_predict_start(predictor: object, persist: bool = False) -> None:
         else:
             # Register hook to extract input of Detect layer
             def pre_hook(module, input):
-                predictor._feats = list(input[0])  # unroll to new list to avoid mutation in forward
+                predictor._feats = list(
+                    input[0]
+                )  # unroll to new list to avoid mutation in forward
 
-            predictor._hook = predictor.model.model.model[-1].register_forward_pre_hook(pre_hook)
+            predictor._hook = predictor.model.model.model[-1].register_forward_pre_hook(
+                pre_hook
+            )
 
     trackers = []
     for _ in range(predictor.dataset.bs):
@@ -66,7 +72,9 @@ def on_predict_start(predictor: object, persist: bool = False) -> None:
         if predictor.dataset.mode != "stream":  # only need one tracker for other modes
             break
     predictor.trackers = trackers
-    predictor.vid_path = [None] * predictor.dataset.bs  # for determining when to reset tracker on new video
+    predictor.vid_path = [
+        None
+    ] * predictor.dataset.bs  # for determining when to reset tracker on new video
 
 
 def on_predict_postprocess_end(predictor: object, persist: bool = False) -> None:
@@ -116,4 +124,7 @@ def register_tracker(model: object, persist: bool) -> None:
         >>> register_tracker(model, persist=True)
     """
     model.add_callback("on_predict_start", partial(on_predict_start, persist=persist))
-    model.add_callback("on_predict_postprocess_end", partial(on_predict_postprocess_end, persist=persist))
+    model.add_callback(
+        "on_predict_postprocess_end",
+        partial(on_predict_postprocess_end, persist=persist),
+    )

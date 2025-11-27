@@ -91,7 +91,9 @@ class Heatmap(ObjectCounter):
             self.initialized = True  # Initialize heatmap only once
 
         self.extract_tracks(im0)  # Extract tracks
-        self.annotator = SolutionAnnotator(im0, line_width=self.line_width)  # Initialize annotator
+        self.annotator = SolutionAnnotator(
+            im0, line_width=self.line_width
+        )  # Initialize annotator
 
         # Iterate over bounding boxes, track ids and classes index
         for box, track_id, cls in zip(self.boxes, self.track_ids, self.clss):
@@ -99,13 +101,19 @@ class Heatmap(ObjectCounter):
             self.heatmap_effect(box)
 
             if self.region is not None:
-                self.annotator.draw_region(reg_pts=self.region, color=(104, 0, 123), thickness=self.line_width * 2)
+                self.annotator.draw_region(
+                    reg_pts=self.region,
+                    color=(104, 0, 123),
+                    thickness=self.line_width * 2,
+                )
                 self.store_tracking_history(track_id, box)  # Store track history
                 # Get previous position if available
                 prev_position = None
                 if len(self.track_history[track_id]) > 1:
                     prev_position = self.track_history[track_id][-2]
-                self.count_objects(self.track_history[track_id][-1], track_id, prev_position, cls)  # object counting
+                self.count_objects(
+                    self.track_history[track_id][-1], track_id, prev_position, cls
+                )  # object counting
 
         plot_im = self.annotator.result()
         if self.region is not None:
@@ -113,7 +121,9 @@ class Heatmap(ObjectCounter):
 
         # Normalize, apply colormap to heatmap and combine with original image
         if self.track_data.is_track:
-            normalized_heatmap = cv2.normalize(self.heatmap, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+            normalized_heatmap = cv2.normalize(
+                self.heatmap, None, 0, 255, cv2.NORM_MINMAX
+            ).astype(np.uint8)
             colored_heatmap = cv2.applyColorMap(normalized_heatmap, self.colormap)
             plot_im = cv2.addWeighted(plot_im, 0.5, colored_heatmap, 0.5, 0)
 

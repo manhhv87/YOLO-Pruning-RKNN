@@ -37,7 +37,11 @@ def linear_assignment(cost_matrix: np.ndarray, thresh: float, use_lap: bool = Tr
         >>> matched_indices, unmatched_a, unmatched_b = linear_assignment(cost_matrix, thresh, use_lap=True)
     """
     if cost_matrix.size == 0:
-        return np.empty((0, 2), dtype=int), tuple(range(cost_matrix.shape[0])), tuple(range(cost_matrix.shape[1]))
+        return (
+            np.empty((0, 2), dtype=int),
+            tuple(range(cost_matrix.shape[0])),
+            tuple(range(cost_matrix.shape[1])),
+        )
 
     if use_lap:
         # Use lap.lapjv
@@ -50,13 +54,19 @@ def linear_assignment(cost_matrix: np.ndarray, thresh: float, use_lap: bool = Tr
         # Use scipy.optimize.linear_sum_assignment
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html
         x, y = scipy.optimize.linear_sum_assignment(cost_matrix)  # row x, col y
-        matches = np.asarray([[x[i], y[i]] for i in range(len(x)) if cost_matrix[x[i], y[i]] <= thresh])
+        matches = np.asarray(
+            [[x[i], y[i]] for i in range(len(x)) if cost_matrix[x[i], y[i]] <= thresh]
+        )
         if len(matches) == 0:
             unmatched_a = list(np.arange(cost_matrix.shape[0]))
             unmatched_b = list(np.arange(cost_matrix.shape[1]))
         else:
-            unmatched_a = list(frozenset(np.arange(cost_matrix.shape[0])) - frozenset(matches[:, 0]))
-            unmatched_b = list(frozenset(np.arange(cost_matrix.shape[1])) - frozenset(matches[:, 1]))
+            unmatched_a = list(
+                frozenset(np.arange(cost_matrix.shape[0])) - frozenset(matches[:, 0])
+            )
+            unmatched_b = list(
+                frozenset(np.arange(cost_matrix.shape[1])) - frozenset(matches[:, 1])
+            )
 
     return matches, unmatched_a, unmatched_b
 
@@ -78,12 +88,21 @@ def iou_distance(atracks: list, btracks: list) -> np.ndarray:
         >>> btracks = [np.array([5, 5, 15, 15]), np.array([25, 25, 35, 35])]
         >>> cost_matrix = iou_distance(atracks, btracks)
     """
-    if atracks and isinstance(atracks[0], np.ndarray) or btracks and isinstance(btracks[0], np.ndarray):
+    if (
+        atracks
+        and isinstance(atracks[0], np.ndarray)
+        or btracks
+        and isinstance(btracks[0], np.ndarray)
+    ):
         atlbrs = atracks
         btlbrs = btracks
     else:
-        atlbrs = [track.xywha if track.angle is not None else track.xyxy for track in atracks]
-        btlbrs = [track.xywha if track.angle is not None else track.xyxy for track in btracks]
+        atlbrs = [
+            track.xywha if track.angle is not None else track.xyxy for track in atracks
+        ]
+        btlbrs = [
+            track.xywha if track.angle is not None else track.xyxy for track in btracks
+        ]
 
     ious = np.zeros((len(atlbrs), len(btlbrs)), dtype=np.float32)
     if len(atlbrs) and len(btlbrs):
@@ -101,7 +120,9 @@ def iou_distance(atracks: list, btracks: list) -> np.ndarray:
     return 1 - ious  # cost matrix
 
 
-def embedding_distance(tracks: list, detections: list, metric: str = "cosine") -> np.ndarray:
+def embedding_distance(
+    tracks: list, detections: list, metric: str = "cosine"
+) -> np.ndarray:
     """
     Compute distance between tracks and detections based on embeddings.
 
@@ -123,11 +144,17 @@ def embedding_distance(tracks: list, detections: list, metric: str = "cosine") -
     cost_matrix = np.zeros((len(tracks), len(detections)), dtype=np.float32)
     if cost_matrix.size == 0:
         return cost_matrix
-    det_features = np.asarray([track.curr_feat for track in detections], dtype=np.float32)
+    det_features = np.asarray(
+        [track.curr_feat for track in detections], dtype=np.float32
+    )
     # for i, track in enumerate(tracks):
     # cost_matrix[i, :] = np.maximum(0.0, cdist(track.smooth_feat.reshape(1,-1), det_features, metric))
-    track_features = np.asarray([track.smooth_feat for track in tracks], dtype=np.float32)
-    cost_matrix = np.maximum(0.0, cdist(track_features, det_features, metric))  # Normalized features
+    track_features = np.asarray(
+        [track.smooth_feat for track in tracks], dtype=np.float32
+    )
+    cost_matrix = np.maximum(
+        0.0, cdist(track_features, det_features, metric)
+    )  # Normalized features
     return cost_matrix
 
 

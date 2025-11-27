@@ -9,15 +9,44 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 
-from ultralytics.utils import LOGGER, DataExportMixin, SimpleClass, TryExcept, checks, plt_settings
+from ultralytics.utils import (
+    LOGGER,
+    DataExportMixin,
+    SimpleClass,
+    TryExcept,
+    checks,
+    plt_settings,
+)
 
 OKS_SIGMA = (
-    np.array([0.26, 0.25, 0.25, 0.35, 0.35, 0.79, 0.79, 0.72, 0.72, 0.62, 0.62, 1.07, 1.07, 0.87, 0.87, 0.89, 0.89])
+    np.array(
+        [
+            0.26,
+            0.25,
+            0.25,
+            0.35,
+            0.35,
+            0.79,
+            0.79,
+            0.72,
+            0.72,
+            0.62,
+            0.62,
+            1.07,
+            1.07,
+            0.87,
+            0.87,
+            0.89,
+            0.89,
+        ]
+    )
     / 10.0
 )
 
 
-def bbox_ioa(box1: np.ndarray, box2: np.ndarray, iou: bool = False, eps: float = 1e-7) -> np.ndarray:
+def bbox_ioa(
+    box1: np.ndarray, box2: np.ndarray, iou: bool = False, eps: float = 1e-7
+) -> np.ndarray:
     """
     Calculate the intersection over box2 area given box1 and box2.
 
@@ -35,9 +64,13 @@ def bbox_ioa(box1: np.ndarray, box2: np.ndarray, iou: bool = False, eps: float =
     b2_x1, b2_y1, b2_x2, b2_y2 = box2.T
 
     # Intersection area
-    inter_area = (np.minimum(b1_x2[:, None], b2_x2) - np.maximum(b1_x1[:, None], b2_x1)).clip(0) * (
+    inter_area = (
+        np.minimum(b1_x2[:, None], b2_x2) - np.maximum(b1_x1[:, None], b2_x1)
+    ).clip(0) * (
         np.minimum(b1_y2[:, None], b2_y2) - np.maximum(b1_y1[:, None], b2_y1)
-    ).clip(0)
+    ).clip(
+        0
+    )
 
     # Box2 area
     area = (b2_x2 - b2_x1) * (b2_y2 - b2_y1)
@@ -66,7 +99,9 @@ def box_iou(box1: torch.Tensor, box2: torch.Tensor, eps: float = 1e-7) -> torch.
     """
     # NOTE: Need .float() to get accurate iou values
     # inter(N,M) = (rb(N,M,2) - lt(N,M,2)).clamp(0).prod(2)
-    (a1, a2), (b1, b2) = box1.float().unsqueeze(1).chunk(2, 2), box2.float().unsqueeze(0).chunk(2, 2)
+    (a1, a2), (b1, b2) = box1.float().unsqueeze(1).chunk(2, 2), box2.float().unsqueeze(
+        0
+    ).chunk(2, 2)
     inter = (torch.min(a2, b2) - torch.max(a1, b1)).clamp_(0).prod(2)
 
     # IoU = inter / (area1 + area2 - inter)
@@ -126,25 +161,34 @@ def bbox_iou(
     # IoU
     iou = inter / union
     if CIoU or DIoU or GIoU:
-        cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex (smallest enclosing box) width
+        cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(
+            b2_x1
+        )  # convex (smallest enclosing box) width
         ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
         if CIoU or DIoU:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
             c2 = cw.pow(2) + ch.pow(2) + eps  # convex diagonal squared
             rho2 = (
-                (b2_x1 + b2_x2 - b1_x1 - b1_x2).pow(2) + (b2_y1 + b2_y2 - b1_y1 - b1_y2).pow(2)
+                (b2_x1 + b2_x2 - b1_x1 - b1_x2).pow(2)
+                + (b2_y1 + b2_y2 - b1_y1 - b1_y2).pow(2)
             ) / 4  # center dist**2
-            if CIoU:  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
+            if (
+                CIoU
+            ):  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
                 v = (4 / math.pi**2) * ((w2 / h2).atan() - (w1 / h1).atan()).pow(2)
                 with torch.no_grad():
                     alpha = v / (v - iou + (1 + eps))
                 return iou - (rho2 / c2 + v * alpha)  # CIoU
             return iou - rho2 / c2  # DIoU
         c_area = cw * ch + eps  # convex area
-        return iou - (c_area - union) / c_area  # GIoU https://arxiv.org/pdf/1902.09630.pdf
+        return (
+            iou - (c_area - union) / c_area
+        )  # GIoU https://arxiv.org/pdf/1902.09630.pdf
     return iou  # IoU
 
 
-def mask_iou(mask1: torch.Tensor, mask2: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
+def mask_iou(
+    mask1: torch.Tensor, mask2: torch.Tensor, eps: float = 1e-7
+) -> torch.Tensor:
     """
     Calculate masks IoU.
 
@@ -159,12 +203,18 @@ def mask_iou(mask1: torch.Tensor, mask2: torch.Tensor, eps: float = 1e-7) -> tor
         (torch.Tensor): A tensor of shape (N, M) representing masks IoU.
     """
     intersection = torch.matmul(mask1, mask2.T).clamp_(0)
-    union = (mask1.sum(1)[:, None] + mask2.sum(1)[None]) - intersection  # (area1 + area2) - intersection
+    union = (
+        mask1.sum(1)[:, None] + mask2.sum(1)[None]
+    ) - intersection  # (area1 + area2) - intersection
     return intersection / (union + eps)
 
 
 def kpt_iou(
-    kpt1: torch.Tensor, kpt2: torch.Tensor, area: torch.Tensor, sigma: List[float], eps: float = 1e-7
+    kpt1: torch.Tensor,
+    kpt2: torch.Tensor,
+    area: torch.Tensor,
+    sigma: List[float],
+    eps: float = 1e-7,
 ) -> torch.Tensor:
     """
     Calculate Object Keypoint Similarity (OKS).
@@ -179,7 +229,11 @@ def kpt_iou(
     Returns:
         (torch.Tensor): A tensor of shape (N, M) representing keypoint similarities.
     """
-    d = (kpt1[:, None, :, 0] - kpt2[..., 0]).pow(2) + (kpt1[:, None, :, 1] - kpt2[..., 1]).pow(2)  # (N, M, 17)
+    d = (kpt1[:, None, :, 0] - kpt2[..., 0]).pow(2) + (
+        kpt1[:, None, :, 1] - kpt2[..., 1]
+    ).pow(
+        2
+    )  # (N, M, 17)
     sigma = torch.tensor(sigma, device=kpt1.device, dtype=kpt1.dtype)  # (17, )
     kpt_mask = kpt1[..., 2] != 0  # (N, 17)
     e = d / ((2 * sigma).pow(2) * (area[:, None, None] + eps) * 2)  # from cocoeval
@@ -187,7 +241,9 @@ def kpt_iou(
     return ((-e).exp() * kpt_mask[:, None]).sum(-1) / (kpt_mask.sum(-1)[:, None] + eps)
 
 
-def _get_covariance_matrix(boxes: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def _get_covariance_matrix(
+    boxes: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Generate covariance matrix from oriented bounding boxes.
 
@@ -207,7 +263,9 @@ def _get_covariance_matrix(boxes: torch.Tensor) -> Tuple[torch.Tensor, torch.Ten
     return a * cos2 + b * sin2, a * sin2 + b * cos2, (a - b) * cos * sin
 
 
-def probiou(obb1: torch.Tensor, obb2: torch.Tensor, CIoU: bool = False, eps: float = 1e-7) -> torch.Tensor:
+def probiou(
+    obb1: torch.Tensor, obb2: torch.Tensor, CIoU: bool = False, eps: float = 1e-7
+) -> torch.Tensor:
     """
     Calculate probabilistic IoU between oriented bounding boxes.
 
@@ -232,12 +290,20 @@ def probiou(obb1: torch.Tensor, obb2: torch.Tensor, CIoU: bool = False, eps: flo
     a2, b2, c2 = _get_covariance_matrix(obb2)
 
     t1 = (
-        ((a1 + a2) * (y1 - y2).pow(2) + (b1 + b2) * (x1 - x2).pow(2)) / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)
+        ((a1 + a2) * (y1 - y2).pow(2) + (b1 + b2) * (x1 - x2).pow(2))
+        / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)
     ) * 0.25
-    t2 = (((c1 + c2) * (x2 - x1) * (y1 - y2)) / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)) * 0.5
+    t2 = (
+        ((c1 + c2) * (x2 - x1) * (y1 - y2))
+        / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)
+    ) * 0.5
     t3 = (
         ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2))
-        / (4 * ((a1 * b1 - c1.pow(2)).clamp_(0) * (a2 * b2 - c2.pow(2)).clamp_(0)).sqrt() + eps)
+        / (
+            4
+            * ((a1 * b1 - c1.pow(2)).clamp_(0) * (a2 * b2 - c2.pow(2)).clamp_(0)).sqrt()
+            + eps
+        )
         + eps
     ).log() * 0.5
     bd = (t1 + t2 + t3).clamp(eps, 100.0)
@@ -254,7 +320,9 @@ def probiou(obb1: torch.Tensor, obb2: torch.Tensor, CIoU: bool = False, eps: flo
 
 
 def batch_probiou(
-    obb1: Union[torch.Tensor, np.ndarray], obb2: Union[torch.Tensor, np.ndarray], eps: float = 1e-7
+    obb1: Union[torch.Tensor, np.ndarray],
+    obb2: Union[torch.Tensor, np.ndarray],
+    eps: float = 1e-7,
 ) -> torch.Tensor:
     """
     Calculate the probabilistic IoU between oriented bounding boxes.
@@ -279,12 +347,20 @@ def batch_probiou(
     a2, b2, c2 = (x.squeeze(-1)[None] for x in _get_covariance_matrix(obb2))
 
     t1 = (
-        ((a1 + a2) * (y1 - y2).pow(2) + (b1 + b2) * (x1 - x2).pow(2)) / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)
+        ((a1 + a2) * (y1 - y2).pow(2) + (b1 + b2) * (x1 - x2).pow(2))
+        / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)
     ) * 0.25
-    t2 = (((c1 + c2) * (x2 - x1) * (y1 - y2)) / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)) * 0.5
+    t2 = (
+        ((c1 + c2) * (x2 - x1) * (y1 - y2))
+        / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)
+    ) * 0.5
     t3 = (
         ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2))
-        / (4 * ((a1 * b1 - c1.pow(2)).clamp_(0) * (a2 * b2 - c2.pow(2)).clamp_(0)).sqrt() + eps)
+        / (
+            4
+            * ((a1 * b1 - c1.pow(2)).clamp_(0) * (a2 * b2 - c2.pow(2)).clamp_(0)).sqrt()
+            + eps
+        )
         + eps
     ).log() * 0.5
     bd = (t1 + t2 + t3).clamp(eps, 100.0)
@@ -330,7 +406,11 @@ class ConfusionMatrix(DataExportMixin):
         """
         self.task = task
         self.nc = len(names)  # number of classes
-        self.matrix = np.zeros((self.nc + 1, self.nc + 1)) if self.task == "detect" else np.zeros((self.nc, self.nc))
+        self.matrix = (
+            np.zeros((self.nc + 1, self.nc + 1))
+            if self.task == "detect"
+            else np.zeros((self.nc, self.nc))
+        )
         self.names = names  # name of classes
 
     def process_cls_preds(self, preds, targets):
@@ -346,7 +426,11 @@ class ConfusionMatrix(DataExportMixin):
             self.matrix[p][t] += 1
 
     def process_batch(
-        self, detections: Dict[str, torch.Tensor], batch: Dict[str, Any], conf: float = 0.25, iou_thres: float = 0.45
+        self,
+        detections: Dict[str, torch.Tensor],
+        batch: Dict[str, Any],
+        conf: float = 0.25,
+        iou_thres: float = 0.45,
     ) -> None:
         """
         Update confusion matrix for object detection task.
@@ -360,12 +444,17 @@ class ConfusionMatrix(DataExportMixin):
             conf (float, optional): Confidence threshold for detections.
             iou_thres (float, optional): IoU threshold for matching detections to ground truth.
         """
-        conf = 0.25 if conf in {None, 0.001} else conf  # apply 0.25 if default val conf is passed
+        conf = (
+            0.25 if conf in {None, 0.001} else conf
+        )  # apply 0.25 if default val conf is passed
         gt_cls, gt_bboxes = batch["cls"], batch["bboxes"]
         no_pred = len(detections["cls"]) == 0
         if gt_cls.shape[0] == 0:  # Check if labels is empty
             if not no_pred:
-                detections = {k: detections[k][detections["conf"] > conf] for k in {"cls", "bboxes"}}
+                detections = {
+                    k: detections[k][detections["conf"] > conf]
+                    for k in {"cls", "bboxes"}
+                }
                 detection_classes = detections["cls"].int().tolist()
                 for dc in detection_classes:
                     self.matrix[dc, self.nc] += 1  # false positives
@@ -376,7 +465,9 @@ class ConfusionMatrix(DataExportMixin):
                 self.matrix[self.nc, gc] += 1  # background FN
             return
 
-        detections = {k: detections[k][detections["conf"] > conf] for k in {"cls", "bboxes"}}
+        detections = {
+            k: detections[k][detections["conf"] > conf] for k in {"cls", "bboxes"}
+        }
         gt_classes = gt_cls.int().tolist()
         detection_classes = detections["cls"].int().tolist()
         bboxes = detections["bboxes"]
@@ -385,7 +476,11 @@ class ConfusionMatrix(DataExportMixin):
 
         x = torch.where(iou > iou_thres)
         if x[0].shape[0]:
-            matches = torch.cat((torch.stack(x, 1), iou[x[0], x[1]][:, None]), 1).cpu().numpy()
+            matches = (
+                torch.cat((torch.stack(x, 1), iou[x[0], x[1]][:, None]), 1)
+                .cpu()
+                .numpy()
+            )
             if x[0].shape[0] > 1:
                 matches = matches[matches[:, 2].argsort()[::-1]]
                 matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
@@ -422,7 +517,9 @@ class ConfusionMatrix(DataExportMixin):
         tp = self.matrix.diagonal()  # true positives
         fp = self.matrix.sum(1) - tp  # false positives
         # fn = self.matrix.sum(0) - tp  # false negatives (missed detections)
-        return (tp[:-1], fp[:-1]) if self.task == "detect" else (tp, fp)  # remove background class if task=detect
+        return (
+            (tp[:-1], fp[:-1]) if self.task == "detect" else (tp, fp)
+        )  # remove background class if task=detect
 
     @TryExcept(msg="ConfusionMatrix plot failure")
     @plt_settings()
@@ -437,7 +534,9 @@ class ConfusionMatrix(DataExportMixin):
         """
         import matplotlib.pyplot as plt  # scope for faster 'import ultralytics'
 
-        array = self.matrix / ((self.matrix.sum(0).reshape(1, -1) + 1e-9) if normalize else 1)  # normalize columns
+        array = self.matrix / (
+            (self.matrix.sum(0).reshape(1, -1) + 1e-9) if normalize else 1
+        )  # normalize columns
         array[array < 0.005] = np.nan  # don't annotate (would appear as 0.00)
 
         fig, ax = plt.subplots(1, 1, figsize=(12, 9))
@@ -447,21 +546,29 @@ class ConfusionMatrix(DataExportMixin):
             self.names = self.names[keep_idx]  # slice class names
             array = array[keep_idx, :][:, keep_idx]  # slice matrix rows and cols
             n = (self.nc + k - 1) // k  # number of retained classes
-            nc = nn = n if self.task == "classify" else n + 1  # adjust for background if needed
+            nc = nn = (
+                n if self.task == "classify" else n + 1
+            )  # adjust for background if needed
         else:
             nc = nn = self.nc if self.task == "classify" else self.nc + 1
-        ticklabels = (self.names + ["background"]) if (0 < nn < 99) and (nn == nc) else "auto"
+        ticklabels = (
+            (self.names + ["background"]) if (0 < nn < 99) and (nn == nc) else "auto"
+        )
         xy_ticks = np.arange(len(ticklabels))
         tick_fontsize = max(6, 15 - 0.1 * nc)  # Minimum size is 6
         label_fontsize = max(6, 12 - 0.1 * nc)
         title_fontsize = max(6, 12 - 0.1 * nc)
         btm = max(0.1, 0.25 - 0.001 * nc)  # Minimum value is 0.1
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # suppress empty matrix RuntimeWarning: All-NaN slice encountered
+            warnings.simplefilter(
+                "ignore"
+            )  # suppress empty matrix RuntimeWarning: All-NaN slice encountered
             im = ax.imshow(array, cmap="Blues", vmin=0.0, interpolation="none")
             ax.xaxis.set_label_position("bottom")
             if nc < 30:  # Add score for each cell of confusion matrix
-                color_threshold = 0.45 * (1 if normalize else np.nanmax(array))  # text color threshold
+                color_threshold = 0.45 * (
+                    1 if normalize else np.nanmax(array)
+                )  # text color threshold
                 for i, row in enumerate(array[:nc]):
                     for j, val in enumerate(row[:nc]):
                         val = array[i, j]
@@ -483,16 +590,26 @@ class ConfusionMatrix(DataExportMixin):
         ax.set_title(title, fontsize=title_fontsize, pad=20)
         ax.set_xticks(xy_ticks)
         ax.set_yticks(xy_ticks)
-        ax.tick_params(axis="x", bottom=True, top=False, labelbottom=True, labeltop=False)
-        ax.tick_params(axis="y", left=True, right=False, labelleft=True, labelright=False)
+        ax.tick_params(
+            axis="x", bottom=True, top=False, labelbottom=True, labeltop=False
+        )
+        ax.tick_params(
+            axis="y", left=True, right=False, labelleft=True, labelright=False
+        )
         if ticklabels != "auto":
-            ax.set_xticklabels(ticklabels, fontsize=tick_fontsize, rotation=90, ha="center")
+            ax.set_xticklabels(
+                ticklabels, fontsize=tick_fontsize, rotation=90, ha="center"
+            )
             ax.set_yticklabels(ticklabels, fontsize=tick_fontsize)
         for s in ["left", "right", "bottom", "top", "outline"]:
             if s != "outline":
-                ax.spines[s].set_visible(False)  # Confusion matrix plot don't have outline
+                ax.spines[s].set_visible(
+                    False
+                )  # Confusion matrix plot don't have outline
             cbar.ax.spines[s].set_visible(False)
-        fig.subplots_adjust(left=0, right=0.84, top=0.94, bottom=btm)  # Adjust layout to ensure equal margins
+        fig.subplots_adjust(
+            left=0, right=0.84, top=0.94, bottom=btm
+        )  # Adjust layout to ensure equal margins
         plot_fname = Path(save_dir) / f"{title.lower().replace(' ', '_')}.png"
         fig.savefig(plot_fname, dpi=250)
         plt.close(fig)
@@ -504,7 +621,9 @@ class ConfusionMatrix(DataExportMixin):
         for i in range(self.matrix.shape[0]):
             LOGGER.info(" ".join(map(str, self.matrix[i])))
 
-    def summary(self, normalize: bool = False, decimals: int = 5) -> List[Dict[str, float]]:
+    def summary(
+        self, normalize: bool = False, decimals: int = 5
+    ) -> List[Dict[str, float]]:
         """
         Generate a summarized representation of the confusion matrix as a list of dictionaries, with optional
         normalization. This is useful for exporting the matrix to various formats such as CSV, XML, HTML, JSON, or SQL.
@@ -534,9 +653,15 @@ class ConfusionMatrix(DataExportMixin):
                 counter += 1
             seen.add(clean_name.lower())
             clean_names.append(clean_name)
-        array = (self.matrix / ((self.matrix.sum(0).reshape(1, -1) + 1e-9) if normalize else 1)).round(decimals)
+        array = (
+            self.matrix
+            / ((self.matrix.sum(0).reshape(1, -1) + 1e-9) if normalize else 1)
+        ).round(decimals)
         return [
-            dict({"Predicted": clean_names[i]}, **{clean_names[j]: array[i, j] for j in range(len(clean_names))})
+            dict(
+                {"Predicted": clean_names[i]},
+                **{clean_names[j]: array[i, j] for j in range(len(clean_names))},
+            )
             for i in range(len(clean_names))
         ]
 
@@ -576,11 +701,19 @@ def plot_pr_curve(
 
     if 0 < len(names) < 21:  # display per-class legend if < 21 classes
         for i, y in enumerate(py.T):
-            ax.plot(px, y, linewidth=1, label=f"{names[i]} {ap[i, 0]:.3f}")  # plot(recall, precision)
+            ax.plot(
+                px, y, linewidth=1, label=f"{names[i]} {ap[i, 0]:.3f}"
+            )  # plot(recall, precision)
     else:
         ax.plot(px, py, linewidth=1, color="grey")  # plot(recall, precision)
 
-    ax.plot(px, py.mean(1), linewidth=3, color="blue", label=f"all classes {ap[:, 0].mean():.3f} mAP@0.5")
+    ax.plot(
+        px,
+        py.mean(1),
+        linewidth=3,
+        color="blue",
+        label=f"all classes {ap[:, 0].mean():.3f} mAP@0.5",
+    )
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
     ax.set_xlim(0, 1)
@@ -626,7 +759,13 @@ def plot_mc_curve(
         ax.plot(px, py.T, linewidth=1, color="grey")  # plot(confidence, metric)
 
     y = smooth(py.mean(0), 0.1)
-    ax.plot(px, y, linewidth=3, color="blue", label=f"all classes {y.max():.2f} at {px[y.argmax()]:.3f}")
+    ax.plot(
+        px,
+        y,
+        linewidth=3,
+        color="blue",
+        label=f"all classes {y.max():.2f} at {px[y.argmax()]:.3f}",
+    )
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_xlim(0, 1)
@@ -639,7 +778,9 @@ def plot_mc_curve(
         on_plot(save_dir)
 
 
-def compute_ap(recall: List[float], precision: List[float]) -> Tuple[float, np.ndarray, np.ndarray]:
+def compute_ap(
+    recall: List[float], precision: List[float]
+) -> Tuple[float, np.ndarray, np.ndarray]:
     """
     Compute the average precision (AP) given the recall and precision curves.
 
@@ -663,7 +804,9 @@ def compute_ap(recall: List[float], precision: List[float]) -> Tuple[float, np.n
     method = "interp"  # methods: 'continuous', 'interp'
     if method == "interp":
         x = np.linspace(0, 1, 101)  # 101-point interp (COCO)
-        func = np.trapezoid if checks.check_version(np.__version__, ">=2.0") else np.trapz  # np.trapz deprecated
+        func = (
+            np.trapezoid if checks.check_version(np.__version__, ">=2.0") else np.trapz
+        )  # np.trapz deprecated
         ap = func(np.interp(x, mrec, mpre), x)  # integrate
     else:  # 'continuous'
         i = np.where(mrec[1:] != mrec[:-1])[0]  # points where x-axis (recall) changes
@@ -725,7 +868,11 @@ def ap_per_class(
     x, prec_values = np.linspace(0, 1, 1000), []
 
     # Average precision, precision and recall curves
-    ap, p_curve, r_curve = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+    ap, p_curve, r_curve = (
+        np.zeros((nc, tp.shape[1])),
+        np.zeros((nc, 1000)),
+        np.zeros((nc, 1000)),
+    )
     for ci, c in enumerate(unique_classes):
         i = pred_cls == c
         n_l = nt[ci]  # number of labels
@@ -739,7 +886,9 @@ def ap_per_class(
 
         # Recall
         recall = tpc / (n_l + eps)  # recall curve
-        r_curve[ci] = np.interp(-x, -conf[i], recall[:, 0], left=0)  # negative x, xp because xp decreases
+        r_curve[ci] = np.interp(
+            -x, -conf[i], recall[:, 0], left=0
+        )  # negative x, xp because xp decreases
 
         # Precision
         precision = tpc / (tpc + fpc)  # precision curve
@@ -751,22 +900,71 @@ def ap_per_class(
             if j == 0:
                 prec_values.append(np.interp(x, mrec, mpre))  # precision at mAP@0.5
 
-    prec_values = np.array(prec_values) if prec_values else np.zeros((1, 1000))  # (nc, 1000)
+    prec_values = (
+        np.array(prec_values) if prec_values else np.zeros((1, 1000))
+    )  # (nc, 1000)
 
     # Compute F1 (harmonic mean of precision and recall)
     f1_curve = 2 * p_curve * r_curve / (p_curve + r_curve + eps)
-    names = {i: names[k] for i, k in enumerate(unique_classes) if k in names}  # dict: only classes that have data
+    names = {
+        i: names[k] for i, k in enumerate(unique_classes) if k in names
+    }  # dict: only classes that have data
     if plot:
-        plot_pr_curve(x, prec_values, ap, save_dir / f"{prefix}PR_curve.png", names, on_plot=on_plot)
-        plot_mc_curve(x, f1_curve, save_dir / f"{prefix}F1_curve.png", names, ylabel="F1", on_plot=on_plot)
-        plot_mc_curve(x, p_curve, save_dir / f"{prefix}P_curve.png", names, ylabel="Precision", on_plot=on_plot)
-        plot_mc_curve(x, r_curve, save_dir / f"{prefix}R_curve.png", names, ylabel="Recall", on_plot=on_plot)
+        plot_pr_curve(
+            x,
+            prec_values,
+            ap,
+            save_dir / f"{prefix}PR_curve.png",
+            names,
+            on_plot=on_plot,
+        )
+        plot_mc_curve(
+            x,
+            f1_curve,
+            save_dir / f"{prefix}F1_curve.png",
+            names,
+            ylabel="F1",
+            on_plot=on_plot,
+        )
+        plot_mc_curve(
+            x,
+            p_curve,
+            save_dir / f"{prefix}P_curve.png",
+            names,
+            ylabel="Precision",
+            on_plot=on_plot,
+        )
+        plot_mc_curve(
+            x,
+            r_curve,
+            save_dir / f"{prefix}R_curve.png",
+            names,
+            ylabel="Recall",
+            on_plot=on_plot,
+        )
 
     i = smooth(f1_curve.mean(0), 0.1).argmax()  # max F1 index
-    p, r, f1 = p_curve[:, i], r_curve[:, i], f1_curve[:, i]  # max-F1 precision, recall, F1 values
+    p, r, f1 = (
+        p_curve[:, i],
+        r_curve[:, i],
+        f1_curve[:, i],
+    )  # max-F1 precision, recall, F1 values
     tp = (r * nt).round()  # true positives
     fp = (tp / (p + eps) - tp).round()  # false positives
-    return tp, fp, p, r, f1, ap, unique_classes.astype(int), p_curve, r_curve, f1_curve, x, prec_values
+    return (
+        tp,
+        fp,
+        p,
+        r,
+        f1,
+        ap,
+        unique_classes.astype(int),
+        p_curve,
+        r_curve,
+        f1_curve,
+        x,
+        prec_values,
+    )
 
 
 class Metric(SimpleClass):
@@ -965,7 +1163,12 @@ class DetMetrics(SimpleClass, DataExportMixin):
         """
         self.names = names
         self.box = Metric()
-        self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
+        self.speed = {
+            "preprocess": 0.0,
+            "inference": 0.0,
+            "loss": 0.0,
+            "postprocess": 0.0,
+        }
         self.task = "detect"
         self.stats = dict(tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[])
         self.nt_per_class = None
@@ -982,7 +1185,9 @@ class DetMetrics(SimpleClass, DataExportMixin):
         for k in self.stats.keys():
             self.stats[k].append(stat[k])
 
-    def process(self, save_dir: Path = Path("."), plot: bool = False, on_plot=None) -> Dict[str, np.ndarray]:
+    def process(
+        self, save_dir: Path = Path("."), plot: bool = False, on_plot=None
+    ) -> Dict[str, np.ndarray]:
         """
         Process predicted results for object detection and update metrics.
 
@@ -1009,8 +1214,12 @@ class DetMetrics(SimpleClass, DataExportMixin):
         )[2:]
         self.box.nc = len(self.names)
         self.box.update(results)
-        self.nt_per_class = np.bincount(stats["target_cls"].astype(int), minlength=len(self.names))
-        self.nt_per_image = np.bincount(stats["target_img"].astype(int), minlength=len(self.names))
+        self.nt_per_class = np.bincount(
+            stats["target_cls"].astype(int), minlength=len(self.names)
+        )
+        self.nt_per_image = np.bincount(
+            stats["target_img"].astype(int), minlength=len(self.names)
+        )
         return stats
 
     def clear_stats(self):
@@ -1021,7 +1230,12 @@ class DetMetrics(SimpleClass, DataExportMixin):
     @property
     def keys(self) -> List[str]:
         """Return a list of keys for accessing specific metrics."""
-        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)"]
+        return [
+            "metrics/precision(B)",
+            "metrics/recall(B)",
+            "metrics/mAP50(B)",
+            "metrics/mAP50-95(B)",
+        ]
 
     def mean_results(self) -> List[float]:
         """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
@@ -1054,14 +1268,21 @@ class DetMetrics(SimpleClass, DataExportMixin):
     @property
     def curves(self) -> List[str]:
         """Return a list of curves for accessing specific metrics curves."""
-        return ["Precision-Recall(B)", "F1-Confidence(B)", "Precision-Confidence(B)", "Recall-Confidence(B)"]
+        return [
+            "Precision-Recall(B)",
+            "F1-Confidence(B)",
+            "Precision-Confidence(B)",
+            "Recall-Confidence(B)",
+        ]
 
     @property
     def curves_results(self) -> List[List]:
         """Return dictionary of computed performance metrics and statistics."""
         return self.box.curves_results
 
-    def summary(self, normalize: bool = True, decimals: int = 5) -> List[Dict[str, Union[str, float]]]:
+    def summary(
+        self, normalize: bool = True, decimals: int = 5
+    ) -> List[Dict[str, Union[str, float]]]:
         """
         Generate a summarized representation of per-class detection metrics as a list of dictionaries. Includes shared
         scalar metrics (mAP, mAP50, mAP75) alongside precision, recall, and F1-score for each class.
@@ -1123,7 +1344,9 @@ class SegmentMetrics(DetMetrics):
         self.task = "segment"
         self.stats["tp_m"] = []  # add additional stats for masks
 
-    def process(self, save_dir: Path = Path("."), plot: bool = False, on_plot=None) -> Dict[str, np.ndarray]:
+    def process(
+        self, save_dir: Path = Path("."), plot: bool = False, on_plot=None
+    ) -> Dict[str, np.ndarray]:
         """
         Process the detection and segmentation metrics over the given set of predictions.
 
@@ -1194,7 +1417,9 @@ class SegmentMetrics(DetMetrics):
         """Return dictionary of computed performance metrics and statistics."""
         return DetMetrics.curves_results.fget(self) + self.seg.curves_results
 
-    def summary(self, normalize: bool = True, decimals: int = 5) -> List[Dict[str, Union[str, float]]]:
+    def summary(
+        self, normalize: bool = True, decimals: int = 5
+    ) -> List[Dict[str, Union[str, float]]]:
         """
         Generate a summarized representation of per-class segmentation metrics as a list of dictionaries. Includes both
         box and mask scalar metrics (mAP, mAP50, mAP75) alongside precision, recall, and F1-score for each class.
@@ -1258,7 +1483,9 @@ class PoseMetrics(DetMetrics):
         self.task = "pose"
         self.stats["tp_p"] = []  # add additional stats for pose
 
-    def process(self, save_dir: Path = Path("."), plot: bool = False, on_plot=None) -> Dict[str, np.ndarray]:
+    def process(
+        self, save_dir: Path = Path("."), plot: bool = False, on_plot=None
+    ) -> Dict[str, np.ndarray]:
         """
         Process the detection and pose metrics over the given set of predictions.
 
@@ -1333,7 +1560,9 @@ class PoseMetrics(DetMetrics):
         """Return dictionary of computed performance metrics and statistics."""
         return DetMetrics.curves_results.fget(self) + self.pose.curves_results
 
-    def summary(self, normalize: bool = True, decimals: int = 5) -> List[Dict[str, Union[str, float]]]:
+    def summary(
+        self, normalize: bool = True, decimals: int = 5
+    ) -> List[Dict[str, Union[str, float]]]:
         """
         Generate a summarized representation of per-class pose metrics as a list of dictionaries. Includes both box and
         pose scalar metrics (mAP, mAP50, mAP75) alongside precision, recall, and F1-score for each class.
@@ -1376,7 +1605,12 @@ class ClassifyMetrics(SimpleClass, DataExportMixin):
         """Initialize a ClassifyMetrics instance."""
         self.top1 = 0
         self.top5 = 0
-        self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
+        self.speed = {
+            "preprocess": 0.0,
+            "inference": 0.0,
+            "loss": 0.0,
+            "postprocess": 0.0,
+        }
         self.task = "classify"
 
     def process(self, targets: torch.Tensor, pred: torch.Tensor):
@@ -1389,7 +1623,9 @@ class ClassifyMetrics(SimpleClass, DataExportMixin):
         """
         pred, targets = torch.cat(pred), torch.cat(targets)
         correct = (targets[:, None] == pred).float()
-        acc = torch.stack((correct[:, 0], correct.max(1).values), dim=1)  # (top1, top5) accuracy
+        acc = torch.stack(
+            (correct[:, 0], correct.max(1).values), dim=1
+        )  # (top1, top5) accuracy
         self.top1, self.top5 = acc.mean(0).tolist()
 
     @property
@@ -1417,7 +1653,9 @@ class ClassifyMetrics(SimpleClass, DataExportMixin):
         """Return a list of curves for accessing specific metrics curves."""
         return []
 
-    def summary(self, normalize: bool = True, decimals: int = 5) -> List[Dict[str, float]]:
+    def summary(
+        self, normalize: bool = True, decimals: int = 5
+    ) -> List[Dict[str, float]]:
         """
         Generate a single-row summary of classification metrics (Top-1 and Top-5 accuracy).
 
@@ -1433,7 +1671,12 @@ class ClassifyMetrics(SimpleClass, DataExportMixin):
             >>> classify_summary = results.summary(decimals=4)
             >>> print(classify_summary)
         """
-        return [{"top1_acc": round(self.top1, decimals), "top5_acc": round(self.top5, decimals)}]
+        return [
+            {
+                "top1_acc": round(self.top1, decimals),
+                "top5_acc": round(self.top5, decimals),
+            }
+        ]
 
 
 class OBBMetrics(DetMetrics):

@@ -79,7 +79,9 @@ class BaseSolution:
             **kwargs (Any): Additional configuration parameters that override defaults.
         """
         self.CFG = vars(SolutionConfig().update(**kwargs))
-        self.LOGGER = LOGGER  # Store logger object to be used in multiple solution classes
+        self.LOGGER = (
+            LOGGER  # Store logger object to be used in multiple solution classes
+        )
 
         if self.__class__.__name__ != "VisualAISearch":
             check_requirements("shapely>=2.0.0")
@@ -102,7 +104,9 @@ class BaseSolution:
             self.frame_no = -1  # Only for logging
 
             self.LOGGER.info(f"Ultralytics Solutions: ✅ {self.CFG}")
-            self.region = self.CFG["region"]  # Store region data for other classes usage
+            self.region = self.CFG[
+                "region"
+            ]  # Store region data for other classes usage
             self.line_width = self.CFG["line_width"]
 
             # Load Model and store additional information (classes, show_conf, show_label)
@@ -116,15 +120,24 @@ class BaseSolution:
             self.device = self.CFG["device"]
 
             self.track_add_args = {  # Tracker additional arguments for advance configuration
-                k: self.CFG[k] for k in ["iou", "conf", "device", "max_det", "half", "tracker"]
+                k: self.CFG[k]
+                for k in ["iou", "conf", "device", "max_det", "half", "tracker"]
             }  # verbose must be passed to track method; setting it False in YOLO still logs the track information.
 
             if is_cli and self.CFG["source"] is None:
-                d_s = "solutions_ci_demo.mp4" if "-pose" not in self.CFG["model"] else "solution_ci_pose_demo.mp4"
-                self.LOGGER.warning(f"source not provided. using default source {ASSETS_URL}/{d_s}")
+                d_s = (
+                    "solutions_ci_demo.mp4"
+                    if "-pose" not in self.CFG["model"]
+                    else "solution_ci_pose_demo.mp4"
+                )
+                self.LOGGER.warning(
+                    f"source not provided. using default source {ASSETS_URL}/{d_s}"
+                )
                 from ultralytics.utils.downloads import safe_download
 
-                safe_download(f"{ASSETS_URL}/{d_s}")  # download source from ultralytics assets
+                safe_download(
+                    f"{ASSETS_URL}/{d_s}"
+                )  # download source from ultralytics assets
                 self.CFG["source"] = d_s  # set default source
 
             # Initialize environment and region setup
@@ -136,7 +149,9 @@ class BaseSolution:
                 ops.Profile(device=self.device),  # solution
             )
 
-    def adjust_box_label(self, cls: int, conf: float, track_id: Optional[int] = None) -> Optional[str]:
+    def adjust_box_label(
+        self, cls: int, conf: float, track_id: Optional[int] = None
+    ) -> Optional[str]:
         """
         Generate a formatted label for a bounding box.
 
@@ -153,7 +168,11 @@ class BaseSolution:
             (str | None): The formatted label string if `self.show_labels` is True; otherwise, None.
         """
         name = ("" if track_id is None else f"{track_id} ") + self.names[cls]
-        return (f"{name} {conf:.2f}" if self.show_conf else name) if self.show_labels else None
+        return (
+            (f"{name} {conf:.2f}" if self.show_conf else name)
+            if self.show_labels
+            else None
+        )
 
     def extract_tracks(self, im0: np.ndarray) -> None:
         """
@@ -169,13 +188,21 @@ class BaseSolution:
         """
         with self.profilers[0]:
             self.tracks = self.model.track(
-                source=im0, persist=True, classes=self.classes, verbose=False, **self.track_add_args
+                source=im0,
+                persist=True,
+                classes=self.classes,
+                verbose=False,
+                **self.track_add_args,
             )[0]
         is_obb = self.tracks.obb is not None
-        self.track_data = self.tracks.obb if is_obb else self.tracks.boxes  # Extract tracks for OBB or object detection
+        self.track_data = (
+            self.tracks.obb if is_obb else self.tracks.boxes
+        )  # Extract tracks for OBB or object detection
 
         if self.track_data and self.track_data.is_track:
-            self.boxes = (self.track_data.xyxyxyxy if is_obb else self.track_data.xyxy).cpu()
+            self.boxes = (
+                self.track_data.xyxyxyxy if is_obb else self.track_data.xyxy
+            ).cpu()
             self.clss = self.track_data.cls.cpu().tolist()
             self.track_ids = self.track_data.id.int().cpu().tolist()
             self.confs = self.track_data.conf.cpu().tolist()
@@ -200,7 +227,11 @@ class BaseSolution:
         """
         # Store tracking history
         self.track_line = self.track_history[track_id]
-        self.track_line.append(tuple(box.mean(dim=0)) if box.numel() > 4 else (box[:4:2].mean(), box[1:4:2].mean()))
+        self.track_line.append(
+            tuple(box.mean(dim=0))
+            if box.numel() > 4
+            else (box[:4:2].mean(), box[1:4:2].mean())
+        )
         if len(self.track_line) > 30:
             self.track_line.pop(0)
 
@@ -209,7 +240,9 @@ class BaseSolution:
         if self.region is None:
             self.region = [(10, 200), (540, 200), (540, 180), (10, 180)]
         self.r_s = (
-            self.Polygon(self.region) if len(self.region) >= 3 else self.LineString(self.region)
+            self.Polygon(self.region)
+            if len(self.region) >= 3
+            else self.LineString(self.region)
         )  # region or line
 
     def display_output(self, plot_im: np.ndarray) -> None:
@@ -244,11 +277,20 @@ class BaseSolution:
     def __call__(self, *args: Any, **kwargs: Any):
         """Allow instances to be called like a function with flexible arguments."""
         with self.profilers[1]:
-            result = self.process(*args, **kwargs)  # Call the subclass-specific process method
-        track_or_predict = "predict" if type(self).__name__ == "ObjectCropper" else "track"
+            result = self.process(
+                *args, **kwargs
+            )  # Call the subclass-specific process method
+        track_or_predict = (
+            "predict" if type(self).__name__ == "ObjectCropper" else "track"
+        )
         track_or_predict_speed = self.profilers[0].dt * 1e3
-        solution_speed = (self.profilers[1].dt - self.profilers[0].dt) * 1e3  # solution time = process - track
-        result.speed = {track_or_predict: track_or_predict_speed, "solution": solution_speed}
+        solution_speed = (
+            self.profilers[1].dt - self.profilers[0].dt
+        ) * 1e3  # solution time = process - track
+        result.speed = {
+            track_or_predict: track_or_predict_speed,
+            "solution": solution_speed,
+        }
         if self.CFG["verbose"]:
             self.frame_no += 1
             LOGGER.info(
@@ -335,11 +377,19 @@ class SolutionAnnotator(Annotator):
             color (Tuple[int, int, int]): RGB color value for the region.
             thickness (int): Line thickness for drawing the region.
         """
-        cv2.polylines(self.im, [np.array(reg_pts, dtype=np.int32)], isClosed=True, color=color, thickness=thickness)
+        cv2.polylines(
+            self.im,
+            [np.array(reg_pts, dtype=np.int32)],
+            isClosed=True,
+            color=color,
+            thickness=thickness,
+        )
 
         # Draw small circles at the corner points
         for point in reg_pts:
-            cv2.circle(self.im, (point[0], point[1]), thickness * 2, color, -1)  # -1 fills the circle
+            cv2.circle(
+                self.im, (point[0], point[1]), thickness * 2, color, -1
+            )  # -1 fills the circle
 
     def queue_counts_display(
         self,
@@ -420,7 +470,16 @@ class SolutionAnnotator(Annotator):
             rect_x2 = text_x + text_size[0] + margin * 2
             rect_y2 = text_y + margin * 2
             cv2.rectangle(im0, (rect_x1, rect_y1), (rect_x2, rect_y2), bg_color, -1)
-            cv2.putText(im0, txt, (text_x, text_y), 0, self.sf, txt_color, self.tf, lineType=cv2.LINE_AA)
+            cv2.putText(
+                im0,
+                txt,
+                (text_x, text_y),
+                0,
+                self.sf,
+                txt_color,
+                self.tf,
+                lineType=cv2.LINE_AA,
+            )
             text_y_offset = rect_y2
 
     @staticmethod
@@ -437,7 +496,9 @@ class SolutionAnnotator(Annotator):
         Returns:
             (float): The angle in degrees between the three points.
         """
-        radians = math.atan2(c[1] - b[1], c[0] - b[0]) - math.atan2(a[1] - b[1], a[0] - b[0])
+        radians = math.atan2(c[1] - b[1], c[0] - b[0]) - math.atan2(
+            a[1] - b[1], a[0] - b[0]
+        )
         angle = abs(radians * 180.0 / math.pi)
         return angle if angle <= 180.0 else (360 - angle)
 
@@ -465,7 +526,11 @@ class SolutionAnnotator(Annotator):
             Modifies self.im in-place.
         """
         indices = indices or [2, 5, 7]
-        points = [(int(k[0]), int(k[1])) for i, k in enumerate(keypoints) if i in indices and k[2] >= conf_thresh]
+        points = [
+            (int(k[0]), int(k[1]))
+            for i, k in enumerate(keypoints)
+            if i in indices and k[2] >= conf_thresh
+        ]
 
         # Draw lines between consecutive points
         for start, end in zip(points[:-1], points[1:]):
@@ -496,13 +561,18 @@ class SolutionAnnotator(Annotator):
         Returns:
             (int): The height of the text.
         """
-        (text_width, text_height), _ = cv2.getTextSize(display_text, 0, fontScale=self.sf, thickness=self.tf)
+        (text_width, text_height), _ = cv2.getTextSize(
+            display_text, 0, fontScale=self.sf, thickness=self.tf
+        )
 
         # Draw background rectangle
         cv2.rectangle(
             self.im,
             (position[0], position[1] - text_height - 5),
-            (position[0] + text_width + 10, position[1] - text_height - 5 + text_height + 10 + self.tf),
+            (
+                position[0] + text_width + 10,
+                position[1] - text_height - 5 + text_height + 10 + self.tf,
+            ),
             color,
             -1,
         )
@@ -532,17 +602,27 @@ class SolutionAnnotator(Annotator):
             txt_color (Tuple[int, int, int]): Text foreground color.
         """
         # Format text
-        angle_text, count_text, stage_text = f" {angle_text:.2f}", f"Steps : {count_text}", f" {stage_text}"
+        angle_text, count_text, stage_text = (
+            f" {angle_text:.2f}",
+            f"Steps : {count_text}",
+            f" {stage_text}",
+        )
 
         # Draw angle, count and stage text
         angle_height = self.plot_workout_information(
             angle_text, (int(center_kpt[0]), int(center_kpt[1])), color, txt_color
         )
         count_height = self.plot_workout_information(
-            count_text, (int(center_kpt[0]), int(center_kpt[1]) + angle_height + 20), color, txt_color
+            count_text,
+            (int(center_kpt[0]), int(center_kpt[1]) + angle_height + 20),
+            color,
+            txt_color,
         )
         self.plot_workout_information(
-            stage_text, (int(center_kpt[0]), int(center_kpt[1]) + angle_height + count_height + 40), color, txt_color
+            stage_text,
+            (int(center_kpt[0]), int(center_kpt[1]) + angle_height + count_height + 40),
+            color,
+            txt_color,
         )
 
     def plot_distance_and_line(
@@ -566,7 +646,13 @@ class SolutionAnnotator(Annotator):
         (text_width_m, text_height_m), _ = cv2.getTextSize(text, 0, self.sf, self.tf)
 
         # Define corners with 10-pixel margin and draw rectangle
-        cv2.rectangle(self.im, (15, 25), (15 + text_width_m + 20, 25 + text_height_m + 20), line_color, -1)
+        cv2.rectangle(
+            self.im,
+            (15, 25),
+            (15 + text_width_m + 20, 25 + text_height_m + 20),
+            line_color,
+            -1,
+        )
 
         # Calculate the position for the text with a 10-pixel margin and draw text
         text_position = (25, 25 + text_height_m + 10)
@@ -657,7 +743,9 @@ class SolutionAnnotator(Annotator):
 
         # Draw label, if provided
         if label:
-            (text_width, text_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, self.sf, self.tf)
+            (text_width, text_height), _ = cv2.getTextSize(
+                label, cv2.FONT_HERSHEY_SIMPLEX, self.sf, self.tf
+            )
             cv2.rectangle(
                 self.im,
                 (line_x - text_width // 2 - 10, line_y // 2 - text_height // 2 - 10),
@@ -715,15 +803,21 @@ class SolutionAnnotator(Annotator):
             margin (int): The margin between the text and the circle border.
         """
         if len(label) > 3:
-            LOGGER.warning(f"Length of label is {len(label)}, only first 3 letters will be used for circle annotation.")
+            LOGGER.warning(
+                f"Length of label is {len(label)}, only first 3 letters will be used for circle annotation."
+            )
             label = label[:3]
 
         # Calculate the center of the box
         x_center, y_center = int((box[0] + box[2]) / 2), int((box[1] + box[3]) / 2)
         # Get the text size
-        text_size = cv2.getTextSize(str(label), cv2.FONT_HERSHEY_SIMPLEX, self.sf - 0.15, self.tf)[0]
+        text_size = cv2.getTextSize(
+            str(label), cv2.FONT_HERSHEY_SIMPLEX, self.sf - 0.15, self.tf
+        )[0]
         # Calculate the required radius to fit the text with the margin
-        required_radius = int(((text_size[0] ** 2 + text_size[1] ** 2) ** 0.5) / 2) + margin
+        required_radius = (
+            int(((text_size[0] ** 2 + text_size[1] ** 2) ** 0.5) / 2) + margin
+        )
         # Draw the circle with the required radius
         cv2.circle(self.im, (x_center, y_center), required_radius, color, -1)
         # Calculate the position for the text
@@ -762,7 +856,9 @@ class SolutionAnnotator(Annotator):
         # Calculate the center of the bounding box
         x_center, y_center = int((box[0] + box[2]) / 2), int((box[1] + box[3]) / 2)
         # Get the size of the text
-        text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, self.sf - 0.1, self.tf)[0]
+        text_size = cv2.getTextSize(
+            label, cv2.FONT_HERSHEY_SIMPLEX, self.sf - 0.1, self.tf
+        )[0]
         # Calculate the top-left corner of the text (to center it)
         text_x = x_center - text_size[0] // 2
         text_y = y_center + text_size[1] // 2
@@ -852,6 +948,7 @@ class SolutionResults:
         attrs = {
             k: v
             for k, v in self.__dict__.items()
-            if k != "plot_im" and v not in [None, {}, 0, 0.0, False]  # Exclude `plot_im` explicitly
+            if k != "plot_im"
+            and v not in [None, {}, 0, 0.0, False]  # Exclude `plot_im` explicitly
         }
         return ", ".join(f"{k}={v}" for k, v in attrs.items())

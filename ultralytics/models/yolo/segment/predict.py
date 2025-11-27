@@ -82,7 +82,9 @@ class SegmentationPredictor(DetectionPredictor):
         """
         return [
             self.construct_result(pred, img, orig_img, img_path, proto)
-            for pred, orig_img, img_path, proto in zip(preds, orig_imgs, self.batch[0], protos)
+            for pred, orig_img, img_path, proto in zip(
+                preds, orig_imgs, self.batch[0], protos
+            )
         ]
 
     def construct_result(self, pred, img, orig_img, img_path, proto):
@@ -103,11 +105,21 @@ class SegmentationPredictor(DetectionPredictor):
             masks = None
         elif self.args.retina_masks:
             pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
-            masks = ops.process_mask_native(proto, pred[:, 6:], pred[:, :4], orig_img.shape[:2])  # HWC
+            masks = ops.process_mask_native(
+                proto, pred[:, 6:], pred[:, :4], orig_img.shape[:2]
+            )  # HWC
         else:
-            masks = ops.process_mask(proto, pred[:, 6:], pred[:, :4], img.shape[2:], upsample=True)  # HWC
+            masks = ops.process_mask(
+                proto, pred[:, 6:], pred[:, :4], img.shape[2:], upsample=True
+            )  # HWC
             pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
         if masks is not None:
             keep = masks.sum((-2, -1)) > 0  # only keep predictions with masks
             pred, masks = pred[keep], masks[keep]
-        return Results(orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6], masks=masks)
+        return Results(
+            orig_img,
+            path=img_path,
+            names=self.model.names,
+            boxes=pred[:, :6],
+            masks=masks,
+        )

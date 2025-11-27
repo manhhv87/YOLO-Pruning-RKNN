@@ -2,7 +2,11 @@
 
 from typing import Any
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 from ultralytics.utils.plotting import colors
 
 
@@ -58,13 +62,21 @@ class VisionEye(BaseSolution):
         self.extract_tracks(im0)  # Extract tracks (bounding boxes, classes, and masks)
         annotator = SolutionAnnotator(im0, self.line_width)
 
-        for cls, t_id, box, conf in zip(self.clss, self.track_ids, self.boxes, self.confs):
+        for cls, t_id, box, conf in zip(
+            self.clss, self.track_ids, self.boxes, self.confs
+        ):
             # Annotate the image with bounding boxes, labels, and vision mapping
-            annotator.box_label(box, label=self.adjust_box_label(cls, conf, t_id), color=colors(int(t_id), True))
+            annotator.box_label(
+                box,
+                label=self.adjust_box_label(cls, conf, t_id),
+                color=colors(int(t_id), True),
+            )
             annotator.visioneye(box, self.vision_point)
 
         plot_im = annotator.result()
-        self.display_output(plot_im)  # Display the annotated output using the base class function
+        self.display_output(
+            plot_im
+        )  # Display the annotated output using the base class function
 
         # Return a SolutionResults object with the annotated image and tracking statistics
         return SolutionResults(plot_im=plot_im, total_tracks=len(self.track_ids))

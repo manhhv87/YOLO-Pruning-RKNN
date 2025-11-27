@@ -136,17 +136,24 @@ def export_engine(
 
     if dynamic:
         if shape[0] <= 1:
-            LOGGER.warning(f"{prefix} 'dynamic=True' model requires max batch size, i.e. 'batch=16'")
+            LOGGER.warning(
+                f"{prefix} 'dynamic=True' model requires max batch size, i.e. 'batch=16'"
+            )
         profile = builder.create_optimization_profile()
         min_shape = (1, shape[1], 32, 32)  # minimum input shape
-        max_shape = (*shape[:2], *(int(max(2, workspace or 2) * d) for d in shape[2:]))  # max input shape
+        max_shape = (
+            *shape[:2],
+            *(int(max(2, workspace or 2) * d) for d in shape[2:]),
+        )  # max input shape
         for inp in inputs:
             profile.set_shape(inp.name, min=min_shape, opt=shape, max=max_shape)
         config.add_optimization_profile(profile)
         if int8:
             config.set_calibration_profile(profile)
 
-    LOGGER.info(f"{prefix} building {'INT8' if int8 else 'FP' + ('16' if half else '32')} engine as {engine_file}")
+    LOGGER.info(
+        f"{prefix} building {'INT8' if int8 else 'FP' + ('16' if half else '32')} engine as {engine_file}"
+    )
     if int8:
         config.set_flag(trt.BuilderFlag.INT8)
         config.profiling_verbosity = trt.ProfilingVerbosity.DETAILED

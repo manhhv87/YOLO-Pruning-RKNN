@@ -51,7 +51,9 @@ class ClassificationValidator(BaseValidator):
         Torchvision classification models can also be passed to the 'model' argument, i.e. model='resnet18'.
     """
 
-    def __init__(self, dataloader=None, save_dir=None, args=None, _callbacks=None) -> None:
+    def __init__(
+        self, dataloader=None, save_dir=None, args=None, _callbacks=None
+    ) -> None:
         """
         Initialize ClassificationValidator with dataloader, save directory, and other parameters.
 
@@ -105,7 +107,9 @@ class ClassificationValidator(BaseValidator):
             prediction list for later evaluation. N is limited to the minimum of 5 and the number of classes.
         """
         n5 = min(len(self.names), 5)
-        self.pred.append(preds.argsort(1, descending=True)[:, :n5].type(torch.int32).cpu())
+        self.pred.append(
+            preds.argsort(1, descending=True)[:, :n5].type(torch.int32).cpu()
+        )
         self.targets.append(batch["cls"].type(torch.int32).cpu())
 
     def finalize_metrics(self) -> None:
@@ -126,12 +130,16 @@ class ClassificationValidator(BaseValidator):
         self.confusion_matrix.process_cls_preds(self.pred, self.targets)
         if self.args.plots:
             for normalize in True, False:
-                self.confusion_matrix.plot(save_dir=self.save_dir, normalize=normalize, on_plot=self.on_plot)
+                self.confusion_matrix.plot(
+                    save_dir=self.save_dir, normalize=normalize, on_plot=self.on_plot
+                )
         self.metrics.speed = self.speed
         self.metrics.save_dir = self.save_dir
         self.metrics.confusion_matrix = self.confusion_matrix
 
-    def postprocess(self, preds: Union[torch.Tensor, List[torch.Tensor], Tuple[torch.Tensor]]) -> torch.Tensor:
+    def postprocess(
+        self, preds: Union[torch.Tensor, List[torch.Tensor], Tuple[torch.Tensor]]
+    ) -> torch.Tensor:
         """Extract the primary prediction from model output if it's in a list or tuple format."""
         return preds[0] if isinstance(preds, (list, tuple)) else preds
 
@@ -142,9 +150,13 @@ class ClassificationValidator(BaseValidator):
 
     def build_dataset(self, img_path: str) -> ClassificationDataset:
         """Create a ClassificationDataset instance for validation."""
-        return ClassificationDataset(root=img_path, args=self.args, augment=False, prefix=self.args.split)
+        return ClassificationDataset(
+            root=img_path, args=self.args, augment=False, prefix=self.args.split
+        )
 
-    def get_dataloader(self, dataset_path: Union[Path, str], batch_size: int) -> torch.utils.data.DataLoader:
+    def get_dataloader(
+        self, dataset_path: Union[Path, str], batch_size: int
+    ) -> torch.utils.data.DataLoader:
         """
         Build and return a data loader for classification validation.
 
@@ -176,7 +188,9 @@ class ClassificationValidator(BaseValidator):
             >>> batch = {"img": torch.rand(16, 3, 224, 224), "cls": torch.randint(0, 10, (16,))}
             >>> validator.plot_val_samples(batch, 0)
         """
-        batch["batch_idx"] = torch.arange(len(batch["img"]))  # add batch index for plotting
+        batch["batch_idx"] = torch.arange(
+            len(batch["img"])
+        )  # add batch index for plotting
         plot_images(
             labels=batch,
             fname=self.save_dir / f"val_batch{ni}_labels.jpg",
@@ -184,7 +198,9 @@ class ClassificationValidator(BaseValidator):
             on_plot=self.on_plot,
         )
 
-    def plot_predictions(self, batch: Dict[str, Any], preds: torch.Tensor, ni: int) -> None:
+    def plot_predictions(
+        self, batch: Dict[str, Any], preds: torch.Tensor, ni: int
+    ) -> None:
         """
         Plot images with their predicted class labels and save the visualization.
 

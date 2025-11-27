@@ -109,7 +109,9 @@ class CLIP(TextModel):
         return clip.tokenize(texts).to(self.device)
 
     @smart_inference_mode()
-    def encode_text(self, texts: torch.Tensor, dtype: torch.dtype = torch.float32) -> torch.Tensor:
+    def encode_text(
+        self, texts: torch.Tensor, dtype: torch.dtype = torch.float32
+    ) -> torch.Tensor:
         """
         Encode tokenized texts into normalized feature vectors.
 
@@ -135,7 +137,11 @@ class CLIP(TextModel):
         return txt_feats
 
     @smart_inference_mode()
-    def encode_image(self, image: Union[Image.Image, torch.Tensor], dtype: torch.dtype = torch.float32) -> torch.Tensor:
+    def encode_image(
+        self,
+        image: Union[Image.Image, torch.Tensor],
+        dtype: torch.dtype = torch.float32,
+    ) -> torch.Tensor:
         """
         Encode preprocessed images into normalized feature vectors.
 
@@ -218,7 +224,9 @@ class MobileCLIP(TextModel):
                 import mobileclip
         except ImportError:
             # Ultralytics fork preferred since Apple MobileCLIP repo has incorrect version of torchvision
-            checks.check_requirements("git+https://github.com/ultralytics/mobileclip.git")
+            checks.check_requirements(
+                "git+https://github.com/ultralytics/mobileclip.git"
+            )
             import mobileclip
 
         super().__init__()
@@ -227,8 +235,12 @@ class MobileCLIP(TextModel):
         if not Path(file).is_file():
             from ultralytics import download
 
-            download(f"https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/{file}")
-        self.model = mobileclip.create_model_and_transforms(f"mobileclip_{config}", pretrained=file, device=device)[0]
+            download(
+                f"https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/{file}"
+            )
+        self.model = mobileclip.create_model_and_transforms(
+            f"mobileclip_{config}", pretrained=file, device=device
+        )[0]
         self.tokenizer = mobileclip.get_tokenizer(f"mobileclip_{config}")
         self.to(device)
         self.device = device
@@ -251,7 +263,9 @@ class MobileCLIP(TextModel):
         return self.tokenizer(texts).to(self.device)
 
     @smart_inference_mode()
-    def encode_text(self, texts: torch.Tensor, dtype: torch.dtype = torch.float32) -> torch.Tensor:
+    def encode_text(
+        self, texts: torch.Tensor, dtype: torch.dtype = torch.float32
+    ) -> torch.Tensor:
         """
         Encode tokenized texts into normalized feature vectors.
 
@@ -315,7 +329,9 @@ class MobileCLIPTS(TextModel):
         super().__init__()
         from ultralytics.utils.downloads import attempt_download_asset
 
-        self.encoder = torch.jit.load(attempt_download_asset("mobileclip_blt.ts"), map_location=device)
+        self.encoder = torch.jit.load(
+            attempt_download_asset("mobileclip_blt.ts"), map_location=device
+        )
         self.tokenizer = clip.clip.tokenize
         self.device = device
 
@@ -336,7 +352,9 @@ class MobileCLIPTS(TextModel):
         return self.tokenizer(texts).to(self.device)
 
     @smart_inference_mode()
-    def encode_text(self, texts: torch.Tensor, dtype: torch.dtype = torch.float32) -> torch.Tensor:
+    def encode_text(
+        self, texts: torch.Tensor, dtype: torch.dtype = torch.float32
+    ) -> torch.Tensor:
         """
         Encode tokenized texts into normalized feature vectors.
 
@@ -379,4 +397,6 @@ def build_text_model(variant: str, device: torch.device = None) -> TextModel:
     elif base == "mobileclip":
         return MobileCLIPTS(device)
     else:
-        raise ValueError(f"Unrecognized base model: '{base}'. Supported base models: 'clip', 'mobileclip'.")
+        raise ValueError(
+            f"Unrecognized base model: '{base}'. Supported base models: 'clip', 'mobileclip'."
+        )

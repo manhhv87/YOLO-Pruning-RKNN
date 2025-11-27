@@ -41,7 +41,10 @@ class NAS(Model):
 
     def __init__(self, model: str = "yolo_nas_s.pt") -> None:
         """Initialize the NAS model with the provided or default model."""
-        assert Path(model).suffix not in {".yaml", ".yml"}, "YOLO-NAS models only support pre-trained models."
+        assert Path(model).suffix not in {
+            ".yaml",
+            ".yml",
+        }, "YOLO-NAS models only support pre-trained models."
         super().__init__(model, task="detect")
 
     def _load(self, weights: str, task=None) -> None:
@@ -58,7 +61,9 @@ class NAS(Model):
         if suffix == ".pt":
             self.model = torch.load(attempt_download_asset(weights))
         elif suffix == "":
-            self.model = super_gradients.training.models.get(weights, pretrained_weights="coco")
+            self.model = super_gradients.training.models.get(
+                weights, pretrained_weights="coco"
+            )
 
         # Override the forward method to ignore additional arguments
         def new_forward(x, *args, **kwargs):

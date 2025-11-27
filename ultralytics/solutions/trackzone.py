@@ -5,7 +5,11 @@ from typing import Any
 import cv2
 import numpy as np
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 from ultralytics.utils.plotting import colors
 
 
@@ -45,7 +49,9 @@ class TrackZone(BaseSolution):
         """
         super().__init__(**kwargs)
         default_region = [(75, 75), (565, 75), (565, 285), (75, 285)]
-        self.region = cv2.convexHull(np.array(self.region or default_region, dtype=np.int32))
+        self.region = cv2.convexHull(
+            np.array(self.region or default_region, dtype=np.int32)
+        )
         self.mask = None
 
     def process(self, im0: np.ndarray) -> SolutionResults:
@@ -67,7 +73,9 @@ class TrackZone(BaseSolution):
             >>> frame = cv2.imread("path/to/image.jpg")
             >>> results = tracker.process(frame)
         """
-        annotator = SolutionAnnotator(im0, line_width=self.line_width)  # Initialize annotator
+        annotator = SolutionAnnotator(
+            im0, line_width=self.line_width
+        )  # Initialize annotator
 
         if self.mask is None:  # Create a mask for the region
             self.mask = np.zeros_like(im0[:, :, 0])
@@ -76,12 +84,22 @@ class TrackZone(BaseSolution):
         self.extract_tracks(masked_frame)
 
         # Draw the region boundary
-        cv2.polylines(im0, [self.region], isClosed=True, color=(255, 255, 255), thickness=self.line_width * 2)
+        cv2.polylines(
+            im0,
+            [self.region],
+            isClosed=True,
+            color=(255, 255, 255),
+            thickness=self.line_width * 2,
+        )
 
         # Iterate over boxes, track ids, classes indexes list and draw bounding boxes
-        for box, track_id, cls, conf in zip(self.boxes, self.track_ids, self.clss, self.confs):
+        for box, track_id, cls, conf in zip(
+            self.boxes, self.track_ids, self.clss, self.confs
+        ):
             annotator.box_label(
-                box, label=self.adjust_box_label(cls, conf, track_id=track_id), color=colors(track_id, True)
+                box,
+                label=self.adjust_box_label(cls, conf, track_id=track_id),
+                color=colors(track_id, True),
             )
 
         plot_im = annotator.result()

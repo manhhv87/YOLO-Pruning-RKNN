@@ -11,14 +11,32 @@ from urllib import parse, request
 
 import torch
 
-from ultralytics.utils import LOGGER, TQDM, checks, clean_url, emojis, is_online, url2file
+from ultralytics.utils import (
+    LOGGER,
+    TQDM,
+    checks,
+    clean_url,
+    emojis,
+    is_online,
+    url2file,
+)
 
 # Define Ultralytics GitHub assets maintained at https://github.com/ultralytics/assets
 GITHUB_ASSETS_REPO = "ultralytics/assets"
 GITHUB_ASSETS_NAMES = frozenset(
-    [f"yolov8{k}{suffix}.pt" for k in "nsmlx" for suffix in ("", "-cls", "-seg", "-pose", "-obb", "-oiv7")]
-    + [f"yolo11{k}{suffix}.pt" for k in "nsmlx" for suffix in ("", "-cls", "-seg", "-pose", "-obb")]
-    + [f"yolo12{k}{suffix}.pt" for k in "nsmlx" for suffix in ("",)]  # detect models only currently
+    [
+        f"yolov8{k}{suffix}.pt"
+        for k in "nsmlx"
+        for suffix in ("", "-cls", "-seg", "-pose", "-obb", "-oiv7")
+    ]
+    + [
+        f"yolo11{k}{suffix}.pt"
+        for k in "nsmlx"
+        for suffix in ("", "-cls", "-seg", "-pose", "-obb")
+    ]
+    + [
+        f"yolo12{k}{suffix}.pt" for k in "nsmlx" for suffix in ("",)
+    ]  # detect models only currently
     + [f"yolov5{k}{resolution}u.pt" for k in "nsmlx" for resolution in ("", "6")]
     + [f"yolov3{k}u.pt" for k in ("", "-spp", "-tiny")]
     + [f"yolov8{k}-world.pt" for k in "smlx"]
@@ -93,7 +111,12 @@ def delete_dsstore(path, files_to_delete=(".DS_Store", "__MACOSX")):
             f.unlink()
 
 
-def zip_directory(directory, compress: bool = True, exclude=(".DS_Store", "__MACOSX"), progress: bool = True) -> Path:
+def zip_directory(
+    directory,
+    compress: bool = True,
+    exclude=(".DS_Store", "__MACOSX"),
+    progress: bool = True,
+) -> Path:
     """
     Zip the contents of a directory, excluding specified files.
 
@@ -120,11 +143,20 @@ def zip_directory(directory, compress: bool = True, exclude=(".DS_Store", "__MAC
         raise FileNotFoundError(f"Directory '{directory}' does not exist.")
 
     # Zip with progress bar
-    files_to_zip = [f for f in directory.rglob("*") if f.is_file() and all(x not in f.name for x in exclude)]
+    files_to_zip = [
+        f
+        for f in directory.rglob("*")
+        if f.is_file() and all(x not in f.name for x in exclude)
+    ]
     zip_file = directory.with_suffix(".zip")
     compression = ZIP_DEFLATED if compress else ZIP_STORED
     with ZipFile(zip_file, "w", compression) as f:
-        for file in TQDM(files_to_zip, desc=f"Zipping {directory} to {zip_file}...", unit="file", disable=not progress):
+        for file in TQDM(
+            files_to_zip,
+            desc=f"Zipping {directory} to {zip_file}...",
+            unit="file",
+            disable=not progress,
+        ):
             f.write(file, file.relative_to(directory))
 
     return zip_file  # return path to zip file
@@ -174,25 +206,40 @@ def unzip_file(
         top_level_dirs = {Path(f).parts[0] for f in files}
 
         # Decide to unzip directly or unzip into a directory
-        unzip_as_dir = len(top_level_dirs) == 1  # (len(files) > 1 and not files[0].endswith("/"))
+        unzip_as_dir = (
+            len(top_level_dirs) == 1
+        )  # (len(files) > 1 and not files[0].endswith("/"))
         if unzip_as_dir:
             # Zip has 1 top-level directory
             extract_path = path  # i.e. ../datasets
-            path = Path(path) / list(top_level_dirs)[0]  # i.e. extract coco8/ dir to ../datasets/
+            path = (
+                Path(path) / list(top_level_dirs)[0]
+            )  # i.e. extract coco8/ dir to ../datasets/
         else:
             # Zip has multiple files at top level
-            path = extract_path = Path(path) / Path(file).stem  # i.e. extract multiple files to ../datasets/coco8/
+            path = extract_path = (
+                Path(path) / Path(file).stem
+            )  # i.e. extract multiple files to ../datasets/coco8/
 
         # Check if destination directory already exists and contains files
         if path.exists() and any(path.iterdir()) and not exist_ok:
             # If it exists and is not empty, return the path without unzipping
-            LOGGER.warning(f"Skipping {file} unzip as destination directory {path} is not empty.")
+            LOGGER.warning(
+                f"Skipping {file} unzip as destination directory {path} is not empty."
+            )
             return path
 
-        for f in TQDM(files, desc=f"Unzipping {file} to {Path(path).resolve()}...", unit="file", disable=not progress):
+        for f in TQDM(
+            files,
+            desc=f"Unzipping {file} to {Path(path).resolve()}...",
+            unit="file",
+            disable=not progress,
+        ):
             # Ensure the file is within the extract_path to avoid path traversal security vulnerability
             if ".." in Path(f).parts:
-                LOGGER.warning(f"Potentially insecure file path: {f}, skipping extraction.")
+                LOGGER.warning(
+                    f"Potentially insecure file path: {f}, skipping extraction."
+                )
                 continue
             zipObj.extract(f, extract_path)
 
@@ -221,7 +268,9 @@ def check_disk_space(
 
     try:
         r = requests.head(url)  # response
-        assert r.status_code < 400, f"URL error for {url}: {r.status_code} {r.reason}"  # check response
+        assert (
+            r.status_code < 400
+        ), f"URL error for {url}: {r.status_code} {r.reason}"  # check response
     except Exception:
         return True  # requests issue, default to True
 
@@ -322,12 +371,16 @@ def safe_download(
         >>> link = "https://ultralytics.com/assets/bus.jpg"
         >>> path = safe_download(link)
     """
-    gdrive = url.startswith("https://drive.google.com/")  # check if the URL is a Google Drive link
+    gdrive = url.startswith(
+        "https://drive.google.com/"
+    )  # check if the URL is a Google Drive link
     if gdrive:
         url, file = get_google_drive_file_info(url)
 
     f = Path(dir or ".") / (file or url2file(url))  # URL converted to filename
-    if "://" not in str(url) and Path(url).is_file():  # URL exists ('://' check required in Windows Python<3.10)
+    if (
+        "://" not in str(url) and Path(url).is_file()
+    ):  # URL exists ('://' check required in Windows Python<3.10)
         f = Path(url)  # filename
     elif not f.is_file():  # URL and file do not exist
         uri = (url if gdrive else clean_url(url)).replace(  # cleaned and aliased url
@@ -341,9 +394,24 @@ def safe_download(
         curl_installed = shutil.which("curl")
         for i in range(retry + 1):
             try:
-                if (curl or i > 0) and curl_installed:  # curl download with retry, continue
+                if (
+                    curl or i > 0
+                ) and curl_installed:  # curl download with retry, continue
                     s = "sS" * (not progress)  # silent
-                    r = subprocess.run(["curl", "-#", f"-{s}L", url, "-o", f, "--retry", "3", "-C", "-"]).returncode
+                    r = subprocess.run(
+                        [
+                            "curl",
+                            "-#",
+                            f"-{s}L",
+                            url,
+                            "-o",
+                            f,
+                            "--retry",
+                            "3",
+                            "-C",
+                            "-",
+                        ]
+                    ).returncode
                     assert r == 0, f"Curl return value {r}"
                 else:  # urllib download
                     method = "torch"
@@ -369,20 +437,39 @@ def safe_download(
                     f.unlink()  # remove partial downloads
             except Exception as e:
                 if i == 0 and not is_online():
-                    raise ConnectionError(emojis(f"❌  Download failure for {uri}. Environment is not online.")) from e
+                    raise ConnectionError(
+                        emojis(
+                            f"❌  Download failure for {uri}. Environment is not online."
+                        )
+                    ) from e
                 elif i >= retry:
-                    raise ConnectionError(emojis(f"❌  Download failure for {uri}. Retry limit reached.")) from e
+                    raise ConnectionError(
+                        emojis(f"❌  Download failure for {uri}. Retry limit reached.")
+                    ) from e
                 LOGGER.warning(f"Download failure, retrying {i + 1}/{retry} {uri}...")
 
     if unzip and f.exists() and f.suffix in {"", ".zip", ".tar", ".gz"}:
         from zipfile import is_zipfile
 
-        unzip_dir = (dir or f.parent).resolve()  # unzip to dir if provided else unzip in place
+        unzip_dir = (
+            dir or f.parent
+        ).resolve()  # unzip to dir if provided else unzip in place
         if is_zipfile(f):
-            unzip_dir = unzip_file(file=f, path=unzip_dir, exist_ok=exist_ok, progress=progress)  # unzip
+            unzip_dir = unzip_file(
+                file=f, path=unzip_dir, exist_ok=exist_ok, progress=progress
+            )  # unzip
         elif f.suffix in {".tar", ".gz"}:
             LOGGER.info(f"Unzipping {f} to {unzip_dir}...")
-            subprocess.run(["tar", "xf" if f.suffix == ".tar" else "xfz", f, "--directory", unzip_dir], check=True)
+            subprocess.run(
+                [
+                    "tar",
+                    "xf" if f.suffix == ".tar" else "xfz",
+                    f,
+                    "--directory",
+                    unzip_dir,
+                ],
+                check=True,
+            )
         if delete:
             f.unlink()  # remove zip
         return unzip_dir
@@ -417,16 +504,24 @@ def get_github_assets(
         version = f"tags/{version}"  # i.e. tags/v6.2
     url = f"https://api.github.com/repos/{repo}/releases/{version}"
     r = requests.get(url)  # github api
-    if r.status_code != 200 and r.reason != "rate limit exceeded" and retry:  # failed and not 403 rate limit exceeded
+    if (
+        r.status_code != 200 and r.reason != "rate limit exceeded" and retry
+    ):  # failed and not 403 rate limit exceeded
         r = requests.get(url)  # try again
     if r.status_code != 200:
-        LOGGER.warning(f"GitHub assets check failure for {url}: {r.status_code} {r.reason}")
+        LOGGER.warning(
+            f"GitHub assets check failure for {url}: {r.status_code} {r.reason}"
+        )
         return "", []
     data = r.json()
-    return data["tag_name"], [x["name"] for x in data["assets"]]  # tag, assets i.e. ['yolo11n.pt', 'yolov8s.pt', ...]
+    return data["tag_name"], [
+        x["name"] for x in data["assets"]
+    ]  # tag, assets i.e. ['yolo11n.pt', 'yolov8s.pt', ...]
 
 
-def attempt_download_asset(file, repo: str = "ultralytics/assets", release: str = "v8.3.0", **kwargs) -> str:
+def attempt_download_asset(
+    file, repo: str = "ultralytics/assets", release: str = "v8.3.0", **kwargs
+) -> str:
     """
     Attempt to download a file from GitHub release assets if it is not found locally.
 
@@ -458,21 +553,35 @@ def attempt_download_asset(file, repo: str = "ultralytics/assets", release: str 
         download_url = f"https://github.com/{repo}/releases/download"
         if str(file).startswith(("http:/", "https:/")):  # download
             url = str(file).replace(":/", "://")  # Pathlib turns :// -> :/
-            file = url2file(name)  # parse authentication https://url.com/file.txt?auth...
+            file = url2file(
+                name
+            )  # parse authentication https://url.com/file.txt?auth...
             if Path(file).is_file():
-                LOGGER.info(f"Found {clean_url(url)} locally at {file}")  # file already exists
+                LOGGER.info(
+                    f"Found {clean_url(url)} locally at {file}"
+                )  # file already exists
             else:
                 safe_download(url=url, file=file, min_bytes=1e5, **kwargs)
 
         elif repo == GITHUB_ASSETS_REPO and name in GITHUB_ASSETS_NAMES:
-            safe_download(url=f"{download_url}/{release}/{name}", file=file, min_bytes=1e5, **kwargs)
+            safe_download(
+                url=f"{download_url}/{release}/{name}",
+                file=file,
+                min_bytes=1e5,
+                **kwargs,
+            )
 
         else:
             tag, assets = get_github_assets(repo, release)
             if not assets:
                 tag, assets = get_github_assets(repo)  # latest release
             if name in assets:
-                safe_download(url=f"{download_url}/{tag}/{name}", file=file, min_bytes=1e5, **kwargs)
+                safe_download(
+                    url=f"{download_url}/{tag}/{name}",
+                    file=file,
+                    min_bytes=1e5,
+                    **kwargs,
+                )
 
         return str(file)
 
@@ -526,4 +635,12 @@ def download(
             pool.join()
     else:
         for u in [url] if isinstance(url, (str, Path)) else url:
-            safe_download(url=u, dir=dir, unzip=unzip, delete=delete, curl=curl, retry=retry, exist_ok=exist_ok)
+            safe_download(
+                url=u,
+                dir=dir,
+                unzip=unzip,
+                delete=delete,
+                curl=curl,
+                retry=retry,
+                exist_ok=exist_ok,
+            )

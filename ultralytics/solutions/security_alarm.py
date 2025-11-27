@@ -2,7 +2,11 @@
 
 from typing import Any
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 from ultralytics.utils import LOGGER
 from ultralytics.utils.plotting import colors
 
@@ -137,7 +141,9 @@ class SecurityAlarm(BaseSolution):
             >>> results = alarm.process(frame)
         """
         self.extract_tracks(im0)  # Extract tracks
-        annotator = SolutionAnnotator(im0, line_width=self.line_width)  # Initialize annotator
+        annotator = SolutionAnnotator(
+            im0, line_width=self.line_width
+        )  # Initialize annotator
 
         # Iterate over bounding boxes and classes index
         for box, cls in zip(self.boxes, self.clss):
@@ -145,7 +151,9 @@ class SecurityAlarm(BaseSolution):
             annotator.box_label(box, label=self.names[cls], color=colors(cls, True))
 
         total_det = len(self.clss)
-        if total_det >= self.records and not self.email_sent:  # Only send email if not sent before
+        if (
+            total_det >= self.records and not self.email_sent
+        ):  # Only send email if not sent before
             self.send_email(im0, total_det)
             self.email_sent = True
 
@@ -153,4 +161,8 @@ class SecurityAlarm(BaseSolution):
         self.display_output(plot_im)  # Display output with base class function
 
         # Return a SolutionResults
-        return SolutionResults(plot_im=plot_im, total_tracks=len(self.track_ids), email_sent=self.email_sent)
+        return SolutionResults(
+            plot_im=plot_im,
+            total_tracks=len(self.track_ids),
+            email_sent=self.email_sent,
+        )

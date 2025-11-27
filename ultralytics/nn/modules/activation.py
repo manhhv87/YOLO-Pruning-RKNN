@@ -36,8 +36,12 @@ class AGLU(nn.Module):
         """Initialize the Unified activation function with learnable parameters."""
         super().__init__()
         self.act = nn.Softplus(beta=-1.0)
-        self.lambd = nn.Parameter(nn.init.uniform_(torch.empty(1, device=device, dtype=dtype)))  # lambda parameter
-        self.kappa = nn.Parameter(nn.init.uniform_(torch.empty(1, device=device, dtype=dtype)))  # kappa parameter
+        self.lambd = nn.Parameter(
+            nn.init.uniform_(torch.empty(1, device=device, dtype=dtype))
+        )  # lambda parameter
+        self.kappa = nn.Parameter(
+            nn.init.uniform_(torch.empty(1, device=device, dtype=dtype))
+        )  # kappa parameter
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -52,5 +56,7 @@ class AGLU(nn.Module):
         Returns:
             (torch.Tensor): Output tensor after applying the AGLU activation function, with the same shape as the input.
         """
-        lam = torch.clamp(self.lambd, min=0.0001)  # Clamp lambda to avoid division by zero
+        lam = torch.clamp(
+            self.lambd, min=0.0001
+        )  # Clamp lambda to avoid division by zero
         return torch.exp((1 / lam) * self.act((self.kappa * x) - torch.log(lam)))

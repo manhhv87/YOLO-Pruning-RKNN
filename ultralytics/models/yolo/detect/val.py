@@ -40,7 +40,9 @@ class DetectionValidator(BaseValidator):
         >>> validator()
     """
 
-    def __init__(self, dataloader=None, save_dir=None, args=None, _callbacks=None) -> None:
+    def __init__(
+        self, dataloader=None, save_dir=None, args=None, _callbacks=None
+    ) -> None:
         """
         Initialize detection validator with necessary variables and settings.
 
@@ -70,7 +72,9 @@ class DetectionValidator(BaseValidator):
             (Dict[str, Any]): Preprocessed batch.
         """
         batch["img"] = batch["img"].to(self.device, non_blocking=True)
-        batch["img"] = (batch["img"].half() if self.args.half else batch["img"].float()) / 255
+        batch["img"] = (
+            batch["img"].half() if self.args.half else batch["img"].float()
+        ) / 255
         for k in ["batch_idx", "cls", "bboxes"]:
             batch[k] = batch[k].to(self.device)
 
@@ -87,11 +91,22 @@ class DetectionValidator(BaseValidator):
         self.is_coco = (
             isinstance(val, str)
             and "coco" in val
-            and (val.endswith(f"{os.sep}val2017.txt") or val.endswith(f"{os.sep}test-dev2017.txt"))
+            and (
+                val.endswith(f"{os.sep}val2017.txt")
+                or val.endswith(f"{os.sep}test-dev2017.txt")
+            )
         )  # is COCO
-        self.is_lvis = isinstance(val, str) and "lvis" in val and not self.is_coco  # is LVIS
-        self.class_map = converter.coco80_to_coco91_class() if self.is_coco else list(range(1, len(model.names) + 1))
-        self.args.save_json |= self.args.val and (self.is_coco or self.is_lvis) and not self.training  # run final val
+        self.is_lvis = (
+            isinstance(val, str) and "lvis" in val and not self.is_coco
+        )  # is LVIS
+        self.class_map = (
+            converter.coco80_to_coco91_class()
+            if self.is_coco
+            else list(range(1, len(model.names) + 1))
+        )
+        self.args.save_json |= (
+            self.args.val and (self.is_coco or self.is_lvis) and not self.training
+        )  # run final val
         self.names = model.names
         self.nc = len(model.names)
         self.end2end = getattr(model, "end2end", False)
@@ -102,7 +117,15 @@ class DetectionValidator(BaseValidator):
 
     def get_desc(self) -> str:
         """Return a formatted string summarizing class metrics of YOLO model."""
-        return ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)")
+        return ("%22s" + "%11s" * 6) % (
+            "Class",
+            "Images",
+            "Instances",
+            "Box(P",
+            "R",
+            "mAP50",
+            "mAP50-95)",
+        )
 
     def postprocess(self, preds: torch.Tensor) -> List[Dict[str, torch.Tensor]]:
         """
@@ -126,7 +149,10 @@ class DetectionValidator(BaseValidator):
             end2end=self.end2end,
             rotated=self.args.task == "obb",
         )
-        return [{"bboxes": x[:, :4], "conf": x[:, 4], "cls": x[:, 5], "extra": x[:, 6:]} for x in outputs]
+        return [
+            {"bboxes": x[:, :4], "conf": x[:, 4], "cls": x[:, 5], "extra": x[:, 6:]}
+            for x in outputs
+        ]
 
     def _prepare_batch(self, si: int, batch: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -146,11 +172,24 @@ class DetectionValidator(BaseValidator):
         imgsz = batch["img"].shape[2:]
         ratio_pad = batch["ratio_pad"][si]
         if len(cls):
-            bbox = ops.xywh2xyxy(bbox) * torch.tensor(imgsz, device=self.device)[[1, 0, 1, 0]]  # target boxes
-            ops.scale_boxes(imgsz, bbox, ori_shape, ratio_pad=ratio_pad)  # native-space labels
-        return {"cls": cls, "bboxes": bbox, "ori_shape": ori_shape, "imgsz": imgsz, "ratio_pad": ratio_pad}
+            bbox = (
+                ops.xywh2xyxy(bbox)
+                * torch.tensor(imgsz, device=self.device)[[1, 0, 1, 0]]
+            )  # target boxes
+            ops.scale_boxes(
+                imgsz, bbox, ori_shape, ratio_pad=ratio_pad
+            )  # native-space labels
+        return {
+            "cls": cls,
+            "bboxes": bbox,
+            "ori_shape": ori_shape,
+            "imgsz": imgsz,
+            "ratio_pad": ratio_pad,
+        }
 
-    def _prepare_pred(self, pred: Dict[str, torch.Tensor], pbatch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+    def _prepare_pred(
+        self, pred: Dict[str, torch.Tensor], pbatch: Dict[str, Any]
+    ) -> Dict[str, torch.Tensor]:
         """
         Prepare predictions for evaluation against ground truth.
 
@@ -166,11 +205,16 @@ class DetectionValidator(BaseValidator):
             cls *= 0
         # predn = pred.clone()
         bboxes = ops.scale_boxes(
-            pbatch["imgsz"], pred["bboxes"].clone(), pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
+            pbatch["imgsz"],
+            pred["bboxes"].clone(),
+            pbatch["ori_shape"],
+            ratio_pad=pbatch["ratio_pad"],
         )  # native-space pred
         return {"bboxes": bboxes, "conf": pred["conf"], "cls": cls}
 
-    def update_metrics(self, preds: List[Dict[str, torch.Tensor]], batch: Dict[str, Any]) -> None:
+    def update_metrics(
+        self, preds: List[Dict[str, torch.Tensor]], batch: Dict[str, Any]
+    ) -> None:
         """
         Update metrics with new predictions and ground truth.
 
@@ -216,7 +260,9 @@ class DetectionValidator(BaseValidator):
         """Set final values for metrics speed and confusion matrix."""
         if self.args.plots:
             for normalize in True, False:
-                self.confusion_matrix.plot(save_dir=self.save_dir, normalize=normalize, on_plot=self.on_plot)
+                self.confusion_matrix.plot(
+                    save_dir=self.save_dir, normalize=normalize, on_plot=self.on_plot
+                )
         self.metrics.speed = self.speed
         self.metrics.confusion_matrix = self.confusion_matrix
         self.metrics.save_dir = self.save_dir
@@ -228,19 +274,36 @@ class DetectionValidator(BaseValidator):
         Returns:
             (Dict[str, Any]): Dictionary containing metrics results.
         """
-        self.metrics.process(save_dir=self.save_dir, plot=self.args.plots, on_plot=self.on_plot)
+        self.metrics.process(
+            save_dir=self.save_dir, plot=self.args.plots, on_plot=self.on_plot
+        )
         self.metrics.clear_stats()
         return self.metrics.results_dict
 
     def print_results(self) -> None:
         """Print training/validation set metrics per class."""
         pf = "%22s" + "%11i" * 2 + "%11.3g" * len(self.metrics.keys)  # print format
-        LOGGER.info(pf % ("all", self.seen, self.metrics.nt_per_class.sum(), *self.metrics.mean_results()))
+        LOGGER.info(
+            pf
+            % (
+                "all",
+                self.seen,
+                self.metrics.nt_per_class.sum(),
+                *self.metrics.mean_results(),
+            )
+        )
         if self.metrics.nt_per_class.sum() == 0:
-            LOGGER.warning(f"no labels found in {self.args.task} set, can not compute metrics without labels")
+            LOGGER.warning(
+                f"no labels found in {self.args.task} set, can not compute metrics without labels"
+            )
 
         # Print results per class
-        if self.args.verbose and not self.training and self.nc > 1 and len(self.metrics.stats):
+        if (
+            self.args.verbose
+            and not self.training
+            and self.nc > 1
+            and len(self.metrics.stats)
+        ):
             for i, c in enumerate(self.metrics.ap_class_index):
                 LOGGER.info(
                     pf
@@ -252,7 +315,9 @@ class DetectionValidator(BaseValidator):
                     )
                 )
 
-    def _process_batch(self, preds: Dict[str, torch.Tensor], batch: Dict[str, Any]) -> Dict[str, np.ndarray]:
+    def _process_batch(
+        self, preds: Dict[str, torch.Tensor], batch: Dict[str, Any]
+    ) -> Dict[str, np.ndarray]:
         """
         Return correct prediction matrix.
 
@@ -266,9 +331,13 @@ class DetectionValidator(BaseValidator):
         if len(batch["cls"]) == 0 or len(preds["cls"]) == 0:
             return {"tp": np.zeros((len(preds["cls"]), self.niou), dtype=bool)}
         iou = box_iou(batch["bboxes"], preds["bboxes"])
-        return {"tp": self.match_predictions(preds["cls"], batch["cls"], iou).cpu().numpy()}
+        return {
+            "tp": self.match_predictions(preds["cls"], batch["cls"], iou).cpu().numpy()
+        }
 
-    def build_dataset(self, img_path: str, mode: str = "val", batch: Optional[int] = None) -> torch.utils.data.Dataset:
+    def build_dataset(
+        self, img_path: str, mode: str = "val", batch: Optional[int] = None
+    ) -> torch.utils.data.Dataset:
         """
         Build YOLO Dataset.
 
@@ -280,9 +349,13 @@ class DetectionValidator(BaseValidator):
         Returns:
             (Dataset): YOLO dataset.
         """
-        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
+        return build_yolo_dataset(
+            self.args, img_path, batch, self.data, mode=mode, stride=self.stride
+        )
 
-    def get_dataloader(self, dataset_path: str, batch_size: int) -> torch.utils.data.DataLoader:
+    def get_dataloader(
+        self, dataset_path: str, batch_size: int
+    ) -> torch.utils.data.DataLoader:
         """
         Construct and return dataloader.
 
@@ -294,7 +367,9 @@ class DetectionValidator(BaseValidator):
             (torch.utils.data.DataLoader): Dataloader for validation.
         """
         dataset = self.build_dataset(dataset_path, batch=batch_size, mode="val")
-        return build_dataloader(dataset, batch_size, self.args.workers, shuffle=False, rank=-1)  # return dataloader
+        return build_dataloader(
+            dataset, batch_size, self.args.workers, shuffle=False, rank=-1
+        )  # return dataloader
 
     def plot_val_samples(self, batch: Dict[str, Any], ni: int) -> None:
         """
@@ -313,7 +388,11 @@ class DetectionValidator(BaseValidator):
         )
 
     def plot_predictions(
-        self, batch: Dict[str, Any], preds: List[Dict[str, torch.Tensor]], ni: int, max_det: Optional[int] = None
+        self,
+        batch: Dict[str, Any],
+        preds: List[Dict[str, torch.Tensor]],
+        ni: int,
+        max_det: Optional[int] = None,
     ) -> None:
         """
         Plot predicted bounding boxes on input images and save the result.
@@ -326,12 +405,18 @@ class DetectionValidator(BaseValidator):
         """
         # TODO: optimize this
         for i, pred in enumerate(preds):
-            pred["batch_idx"] = torch.ones_like(pred["conf"]) * i  # add batch index to predictions
+            pred["batch_idx"] = (
+                torch.ones_like(pred["conf"]) * i
+            )  # add batch index to predictions
         keys = preds[0].keys()
         max_det = max_det or self.args.max_det
-        batched_preds = {k: torch.cat([x[k][:max_det] for x in preds], dim=0) for k in keys}
+        batched_preds = {
+            k: torch.cat([x[k][:max_det] for x in preds], dim=0) for k in keys
+        }
         # TODO: fix this
-        batched_preds["bboxes"][:, :4] = ops.xyxy2xywh(batched_preds["bboxes"][:, :4])  # convert to xywh format
+        batched_preds["bboxes"][:, :4] = ops.xyxy2xywh(
+            batched_preds["bboxes"][:, :4]
+        )  # convert to xywh format
         plot_images(
             images=batch["img"],
             labels=batched_preds,
@@ -341,7 +426,13 @@ class DetectionValidator(BaseValidator):
             on_plot=self.on_plot,
         )  # pred
 
-    def save_one_txt(self, predn: Dict[str, torch.Tensor], save_conf: bool, shape: Tuple[int, int], file: Path) -> None:
+    def save_one_txt(
+        self,
+        predn: Dict[str, torch.Tensor],
+        save_conf: bool,
+        shape: Tuple[int, int],
+        file: Path,
+    ) -> None:
         """
         Save YOLO detections to a txt file in normalized coordinates in a specific format.
 
@@ -357,7 +448,14 @@ class DetectionValidator(BaseValidator):
             np.zeros((shape[0], shape[1]), dtype=np.uint8),
             path=None,
             names=self.names,
-            boxes=torch.cat([predn["bboxes"], predn["conf"].unsqueeze(-1), predn["cls"].unsqueeze(-1)], dim=1),
+            boxes=torch.cat(
+                [
+                    predn["bboxes"],
+                    predn["conf"].unsqueeze(-1),
+                    predn["cls"].unsqueeze(-1),
+                ],
+                dim=1,
+            ),
         ).save_txt(file, save_conf=save_conf)
 
     def pred_to_json(self, predn: Dict[str, torch.Tensor], filename: str) -> None:
@@ -397,7 +495,11 @@ class DetectionValidator(BaseValidator):
         anno_json = (
             self.data["path"]
             / "annotations"
-            / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
+            / (
+                "instances_val2017.json"
+                if self.is_coco
+                else f"lvis_v1_{self.args.split}.json"
+            )
         )  # annotations
         return self.coco_evaluate(stats, pred_json, anno_json)
 
@@ -429,7 +531,9 @@ class DetectionValidator(BaseValidator):
             (Dict[str, Any]): Updated stats dictionary containing the computed COCO/LVIS evaluation metrics.
         """
         if self.args.save_json and (self.is_coco or self.is_lvis) and len(self.jdict):
-            LOGGER.info(f"\nEvaluating faster-coco-eval mAP using {pred_json} and {anno_json}...")
+            LOGGER.info(
+                f"\nEvaluating faster-coco-eval mAP using {pred_json} and {anno_json}..."
+            )
             try:
                 for x in pred_json, anno_json:
                     assert x.is_file(), f"{x} file not found"
@@ -442,16 +546,26 @@ class DetectionValidator(BaseValidator):
                 pred = anno.loadRes(pred_json)
                 for i, iou_type in enumerate(iou_types):
                     val = COCOeval_faster(
-                        anno, pred, iouType=iou_type, lvis_style=self.is_lvis, print_function=LOGGER.info
+                        anno,
+                        pred,
+                        iouType=iou_type,
+                        lvis_style=self.is_lvis,
+                        print_function=LOGGER.info,
                     )
-                    val.params.imgIds = [int(Path(x).stem) for x in self.dataloader.dataset.im_files]  # images to eval
+                    val.params.imgIds = [
+                        int(Path(x).stem) for x in self.dataloader.dataset.im_files
+                    ]  # images to eval
                     val.evaluate()
                     val.accumulate()
                     val.summarize()
 
                     # update mAP50-95 and mAP50
-                    stats[f"metrics/mAP50({suffix[i][0]})"] = val.stats_as_dict["AP_all"]
-                    stats[f"metrics/mAP50-95({suffix[i][0]})"] = val.stats_as_dict["AP_50"]
+                    stats[f"metrics/mAP50({suffix[i][0]})"] = val.stats_as_dict[
+                        "AP_all"
+                    ]
+                    stats[f"metrics/mAP50-95({suffix[i][0]})"] = val.stats_as_dict[
+                        "AP_50"
+                    ]
 
                     if self.is_lvis:
                         stats[f"metrics/APr({suffix[i][0]})"] = val.stats_as_dict["APr"]
@@ -459,7 +573,9 @@ class DetectionValidator(BaseValidator):
                         stats[f"metrics/APf({suffix[i][0]})"] = val.stats_as_dict["APf"]
 
                 if self.is_lvis:
-                    stats["fitness"] = stats["metrics/mAP50-95(B)"]  # always use box mAP50-95 for fitness
+                    stats["fitness"] = stats[
+                        "metrics/mAP50-95(B)"
+                    ]  # always use box mAP50-95 for fitness
             except Exception as e:
                 LOGGER.warning(f"faster-coco-eval unable to run: {e}")
         return stats

@@ -6,7 +6,11 @@ from typing import Any, List, Tuple
 import cv2
 import numpy as np
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 from ultralytics.utils import LOGGER
 from ultralytics.utils.checks import check_imshow
 
@@ -62,7 +66,9 @@ class ParkingPtsSelection:
                 "Darwin": "reinstall Python from https://www.python.org/downloads/macos/ or `brew install python-tk`",
             }.get(platform.system(), "Unknown OS. Check your Python installation.")
 
-            LOGGER.warning(f" Tkinter is not configured or supported. Potential fix: {install_cmd}")
+            LOGGER.warning(
+                f" Tkinter is not configured or supported. Potential fix: {install_cmd}"
+            )
             return
 
         if not check_imshow(warn=True):
@@ -73,7 +79,9 @@ class ParkingPtsSelection:
         self.master.title("Ultralytics Parking Zones Points Selector")
         self.master.resizable(False, False)
 
-        self.canvas = self.tk.Canvas(self.master, bg="white")  # Canvas widget for displaying images
+        self.canvas = self.tk.Canvas(
+            self.master, bg="white"
+        )  # Canvas widget for displaying images
         self.canvas.pack(side=self.tk.BOTTOM)
 
         self.image = None  # Variable to store the loaded image
@@ -108,9 +116,14 @@ class ParkingPtsSelection:
 
     def upload_image(self) -> None:
         """Upload and display an image on the canvas, resizing it to fit within specified dimensions."""
-        from PIL import Image, ImageTk  # Scoped import because ImageTk requires tkinter package
+        from PIL import (
+            Image,
+            ImageTk,
+        )  # Scoped import because ImageTk requires tkinter package
 
-        file = self.filedialog.askopenfilename(filetypes=[("Image Files", "*.png *.jpg *.jpeg")])
+        file = self.filedialog.askopenfilename(
+            filetypes=[("Image Files", "*.png *.jpg *.jpeg")]
+        )
         if not file:
             LOGGER.info("No image selected.")
             return
@@ -119,14 +132,20 @@ class ParkingPtsSelection:
         self.imgw, self.imgh = self.image.size
         aspect_ratio = self.imgw / self.imgh
         canvas_width = (
-            min(self.canvas_max_width, self.imgw) if aspect_ratio > 1 else int(self.canvas_max_height * aspect_ratio)
+            min(self.canvas_max_width, self.imgw)
+            if aspect_ratio > 1
+            else int(self.canvas_max_height * aspect_ratio)
         )
         canvas_height = (
-            min(self.canvas_max_height, self.imgh) if aspect_ratio <= 1 else int(canvas_width / aspect_ratio)
+            min(self.canvas_max_height, self.imgh)
+            if aspect_ratio <= 1
+            else int(canvas_width / aspect_ratio)
         )
 
         self.canvas.config(width=canvas_width, height=canvas_height)
-        self.canvas_image = ImageTk.PhotoImage(self.image.resize((canvas_width, canvas_height)))
+        self.canvas_image = ImageTk.PhotoImage(
+            self.image.resize((canvas_width, canvas_height))
+        )
         self.canvas.create_image(0, 0, anchor=self.tk.NW, image=self.canvas_image)
         self.canvas.bind("<Button-1>", self.on_canvas_click)
 
@@ -135,7 +154,9 @@ class ParkingPtsSelection:
     def on_canvas_click(self, event) -> None:
         """Handle mouse clicks to add points for bounding boxes on the canvas."""
         self.current_box.append((event.x, event.y))
-        self.canvas.create_oval(event.x - 3, event.y - 3, event.x + 3, event.y + 3, fill="red")
+        self.canvas.create_oval(
+            event.x - 3, event.y - 3, event.x + 3, event.y + 3, fill="red"
+        )
         if len(self.current_box) == 4:
             self.rg_data.append(self.current_box.copy())
             self.draw_box(self.current_box)
@@ -163,16 +184,26 @@ class ParkingPtsSelection:
 
     def save_to_json(self) -> None:
         """Save the selected parking zone points to a JSON file with scaled coordinates."""
-        scale_w, scale_h = self.imgw / self.canvas.winfo_width(), self.imgh / self.canvas.winfo_height()
-        data = [{"points": [(int(x * scale_w), int(y * scale_h)) for x, y in box]} for box in self.rg_data]
+        scale_w, scale_h = (
+            self.imgw / self.canvas.winfo_width(),
+            self.imgh / self.canvas.winfo_height(),
+        )
+        data = [
+            {"points": [(int(x * scale_w), int(y * scale_h)) for x, y in box]}
+            for box in self.rg_data
+        ]
 
-        from io import StringIO  # Function level import, as it's only required to store coordinates
+        from io import (
+            StringIO,
+        )  # Function level import, as it's only required to store coordinates
 
         write_buffer = StringIO()
         json.dump(data, write_buffer, indent=4)
         with open("bounding_boxes.json", "w", encoding="utf-8") as f:
             f.write(write_buffer.getvalue())
-        self.messagebox.showinfo("Success", "Bounding boxes saved to bounding_boxes.json")
+        self.messagebox.showinfo(
+            "Success", "Bounding boxes saved to bounding_boxes.json"
+        )
 
 
 class ParkingManagement(BaseSolution):
@@ -206,13 +237,18 @@ class ParkingManagement(BaseSolution):
 
         self.json_file = self.CFG["json_file"]  # Load parking regions JSON data
         if self.json_file is None:
-            LOGGER.warning("json_file argument missing. Parking region details required.")
+            LOGGER.warning(
+                "json_file argument missing. Parking region details required."
+            )
             raise ValueError("❌ Json file path can not be empty")
 
         with open(self.json_file) as f:
             self.json = json.load(f)
 
-        self.pr_info = {"Occupancy": 0, "Available": 0}  # Dictionary for parking information
+        self.pr_info = {
+            "Occupancy": 0,
+            "Available": 0,
+        }  # Dictionary for parking information
 
         self.arc = (0, 0, 255)  # Available region color
         self.occ = (0, 255, 0)  # Occupied region color
@@ -252,17 +288,31 @@ class ParkingManagement(BaseSolution):
                 if dist >= 0:
                     # cv2.circle(im0, (xc, yc), radius=self.line_width * 4, color=self.dc, thickness=-1)
                     annotator.display_objects_labels(
-                        im0, self.model.names[int(cls)], (104, 31, 17), (255, 255, 255), xc, yc, 10
+                        im0,
+                        self.model.names[int(cls)],
+                        (104, 31, 17),
+                        (255, 255, 255),
+                        xc,
+                        yc,
+                        10,
                     )
                     rg_occupied = True
                     break
             fs, es = (fs + 1, es - 1) if rg_occupied else (fs, es)
             # Plot regions
-            cv2.polylines(im0, [pts_array], isClosed=True, color=self.occ if rg_occupied else self.arc, thickness=2)
+            cv2.polylines(
+                im0,
+                [pts_array],
+                isClosed=True,
+                color=self.occ if rg_occupied else self.arc,
+                thickness=2,
+            )
 
         self.pr_info["Occupancy"], self.pr_info["Available"] = fs, es
 
-        annotator.display_analytics(im0, self.pr_info, (104, 31, 17), (255, 255, 255), 10)
+        annotator.display_analytics(
+            im0, self.pr_info, (104, 31, 17), (255, 255, 255), 10
+        )
 
         plot_im = annotator.result()
         self.display_output(plot_im)  # Display output with base class function

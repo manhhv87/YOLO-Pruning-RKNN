@@ -50,17 +50,32 @@ def auto_annotate(
     Path(output_dir).mkdir(exist_ok=True, parents=True)
 
     det_results = det_model(
-        data, stream=True, device=device, conf=conf, iou=iou, imgsz=imgsz, max_det=max_det, classes=classes
+        data,
+        stream=True,
+        device=device,
+        conf=conf,
+        iou=iou,
+        imgsz=imgsz,
+        max_det=max_det,
+        classes=classes,
     )
 
     for result in det_results:
-        class_ids = result.boxes.cls.int().tolist()  # Extract class IDs from detection results
+        class_ids = (
+            result.boxes.cls.int().tolist()
+        )  # Extract class IDs from detection results
         if class_ids:
             boxes = result.boxes.xyxy  # Boxes object for bbox outputs
-            sam_results = sam_model(result.orig_img, bboxes=boxes, verbose=False, save=False, device=device)
+            sam_results = sam_model(
+                result.orig_img, bboxes=boxes, verbose=False, save=False, device=device
+            )
             segments = sam_results[0].masks.xyn
 
-            with open(f"{Path(output_dir) / Path(result.path).stem}.txt", "w", encoding="utf-8") as f:
+            with open(
+                f"{Path(output_dir) / Path(result.path).stem}.txt",
+                "w",
+                encoding="utf-8",
+            ) as f:
                 for i, s in enumerate(segments):
                     if s.any():
                         segment = map(str, s.reshape(-1).tolist())

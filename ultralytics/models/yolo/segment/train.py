@@ -27,7 +27,9 @@ class SegmentationTrainer(yolo.detect.DetectionTrainer):
         >>> trainer.train()
     """
 
-    def __init__(self, cfg=DEFAULT_CFG, overrides: Optional[Dict] = None, _callbacks=None):
+    def __init__(
+        self, cfg=DEFAULT_CFG, overrides: Optional[Dict] = None, _callbacks=None
+    ):
         """
         Initialize a SegmentationTrainer object.
 
@@ -51,7 +53,10 @@ class SegmentationTrainer(yolo.detect.DetectionTrainer):
         super().__init__(cfg, overrides, _callbacks)
 
     def get_model(
-        self, cfg: Optional[Union[Dict, str]] = None, weights: Optional[Union[str, Path]] = None, verbose: bool = True
+        self,
+        cfg: Optional[Union[Dict, str]] = None,
+        weights: Optional[Union[str, Path]] = None,
+        verbose: bool = True,
     ):
         """
         Initialize and return a SegmentationModel with specified configuration and weights.
@@ -69,7 +74,12 @@ class SegmentationTrainer(yolo.detect.DetectionTrainer):
             >>> model = trainer.get_model(cfg="yolo11n-seg.yaml")
             >>> model = trainer.get_model(weights="yolo11n-seg.pt", verbose=False)
         """
-        model = SegmentationModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
+        model = SegmentationModel(
+            cfg,
+            nc=self.data["nc"],
+            ch=self.data["channels"],
+            verbose=verbose and RANK == -1,
+        )
         if weights:
             model.load(weights)
 
@@ -79,9 +89,14 @@ class SegmentationTrainer(yolo.detect.DetectionTrainer):
         """Return an instance of SegmentationValidator for validation of YOLO model."""
         self.loss_names = "box_loss", "seg_loss", "cls_loss", "dfl_loss"
         return yolo.segment.SegmentationValidator(
-            self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
+            self.test_loader,
+            save_dir=self.save_dir,
+            args=copy(self.args),
+            _callbacks=self.callbacks,
         )
 
     def plot_metrics(self):
         """Plot training/validation metrics."""
-        plot_results(file=self.csv, segment=True, on_plot=self.on_plot)  # save results.png
+        plot_results(
+            file=self.csv, segment=True, on_plot=self.on_plot
+        )  # save results.png

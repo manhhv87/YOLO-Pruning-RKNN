@@ -35,7 +35,9 @@ class SegmentationValidator(DetectionValidator):
         >>> validator()
     """
 
-    def __init__(self, dataloader=None, save_dir=None, args=None, _callbacks=None) -> None:
+    def __init__(
+        self, dataloader=None, save_dir=None, args=None, _callbacks=None
+    ) -> None:
         """
         Initialize SegmentationValidator and set task to 'segment', metrics to SegmentMetrics.
 
@@ -75,7 +77,11 @@ class SegmentationValidator(DetectionValidator):
         if self.args.save_json:
             check_requirements("faster-coco-eval>=1.6.7")
         # More accurate vs faster
-        self.process = ops.process_mask_native if self.args.save_json or self.args.save_txt else ops.process_mask
+        self.process = (
+            ops.process_mask_native
+            if self.args.save_json or self.args.save_txt
+            else ops.process_mask
+        )
 
     def get_desc(self) -> str:
         """Return a formatted description of evaluation metrics."""
@@ -103,7 +109,9 @@ class SegmentationValidator(DetectionValidator):
         Returns:
             List[Dict[str, torch.Tensor]]: Processed detection predictions with masks.
         """
-        proto = preds[1][-1] if len(preds[1]) == 3 else preds[1]  # second output is len 3 if pt, but only 1 if exported
+        proto = (
+            preds[1][-1] if len(preds[1]) == 3 else preds[1]
+        )  # second output is len 3 if pt, but only 1 if exported
         preds = super().postprocess(preds[0])
         imgsz = [4 * x for x in proto.shape[2:]]  # get image size from proto
         for i, pred in enumerate(preds):
@@ -112,7 +120,14 @@ class SegmentationValidator(DetectionValidator):
                 self.process(proto[i], coefficient, pred["bboxes"], shape=imgsz)
                 if len(coefficient)
                 else torch.zeros(
-                    (0, *(imgsz if self.process is ops.process_mask_native else proto.shape[2:])),
+                    (
+                        0,
+                        *(
+                            imgsz
+                            if self.process is ops.process_mask_native
+                            else proto.shape[2:]
+                        ),
+                    ),
                     dtype=torch.uint8,
                     device=pred["bboxes"].device,
                 )
@@ -135,7 +150,9 @@ class SegmentationValidator(DetectionValidator):
         prepared_batch["masks"] = batch["masks"][midx]
         return prepared_batch
 
-    def _prepare_pred(self, pred: Dict[str, torch.Tensor], pbatch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+    def _prepare_pred(
+        self, pred: Dict[str, torch.Tensor], pbatch: Dict[str, Any]
+    ) -> Dict[str, torch.Tensor]:
         """
         Prepare predictions for evaluation by processing bounding boxes and masks.
 
@@ -158,7 +175,9 @@ class SegmentationValidator(DetectionValidator):
             predn["coco_masks"] = coco_masks
         return predn
 
-    def _process_batch(self, preds: Dict[str, torch.Tensor], batch: Dict[str, Any]) -> Dict[str, np.ndarray]:
+    def _process_batch(
+        self, preds: Dict[str, torch.Tensor], batch: Dict[str, Any]
+    ) -> Dict[str, np.ndarray]:
         """
         Compute correct prediction matrix for a batch based on bounding boxes and optional masks.
 
@@ -190,14 +209,24 @@ class SegmentationValidator(DetectionValidator):
                 gt_masks = gt_masks.repeat(nl, 1, 1)  # shape(1,640,640) -> (n,640,640)
                 gt_masks = torch.where(gt_masks == index, 1.0, 0.0)
             if gt_masks.shape[1:] != pred_masks.shape[1:]:
-                gt_masks = F.interpolate(gt_masks[None], pred_masks.shape[1:], mode="bilinear", align_corners=False)[0]
+                gt_masks = F.interpolate(
+                    gt_masks[None],
+                    pred_masks.shape[1:],
+                    mode="bilinear",
+                    align_corners=False,
+                )[0]
                 gt_masks = gt_masks.gt_(0.5)
-            iou = mask_iou(gt_masks.view(gt_masks.shape[0], -1), pred_masks.view(pred_masks.shape[0], -1))
+            iou = mask_iou(
+                gt_masks.view(gt_masks.shape[0], -1),
+                pred_masks.view(pred_masks.shape[0], -1),
+            )
             tp_m = self.match_predictions(preds["cls"], gt_cls, iou).cpu().numpy()
         tp.update({"tp_m": tp_m})  # update tp with mask IoU
         return tp
 
-    def plot_predictions(self, batch: Dict[str, Any], preds: List[Dict[str, torch.Tensor]], ni: int) -> None:
+    def plot_predictions(
+        self, batch: Dict[str, Any], preds: List[Dict[str, torch.Tensor]], ni: int
+    ) -> None:
         """
         Plot batch predictions with masks and bounding boxes.
 
@@ -209,11 +238,15 @@ class SegmentationValidator(DetectionValidator):
         for p in preds:
             masks = p["masks"]
             if masks.shape[0] > 50:
-                LOGGER.warning("Limiting validation plots to first 50 items per image for speed...")
+                LOGGER.warning(
+                    "Limiting validation plots to first 50 items per image for speed..."
+                )
             p["masks"] = torch.as_tensor(masks[:50], dtype=torch.uint8).cpu()
         super().plot_predictions(batch, preds, ni, max_det=50)  # plot bboxes
 
-    def save_one_txt(self, predn: torch.Tensor, save_conf: bool, shape: Tuple[int, int], file: Path) -> None:
+    def save_one_txt(
+        self, predn: torch.Tensor, save_conf: bool, shape: Tuple[int, int], file: Path
+    ) -> None:
         """
         Save YOLO detections to a txt file in normalized coordinates in a specific format.
 
@@ -229,7 +262,14 @@ class SegmentationValidator(DetectionValidator):
             np.zeros((shape[0], shape[1]), dtype=np.uint8),
             path=None,
             names=self.names,
-            boxes=torch.cat([predn["bboxes"], predn["conf"].unsqueeze(-1), predn["cls"].unsqueeze(-1)], dim=1),
+            boxes=torch.cat(
+                [
+                    predn["bboxes"],
+                    predn["conf"].unsqueeze(-1),
+                    predn["cls"].unsqueeze(-1),
+                ],
+                dim=1,
+            ),
             masks=torch.as_tensor(predn["masks"], dtype=torch.uint8),
         ).save_txt(file, save_conf=save_conf)
 
@@ -259,7 +299,9 @@ class SegmentationValidator(DetectionValidator):
         pred_masks = np.transpose(predn["coco_masks"], (2, 0, 1))
         with ThreadPool(NUM_THREADS) as pool:
             rles = pool.map(single_encode, pred_masks)
-        for i, (b, s, c) in enumerate(zip(box.tolist(), predn["conf"].tolist(), predn["cls"].tolist())):
+        for i, (b, s, c) in enumerate(
+            zip(box.tolist(), predn["conf"].tolist(), predn["cls"].tolist())
+        ):
             self.jdict.append(
                 {
                     "image_id": image_id,
@@ -276,6 +318,12 @@ class SegmentationValidator(DetectionValidator):
         anno_json = (
             self.data["path"]
             / "annotations"
-            / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
+            / (
+                "instances_val2017.json"
+                if self.is_coco
+                else f"lvis_v1_{self.args.split}.json"
+            )
         )  # annotations
-        return super().coco_evaluate(stats, pred_json, anno_json, ["bbox", "segm"], suffix=["Box", "Mask"])
+        return super().coco_evaluate(
+            stats, pred_json, anno_json, ["bbox", "segm"], suffix=["Box", "Mask"]
+        )

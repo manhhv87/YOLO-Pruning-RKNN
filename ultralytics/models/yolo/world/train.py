@@ -17,7 +17,10 @@ def on_pretrain_routine_end(trainer) -> None:
     """Set up model classes and text encoder at the end of the pretrain routine."""
     if RANK in {-1, 0}:
         # Set class names for evaluation
-        names = [name.split("/", 1)[0] for name in list(trainer.test_loader.dataset.data["names"].values())]
+        names = [
+            name.split("/", 1)[0]
+            for name in list(trainer.test_loader.dataset.data["names"].values())
+        ]
         de_parallel(trainer.ema.ema).set_classes(names, cache_clip_model=False)
 
 
@@ -51,7 +54,12 @@ class WorldTrainer(DetectionTrainer):
         >>> trainer.train()
     """
 
-    def __init__(self, cfg=DEFAULT_CFG, overrides: Optional[Dict[str, Any]] = None, _callbacks=None):
+    def __init__(
+        self,
+        cfg=DEFAULT_CFG,
+        overrides: Optional[Dict[str, Any]] = None,
+        _callbacks=None,
+    ):
         """
         Initialize a WorldTrainer object with given arguments.
 
@@ -65,7 +73,9 @@ class WorldTrainer(DetectionTrainer):
         super().__init__(cfg, overrides, _callbacks)
         self.text_embeddings = None
 
-    def get_model(self, cfg=None, weights: Optional[str] = None, verbose: bool = True) -> WorldModel:
+    def get_model(
+        self, cfg=None, weights: Optional[str] = None, verbose: bool = True
+    ) -> WorldModel:
         """
         Return WorldModel initialized with specified config and weights.
 
@@ -91,7 +101,9 @@ class WorldTrainer(DetectionTrainer):
 
         return model
 
-    def build_dataset(self, img_path: str, mode: str = "train", batch: Optional[int] = None):
+    def build_dataset(
+        self, img_path: str, mode: str = "train", batch: Optional[int] = None
+    ):
         """
         Build YOLO Dataset for training or validation.
 
@@ -105,10 +117,19 @@ class WorldTrainer(DetectionTrainer):
         """
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
         dataset = build_yolo_dataset(
-            self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs, multi_modal=mode == "train"
+            self.args,
+            img_path,
+            batch,
+            self.data,
+            mode=mode,
+            rect=mode == "val",
+            stride=gs,
+            multi_modal=mode == "train",
         )
         if mode == "train":
-            self.set_text_embeddings([dataset], batch)  # cache text embeddings to accelerate training
+            self.set_text_embeddings(
+                [dataset], batch
+            )  # cache text embeddings to accelerate training
         return dataset
 
     def set_text_embeddings(self, datasets: List[Any], batch: Optional[int]) -> None:
@@ -132,12 +153,16 @@ class WorldTrainer(DetectionTrainer):
                 continue
             text_embeddings.update(
                 self.generate_text_embeddings(
-                    list(dataset.category_names), batch, cache_dir=Path(dataset.img_path).parent
+                    list(dataset.category_names),
+                    batch,
+                    cache_dir=Path(dataset.img_path).parent,
                 )
             )
         self.text_embeddings = text_embeddings
 
-    def generate_text_embeddings(self, texts: List[str], batch: int, cache_dir: Path) -> Dict[str, torch.Tensor]:
+    def generate_text_embeddings(
+        self, texts: List[str], batch: int, cache_dir: Path
+    ) -> Dict[str, torch.Tensor]:
         """
         Generate text embeddings for a list of text samples.
 
@@ -150,7 +175,10 @@ class WorldTrainer(DetectionTrainer):
             (Dict[str, torch.Tensor]): Dictionary mapping text samples to their embeddings.
         """
         model = "clip:ViT-B/32"
-        cache_path = cache_dir / f"text_embeddings_{model.replace(':', '_').replace('/', '_')}.pt"
+        cache_path = (
+            cache_dir
+            / f"text_embeddings_{model.replace(':', '_').replace('/', '_')}.pt"
+        )
         if cache_path.exists():
             LOGGER.info(f"Reading existed cache from '{cache_path}'")
             txt_map = torch.load(cache_path)
@@ -158,7 +186,9 @@ class WorldTrainer(DetectionTrainer):
                 return txt_map
         LOGGER.info(f"Caching text embeddings to '{cache_path}'")
         assert self.model is not None
-        txt_feats = de_parallel(self.model).get_text_pe(texts, batch, cache_clip_model=False)
+        txt_feats = de_parallel(self.model).get_text_pe(
+            texts, batch, cache_clip_model=False
+        )
         txt_map = dict(zip(texts, txt_feats.squeeze(0)))
         torch.save(txt_map, cache_path)
         return txt_map
@@ -169,7 +199,11 @@ class WorldTrainer(DetectionTrainer):
 
         # Add text features
         texts = list(itertools.chain(*batch["texts"]))
-        txt_feats = torch.stack([self.text_embeddings[text] for text in texts]).to(self.device)
+        txt_feats = torch.stack([self.text_embeddings[text] for text in texts]).to(
+            self.device
+        )
         txt_feats = txt_feats / txt_feats.norm(p=2, dim=-1, keepdim=True)
-        batch["txt_feats"] = txt_feats.reshape(len(batch["texts"]), -1, txt_feats.shape[-1])
+        batch["txt_feats"] = txt_feats.reshape(
+            len(batch["texts"]), -1, txt_feats.shape[-1]
+        )
         return batch

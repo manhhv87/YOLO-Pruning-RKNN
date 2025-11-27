@@ -47,7 +47,12 @@ class YOLO(Model):
         >>> model = YOLO("yolo11n.yaml")
     """
 
-    def __init__(self, model: Union[str, Path] = "yolo11n.pt", task: Optional[str] = None, verbose: bool = False):
+    def __init__(
+        self,
+        model: Union[str, Path] = "yolo11n.pt",
+        task: Optional[str] = None,
+        verbose: bool = False,
+    ):
         """
         Initialize a YOLO model.
 
@@ -66,18 +71,29 @@ class YOLO(Model):
             >>> model = YOLO("yolo11n-seg.pt")  # load a pretrained YOLO11n segmentation model
         """
         path = Path(model if isinstance(model, (str, Path)) else "")
-        if "-world" in path.stem and path.suffix in {".pt", ".yaml", ".yml"}:  # if YOLOWorld PyTorch model
+        if "-world" in path.stem and path.suffix in {
+            ".pt",
+            ".yaml",
+            ".yml",
+        }:  # if YOLOWorld PyTorch model
             new_instance = YOLOWorld(path, verbose=verbose)
             self.__class__ = type(new_instance)
             self.__dict__ = new_instance.__dict__
-        elif "yoloe" in path.stem and path.suffix in {".pt", ".yaml", ".yml"}:  # if YOLOE PyTorch model
+        elif "yoloe" in path.stem and path.suffix in {
+            ".pt",
+            ".yaml",
+            ".yml",
+        }:  # if YOLOE PyTorch model
             new_instance = YOLOE(path, task=task, verbose=verbose)
             self.__class__ = type(new_instance)
             self.__dict__ = new_instance.__dict__
         else:
             # Continue with default YOLO initialization
             super().__init__(model=model, task=task, verbose=verbose)
-            if hasattr(self.model, "model") and "RTDETR" in self.model.model[-1]._get_name():  # if RTDETR head
+            if (
+                hasattr(self.model, "model")
+                and "RTDETR" in self.model.model[-1]._get_name()
+            ):  # if RTDETR head
                 from ultralytics import RTDETR
 
                 new_instance = RTDETR(self)
@@ -147,7 +163,9 @@ class YOLOWorld(Model):
         >>> model.set_classes(["person", "car", "bicycle"])
     """
 
-    def __init__(self, model: Union[str, Path] = "yolov8s-world.pt", verbose: bool = False) -> None:
+    def __init__(
+        self, model: Union[str, Path] = "yolov8s-world.pt", verbose: bool = False
+    ) -> None:
         """
         Initialize YOLOv8-World model with a pre-trained model file.
 
@@ -231,7 +249,10 @@ class YOLOE(Model):
     """
 
     def __init__(
-        self, model: Union[str, Path] = "yoloe-11s-seg.pt", task: Optional[str] = None, verbose: bool = False
+        self,
+        model: Union[str, Path] = "yoloe-11s-seg.pt",
+        task: Optional[str] = None,
+        verbose: bool = False,
     ) -> None:
         """
         Initialize YOLOE model with a pre-trained model file.
@@ -357,9 +378,16 @@ class YOLOE(Model):
             (dict): Validation statistics containing metrics computed during validation.
         """
         custom = {"rect": not load_vp}  # method defaults
-        args = {**self.overrides, **custom, **kwargs, "mode": "val"}  # highest priority args on the right
+        args = {
+            **self.overrides,
+            **custom,
+            **kwargs,
+            "mode": "val",
+        }  # highest priority args on the right
 
-        validator = (validator or self._smart_load("validator"))(args=args, _callbacks=self.callbacks)
+        validator = (validator or self._smart_load("validator"))(
+            args=args, _callbacks=self.callbacks
+        )
         validator(model=self.model, load_vp=load_vp, refer_data=refer_data)
         self.metrics = validator.metrics
         return validator.metrics
@@ -399,9 +427,9 @@ class YOLOE(Model):
             >>> results = model.predict("path/to/image.jpg", visual_prompts=prompts)
         """
         if len(visual_prompts):
-            assert "bboxes" in visual_prompts and "cls" in visual_prompts, (
-                f"Expected 'bboxes' and 'cls' in visual prompts, but got {visual_prompts.keys()}"
-            )
+            assert (
+                "bboxes" in visual_prompts and "cls" in visual_prompts
+            ), f"Expected 'bboxes' and 'cls' in visual prompts, but got {visual_prompts.keys()}"
             assert len(visual_prompts["bboxes"]) == len(visual_prompts["cls"]), (
                 f"Expected equal number of bounding boxes and classes, but got {len(visual_prompts['bboxes'])} and "
                 f"{len(visual_prompts['cls'])} respectively"
@@ -420,7 +448,8 @@ class YOLOE(Model):
 
             num_cls = (
                 max(len(set(c)) for c in visual_prompts["cls"])
-                if isinstance(source, list) and refer_image is None  # means multiple images
+                if isinstance(source, list)
+                and refer_image is None  # means multiple images
                 else len(set(visual_prompts["cls"]))
             )
             self.model.model[-1].nc = num_cls
@@ -436,7 +465,11 @@ class YOLOE(Model):
             if refer_image is not None:
                 vpe = self.predictor.get_vpe(refer_image)
                 self.model.set_classes(self.model.names, vpe)
-                self.task = "segment" if isinstance(self.predictor, yolo.segment.SegmentationPredictor) else "detect"
+                self.task = (
+                    "segment"
+                    if isinstance(self.predictor, yolo.segment.SegmentationPredictor)
+                    else "detect"
+                )
                 self.predictor = None  # reset predictor
         elif isinstance(self.predictor, yolo.yoloe.YOLOEVPDetectPredictor):
             self.predictor = None  # reset predictor if no visual prompts

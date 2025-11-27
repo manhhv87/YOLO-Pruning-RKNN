@@ -4,7 +4,11 @@ from typing import Any, List, Tuple
 
 import numpy as np
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 from ultralytics.utils.plotting import colors
 
 
@@ -106,13 +110,22 @@ class RegionCounter(BaseSolution):
                 region["prepared_polygon"] = self.prep(region["polygon"])
 
         # Convert bounding boxes to NumPy array for center points
-        boxes_np = np.array([((box[0] + box[2]) / 2, (box[1] + box[3]) / 2) for box in self.boxes], dtype=np.float32)
+        boxes_np = np.array(
+            [((box[0] + box[2]) / 2, (box[1] + box[3]) / 2) for box in self.boxes],
+            dtype=np.float32,
+        )
         points = [self.Point(pt) for pt in boxes_np]  # Convert centers to Point objects
 
         # Process bounding boxes & check containment
         if points:
-            for point, cls, track_id, box, conf in zip(points, self.clss, self.track_ids, self.boxes, self.confs):
-                annotator.box_label(box, label=self.adjust_box_label(cls, conf, track_id), color=colors(track_id, True))
+            for point, cls, track_id, box, conf in zip(
+                points, self.clss, self.track_ids, self.boxes, self.confs
+            ):
+                annotator.box_label(
+                    box,
+                    label=self.adjust_box_label(cls, conf, track_id),
+                    color=colors(track_id, True),
+                )
 
                 for region in self.counting_regions:
                     if region["prepared_polygon"].contains(point):
@@ -132,4 +145,8 @@ class RegionCounter(BaseSolution):
         plot_im = annotator.result()
         self.display_output(plot_im)
 
-        return SolutionResults(plot_im=plot_im, total_tracks=len(self.track_ids), region_counts=self.region_counts)
+        return SolutionResults(
+            plot_im=plot_im,
+            total_tracks=len(self.track_ids),
+            region_counts=self.region_counts,
+        )

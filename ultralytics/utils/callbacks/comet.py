@@ -8,7 +8,13 @@ import cv2
 import numpy as np
 
 from ultralytics.utils import LOGGER, RANK, SETTINGS, TESTS_RUNNING, ops
-from ultralytics.utils.metrics import ClassifyMetrics, DetMetrics, OBBMetrics, PoseMetrics, SegmentMetrics
+from ultralytics.utils.metrics import (
+    ClassifyMetrics,
+    DetMetrics,
+    OBBMetrics,
+    PoseMetrics,
+    SegmentMetrics,
+)
 
 try:
     assert not TESTS_RUNNING  # do not log pytest
@@ -115,7 +121,9 @@ def _resume_or_create_experiment(args: SimpleNamespace) -> None:
         experiment.log_other("Created from", "ultralytics")
 
     except Exception as e:
-        LOGGER.warning(f"Comet installed but not initialized correctly, not logging this run. {e}")
+        LOGGER.warning(
+            f"Comet installed but not initialized correctly, not logging this run. {e}"
+        )
 
 
 def _fetch_trainer_metadata(trainer) -> dict:
@@ -139,7 +147,12 @@ def _fetch_trainer_metadata(trainer) -> dict:
     save_interval = curr_epoch % save_period == 0
     save_assets = save and save_period > 0 and save_interval and not final_epoch
 
-    return dict(curr_epoch=curr_epoch, curr_step=curr_step, save_assets=save_assets, final_epoch=final_epoch)
+    return dict(
+        curr_epoch=curr_epoch,
+        curr_step=curr_step,
+        save_assets=save_assets,
+        final_epoch=final_epoch,
+    )
 
 
 def _scale_bounding_box_to_original_image_shape(
@@ -175,7 +188,9 @@ def _scale_bounding_box_to_original_image_shape(
     return box
 
 
-def _format_ground_truth_annotations_for_detection(img_idx, image_path, batch, class_name_map=None) -> Optional[dict]:
+def _format_ground_truth_annotations_for_detection(
+    img_idx, image_path, batch, class_name_map=None
+) -> Optional[dict]:
     """
     Format ground truth annotations for object detection.
 
@@ -218,7 +233,9 @@ def _format_ground_truth_annotations_for_detection(img_idx, image_path, batch, c
 
     data = []
     for box, label in zip(bboxes, cls_labels):
-        box = _scale_bounding_box_to_original_image_shape(box, resized_image_shape, original_image_shape, ratio_pad)
+        box = _scale_bounding_box_to_original_image_shape(
+            box, resized_image_shape, original_image_shape, ratio_pad
+        )
         data.append(
             {
                 "boxes": [box],
@@ -230,7 +247,9 @@ def _format_ground_truth_annotations_for_detection(img_idx, image_path, batch, c
     return {"name": "ground_truth", "data": data}
 
 
-def _format_prediction_annotations(image_path, metadata, class_label_map=None, class_map=None) -> Optional[dict]:
+def _format_prediction_annotations(
+    image_path, metadata, class_label_map=None, class_map=None
+) -> Optional[dict]:
     """
     Format YOLO predictions for object detection visualization.
 
@@ -283,7 +302,9 @@ def _format_prediction_annotations(image_path, metadata, class_label_map=None, c
     return {"name": "prediction", "data": data}
 
 
-def _extract_segmentation_annotation(segmentation_raw: str, decode: Callable) -> Optional[List[List[Any]]]:
+def _extract_segmentation_annotation(
+    segmentation_raw: str, decode: Callable
+) -> Optional[List[List[Any]]]:
     """
     Extract segmentation annotation from compressed segmentations as list of polygons.
 
@@ -297,7 +318,9 @@ def _extract_segmentation_annotation(segmentation_raw: str, decode: Callable) ->
     try:
         mask = decode(segmentation_raw)
         contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        annotations = [np.array(polygon).squeeze() for polygon in contours if len(polygon) >= 3]
+        annotations = [
+            np.array(polygon).squeeze() for polygon in contours if len(polygon) >= 3
+        ]
         return [annotation.ravel().tolist() for annotation in annotations]
     except Exception as e:
         LOGGER.warning(f"Comet Failed to extract segmentation annotation: {e}")
@@ -329,7 +352,9 @@ def _fetch_annotations(
     )
 
     annotations = [
-        annotation for annotation in [ground_truth_annotations, prediction_annotations] if annotation is not None
+        annotation
+        for annotation in [ground_truth_annotations, prediction_annotations]
+        if annotation is not None
     ]
     return [annotations] if annotations else None
 
@@ -349,7 +374,11 @@ def _log_confusion_matrix(experiment, trainer, curr_step, curr_epoch) -> None:
     conf_mat = trainer.validator.confusion_matrix.matrix
     names = list(trainer.data["names"].values()) + ["background"]
     experiment.log_confusion_matrix(
-        matrix=conf_mat, labels=names, max_categories=len(names), epoch=curr_epoch, step=curr_step
+        matrix=conf_mat,
+        labels=names,
+        max_categories=len(names),
+        epoch=curr_epoch,
+        step=curr_step,
     )
 
 
@@ -369,7 +398,9 @@ def _log_images(experiment, image_paths, curr_step, annotations=None) -> None:
     """
     if annotations:
         for image_path, annotation in zip(image_paths, annotations):
-            experiment.log_image(image_path, name=image_path.stem, step=curr_step, annotations=annotation)
+            experiment.log_image(
+                image_path, name=image_path.stem, step=curr_step, annotations=annotation
+            )
 
     else:
         for image_path in image_paths:
@@ -470,23 +501,34 @@ def _log_plots(experiment, trainer) -> None:
             for prefix in POSE_METRICS_PLOT_PREFIX
         ]
     elif isinstance(trainer.validator.metrics, (DetMetrics, OBBMetrics)):
-        plot_filenames = [trainer.save_dir / f"{plots}.png" for plots in EVALUATION_PLOT_NAMES]
+        plot_filenames = [
+            trainer.save_dir / f"{plots}.png" for plots in EVALUATION_PLOT_NAMES
+        ]
 
     if plot_filenames is not None:
         _log_images(experiment, plot_filenames, None)
 
-    confusion_matrix_filenames = [trainer.save_dir / f"{plots}.png" for plots in CONFUSION_MATRIX_PLOT_NAMES]
+    confusion_matrix_filenames = [
+        trainer.save_dir / f"{plots}.png" for plots in CONFUSION_MATRIX_PLOT_NAMES
+    ]
     _log_images(experiment, confusion_matrix_filenames, None)
 
     if not isinstance(trainer.validator.metrics, ClassifyMetrics):
-        label_plot_filenames = [trainer.save_dir / f"{labels}.jpg" for labels in LABEL_PLOT_NAMES]
+        label_plot_filenames = [
+            trainer.save_dir / f"{labels}.jpg" for labels in LABEL_PLOT_NAMES
+        ]
         _log_images(experiment, label_plot_filenames, None)
 
 
 def _log_model(experiment, trainer) -> None:
     """Log the best-trained model to Comet.ml."""
     model_name = _get_comet_model_name()
-    experiment.log_model(model_name, file_or_folder=str(trainer.best), file_name="best.pt", overwrite=True)
+    experiment.log_model(
+        model_name,
+        file_or_folder=str(trainer.best),
+        file_name="best.pt",
+        overwrite=True,
+    )
 
 
 def _log_image_batches(experiment, trainer, curr_step: int) -> None:
@@ -510,7 +552,11 @@ def on_train_epoch_end(trainer) -> None:
     curr_epoch = metadata["curr_epoch"]
     curr_step = metadata["curr_step"]
 
-    experiment.log_metrics(trainer.label_loss_items(trainer.tloss, prefix="train"), step=curr_step, epoch=curr_epoch)
+    experiment.log_metrics(
+        trainer.label_loss_items(trainer.tloss, prefix="train"),
+        step=curr_step,
+        epoch=curr_epoch,
+    )
 
 
 def on_fit_epoch_end(trainer) -> None:
@@ -546,7 +592,9 @@ def on_fit_epoch_end(trainer) -> None:
     if curr_epoch == 1:
         from ultralytics.utils.torch_utils import model_info_for_loggers
 
-        experiment.log_metrics(model_info_for_loggers(trainer), step=curr_step, epoch=curr_epoch)
+        experiment.log_metrics(
+            model_info_for_loggers(trainer), step=curr_step, epoch=curr_epoch
+        )
 
     if not save_assets:
         return

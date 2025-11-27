@@ -66,7 +66,9 @@ class DetectionPredictor(BasePredictor):
             return_idxs=save_feats,
         )
 
-        if not isinstance(orig_imgs, list):  # input images are a torch.Tensor, not a list
+        if not isinstance(
+            orig_imgs, list
+        ):  # input images are a torch.Tensor, not a list
             orig_imgs = ops.convert_torch2numpy_batch(orig_imgs)
 
         if save_feats:
@@ -87,9 +89,17 @@ class DetectionPredictor(BasePredictor):
 
         s = min([x.shape[1] for x in feat_maps])  # find smallest vector length
         obj_feats = torch.cat(
-            [x.permute(0, 2, 3, 1).reshape(x.shape[0], -1, s, x.shape[1] // s).mean(dim=-1) for x in feat_maps], dim=1
+            [
+                x.permute(0, 2, 3, 1)
+                .reshape(x.shape[0], -1, s, x.shape[1] // s)
+                .mean(dim=-1)
+                for x in feat_maps
+            ],
+            dim=1,
         )  # mean reduce all vectors to same length
-        return [feats[idx] if len(idx) else [] for feats, idx in zip(obj_feats, idxs)]  # for each img in batch
+        return [
+            feats[idx] if len(idx) else [] for feats, idx in zip(obj_feats, idxs)
+        ]  # for each img in batch
 
     def construct_results(self, preds, img, orig_imgs):
         """
@@ -122,4 +132,6 @@ class DetectionPredictor(BasePredictor):
             (Results): Results object containing the original image, image path, class names, and scaled bounding boxes.
         """
         pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
-        return Results(orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6])
+        return Results(
+            orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6]
+        )

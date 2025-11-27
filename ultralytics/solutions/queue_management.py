@@ -2,7 +2,11 @@
 
 from typing import Any
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 from ultralytics.utils.plotting import colors
 
 
@@ -63,12 +67,22 @@ class QueueManager(BaseSolution):
         """
         self.counts = 0  # Reset counts every frame
         self.extract_tracks(im0)  # Extract tracks from the current frame
-        annotator = SolutionAnnotator(im0, line_width=self.line_width)  # Initialize annotator
-        annotator.draw_region(reg_pts=self.region, color=self.rect_color, thickness=self.line_width * 2)  # Draw region
+        annotator = SolutionAnnotator(
+            im0, line_width=self.line_width
+        )  # Initialize annotator
+        annotator.draw_region(
+            reg_pts=self.region, color=self.rect_color, thickness=self.line_width * 2
+        )  # Draw region
 
-        for box, track_id, cls, conf in zip(self.boxes, self.track_ids, self.clss, self.confs):
+        for box, track_id, cls, conf in zip(
+            self.boxes, self.track_ids, self.clss, self.confs
+        ):
             # Draw bounding box and counting region
-            annotator.box_label(box, label=self.adjust_box_label(cls, conf, track_id), color=colors(track_id, True))
+            annotator.box_label(
+                box,
+                label=self.adjust_box_label(cls, conf, track_id),
+                color=colors(track_id, True),
+            )
             self.store_tracking_history(track_id, box)  # Store track history
 
             # Cache frequently accessed attributes
@@ -78,7 +92,11 @@ class QueueManager(BaseSolution):
             prev_position = None
             if len(track_history) > 1:
                 prev_position = track_history[-2]
-            if self.region_length >= 3 and prev_position and self.r_s.contains(self.Point(self.track_line[-1])):
+            if (
+                self.region_length >= 3
+                and prev_position
+                and self.r_s.contains(self.Point(self.track_line[-1]))
+            ):
                 self.counts += 1
 
         # Display queue counts
@@ -92,4 +110,6 @@ class QueueManager(BaseSolution):
         self.display_output(plot_im)  # Display output with base class function
 
         # Return a SolutionResults object with processed data
-        return SolutionResults(plot_im=plot_im, queue_count=self.counts, total_tracks=len(self.track_ids))
+        return SolutionResults(
+            plot_im=plot_im, queue_count=self.counts, total_tracks=len(self.track_ids)
+        )

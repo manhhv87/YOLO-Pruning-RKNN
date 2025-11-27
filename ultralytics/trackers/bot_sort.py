@@ -53,7 +53,12 @@ class BOTrack(STrack):
     shared_kalman = KalmanFilterXYWH()
 
     def __init__(
-        self, tlwh: np.ndarray, score: float, cls: int, feat: Optional[np.ndarray] = None, feat_history: int = 50
+        self,
+        tlwh: np.ndarray,
+        score: float,
+        cls: int,
+        feat: Optional[np.ndarray] = None,
+        feat_history: int = 50,
     ):
         """
         Initialize a BOTrack object with temporal parameters, such as feature history, alpha, and current features.
@@ -100,9 +105,13 @@ class BOTrack(STrack):
             mean_state[6] = 0
             mean_state[7] = 0
 
-        self.mean, self.covariance = self.kalman_filter.predict(mean_state, self.covariance)
+        self.mean, self.covariance = self.kalman_filter.predict(
+            mean_state, self.covariance
+        )
 
-    def re_activate(self, new_track: "BOTrack", frame_id: int, new_id: bool = False) -> None:
+    def re_activate(
+        self, new_track: "BOTrack", frame_id: int, new_id: bool = False
+    ) -> None:
         """Reactivate a track with updated features and optionally assign a new ID."""
         if new_track.curr_feat is not None:
             self.update_features(new_track.curr_feat)
@@ -134,7 +143,9 @@ class BOTrack(STrack):
             if st.state != TrackState.Tracked:
                 multi_mean[i][6] = 0
                 multi_mean[i][7] = 0
-        multi_mean, multi_covariance = BOTrack.shared_kalman.multi_predict(multi_mean, multi_covariance)
+        multi_mean, multi_covariance = BOTrack.shared_kalman.multi_predict(
+            multi_mean, multi_covariance
+        )
         for i, (mean, cov) in enumerate(zip(multi_mean, multi_covariance)):
             stracks[i].mean = mean
             stracks[i].covariance = cov
@@ -199,11 +210,11 @@ class BOTSORT(BYTETracker):
         self.proximity_thresh = args.proximity_thresh
         self.appearance_thresh = args.appearance_thresh
         self.encoder = (
-            (lambda feats, s: [f.cpu().numpy() for f in feats])  # native features do not require any model
+            (
+                lambda feats, s: [f.cpu().numpy() for f in feats]
+            )  # native features do not require any model
             if args.with_reid and self.args.model == "auto"
-            else ReID(args.model)
-            if args.with_reid
-            else None
+            else ReID(args.model) if args.with_reid else None
         )
 
     def get_kalmanfilter(self) -> KalmanFilterXYWH:
@@ -211,16 +222,25 @@ class BOTSORT(BYTETracker):
         return KalmanFilterXYWH()
 
     def init_track(
-        self, dets: np.ndarray, scores: np.ndarray, cls: np.ndarray, img: Optional[np.ndarray] = None
+        self,
+        dets: np.ndarray,
+        scores: np.ndarray,
+        cls: np.ndarray,
+        img: Optional[np.ndarray] = None,
     ) -> List[BOTrack]:
         """Initialize object tracks using detection bounding boxes, scores, class labels, and optional ReID features."""
         if len(dets) == 0:
             return []
         if self.args.with_reid and self.encoder is not None:
             features_keep = self.encoder(img, dets)
-            return [BOTrack(xyxy, s, c, f) for (xyxy, s, c, f) in zip(dets, scores, cls, features_keep)]  # detections
+            return [
+                BOTrack(xyxy, s, c, f)
+                for (xyxy, s, c, f) in zip(dets, scores, cls, features_keep)
+            ]  # detections
         else:
-            return [BOTrack(xyxy, s, c) for (xyxy, s, c) in zip(dets, scores, cls)]  # detections
+            return [
+                BOTrack(xyxy, s, c) for (xyxy, s, c) in zip(dets, scores, cls)
+            ]  # detections
 
     def get_dists(self, tracks: List[BOTrack], detections: List[BOTrack]) -> np.ndarray:
         """Calculate distances between tracks and detections using IoU and optionally ReID embeddings."""
@@ -260,12 +280,19 @@ class ReID:
         from ultralytics import YOLO
 
         self.model = YOLO(model)
-        self.model(embed=[len(self.model.model.model) - 2 if ".pt" in model else -1], verbose=False, save=False)  # init
+        self.model(
+            embed=[len(self.model.model.model) - 2 if ".pt" in model else -1],
+            verbose=False,
+            save=False,
+        )  # init
 
     def __call__(self, img: np.ndarray, dets: np.ndarray) -> List[np.ndarray]:
         """Extract embeddings for detected objects."""
         feats = self.model.predictor(
-            [save_one_box(det, img, save=False) for det in xywh2xyxy(torch.from_numpy(dets[:, :4]))]
+            [
+                save_one_box(det, img, save=False)
+                for det in xywh2xyxy(torch.from_numpy(dets[:, :4]))
+            ]
         )
         if len(feats) != dets.shape[0] and feats[0].shape[0] == dets.shape[0]:
             feats = feats[0]  # batched prediction with non-PyTorch backend

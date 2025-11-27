@@ -24,7 +24,14 @@ import numpy as np
 import torch
 
 from ultralytics.cfg import get_cfg, get_save_dir
-from ultralytics.utils import DEFAULT_CFG, LOGGER, YAML, callbacks, colorstr, remove_colorstr
+from ultralytics.utils import (
+    DEFAULT_CFG,
+    LOGGER,
+    YAML,
+    callbacks,
+    colorstr,
+    remove_colorstr,
+)
 from ultralytics.utils.plotting import plot_tune_results
 
 
@@ -85,7 +92,10 @@ class Tuner:
             "translate": (0.0, 0.9),  # image translation (+/- fraction)
             "scale": (0.0, 0.95),  # image scale (+/- gain)
             "shear": (0.0, 10.0),  # image shear (+/- deg)
-            "perspective": (0.0, 0.001),  # image perspective (+/- fraction), range 0-0.001
+            "perspective": (
+                0.0,
+                0.001,
+            ),  # image perspective (+/- fraction), range 0-0.001
             "flipud": (0.0, 1.0),  # image flip up-down (probability)
             "fliplr": (0.0, 1.0),  # image flip left-right (probability)
             "bgr": (0.0, 1.0),  # image channel bgr (probability)
@@ -97,7 +107,11 @@ class Tuner:
         self.args = get_cfg(overrides=args)
         self.args.exist_ok = self.args.resume  # resume w/ same tune_dir
         self.tune_dir = get_save_dir(self.args, name=self.args.name or "tune")
-        self.args.name, self.args.exist_ok, self.args.resume = (None, False, False)  # reset to not affect training
+        self.args.name, self.args.exist_ok, self.args.resume = (
+            None,
+            False,
+            False,
+        )  # reset to not affect training
         self.tune_csv = self.tune_dir / "tune_results.csv"
         self.callbacks = _callbacks or callbacks.get_default_callbacks()
         self.prefix = colorstr("Tuner: ")
@@ -108,7 +122,11 @@ class Tuner:
         )
 
     def _mutate(
-        self, parent: str = "single", n: int = 5, mutation: float = 0.8, sigma: float = 0.2
+        self,
+        parent: str = "single",
+        n: int = 5,
+        mutation: float = 0.8,
+        sigma: float = 0.2,
     ) -> Dict[str, float]:
         """
         Mutate hyperparameters based on bounds and scaling factors specified in `self.space`.
@@ -138,11 +156,15 @@ class Tuner:
             # Mutate
             r = np.random  # method
             r.seed(int(time.time()))
-            g = np.array([v[2] if len(v) == 3 else 1.0 for v in self.space.values()])  # gains 0-1
+            g = np.array(
+                [v[2] if len(v) == 3 else 1.0 for v in self.space.values()]
+            )  # gains 0-1
             ng = len(self.space)
             v = np.ones(ng)
             while all(v == 1):  # mutate until a change occurs (prevent duplicates)
-                v = (g * (r.random(ng) < mutation) * r.randn(ng) * r.random() * sigma + 1).clip(0.3, 3.0)
+                v = (
+                    g * (r.random(ng) < mutation) * r.randn(ng) * r.random() * sigma + 1
+                ).clip(0.3, 3.0)
             hyp = {k: float(x[i + 1] * v[i]) for i, k in enumerate(self.space.keys())}
         else:
             hyp = {k: getattr(self.args, k) for k in self.space.keys()}
@@ -182,11 +204,15 @@ class Tuner:
         if self.tune_csv.exists():
             x = np.loadtxt(self.tune_csv, ndmin=2, delimiter=",", skiprows=1)
             start = x.shape[0]
-            LOGGER.info(f"{self.prefix}Resuming tuning run {self.tune_dir} from iteration {start + 1}...")
+            LOGGER.info(
+                f"{self.prefix}Resuming tuning run {self.tune_dir} from iteration {start + 1}..."
+            )
         for i in range(start, iterations):
             # Mutate hyperparameters
             mutated_hyp = self._mutate()
-            LOGGER.info(f"{self.prefix}Starting iteration {i + 1}/{iterations} with hyperparameters: {mutated_hyp}")
+            LOGGER.info(
+                f"{self.prefix}Starting iteration {i + 1}/{iterations} with hyperparameters: {mutated_hyp}"
+            )
 
             metrics = {}
             train_args = {**vars(self.args), **mutated_hyp}
@@ -194,20 +220,32 @@ class Tuner:
             weights_dir = save_dir / "weights"
             try:
                 # Train YOLO model with mutated hyperparameters (run in subprocess to avoid dataloader hang)
-                launch = [__import__("sys").executable, "-m", "ultralytics.cfg.__init__"]  # workaround yolo not found
+                launch = [
+                    __import__("sys").executable,
+                    "-m",
+                    "ultralytics.cfg.__init__",
+                ]  # workaround yolo not found
                 cmd = [*launch, "train", *(f"{k}={v}" for k, v in train_args.items())]
                 return_code = subprocess.run(cmd, check=True).returncode
-                ckpt_file = weights_dir / ("best.pt" if (weights_dir / "best.pt").exists() else "last.pt")
+                ckpt_file = weights_dir / (
+                    "best.pt" if (weights_dir / "best.pt").exists() else "last.pt"
+                )
                 metrics = torch.load(ckpt_file)["train_metrics"]
                 assert return_code == 0, "training failed"
 
             except Exception as e:
-                LOGGER.error(f"training failure for hyperparameter tuning iteration {i + 1}\n{e}")
+                LOGGER.error(
+                    f"training failure for hyperparameter tuning iteration {i + 1}\n{e}"
+                )
 
             # Save results and mutated_hyp to CSV
             fitness = metrics.get("fitness", 0.0)
             log_row = [round(fitness, 5)] + [mutated_hyp[k] for k in self.space.keys()]
-            headers = "" if self.tune_csv.exists() else (",".join(["fitness"] + list(self.space.keys())) + "\n")
+            headers = (
+                ""
+                if self.tune_csv.exists()
+                else (",".join(["fitness"] + list(self.space.keys())) + "\n")
+            )
             with open(self.tune_csv, "a", encoding="utf-8") as f:
                 f.write(headers + ",".join(map(str, log_row)) + "\n")
 
@@ -222,7 +260,9 @@ class Tuner:
                 for ckpt in weights_dir.glob("*.pt"):
                     shutil.copy2(ckpt, self.tune_dir / "weights")
             elif cleanup:
-                shutil.rmtree(weights_dir, ignore_errors=True)  # remove iteration weights/ dir to reduce storage space
+                shutil.rmtree(
+                    weights_dir, ignore_errors=True
+                )  # remove iteration weights/ dir to reduce storage space
 
             # Plot tune results
             plot_tune_results(self.tune_csv)
@@ -237,7 +277,9 @@ class Tuner:
                 f"{self.prefix}Best fitness hyperparameters are printed below.\n"
             )
             LOGGER.info("\n" + header)
-            data = {k: float(x[best_idx, i + 1]) for i, k in enumerate(self.space.keys())}
+            data = {
+                k: float(x[best_idx, i + 1]) for i, k in enumerate(self.space.keys())
+            }
             YAML.save(
                 self.tune_dir / "best_hyperparameters.yaml",
                 data=data,

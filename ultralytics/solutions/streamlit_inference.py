@@ -11,7 +11,9 @@ from ultralytics.utils import LOGGER
 from ultralytics.utils.checks import check_requirements
 from ultralytics.utils.downloads import GITHUB_ASSETS_STEMS
 
-torch.classes.__path__ = []  # Torch module __path__._path issue: https://github.com/datalab-to/marker/issues/442
+torch.classes.__path__ = (
+    []
+)  # Torch module __path__._path issue: https://github.com/datalab-to/marker/issues/442
 
 
 class Inference:
@@ -59,18 +61,24 @@ class Inference:
         Args:
             **kwargs (Any): Additional keyword arguments for model configuration.
         """
-        check_requirements("streamlit>=1.29.0")  # scope imports for faster ultralytics package load speeds
+        check_requirements(
+            "streamlit>=1.29.0"
+        )  # scope imports for faster ultralytics package load speeds
         import streamlit as st
 
         self.st = st  # Reference to the Streamlit module
         self.source = None  # Video source selection (webcam or video file)
         self.enable_trk = False  # Flag to toggle object tracking
         self.conf = 0.25  # Confidence threshold for detection
-        self.iou = 0.45  # Intersection-over-Union (IoU) threshold for non-maximum suppression
+        self.iou = (
+            0.45  # Intersection-over-Union (IoU) threshold for non-maximum suppression
+        )
         self.org_frame = None  # Container for the original frame display
         self.ann_frame = None  # Container for the annotated frame display
         self.vid_file_name = None  # Video file name or webcam index
-        self.selected_ind: List[int] = []  # List of selected class indices for detection
+        self.selected_ind: List[int] = (
+            []
+        )  # List of selected class indices for detection
         self.model = None  # YOLO model instance
 
         self.temp_dict = {"model": None, **kwargs}
@@ -82,7 +90,9 @@ class Inference:
 
     def web_ui(self) -> None:
         """Set up the Streamlit web interface with custom HTML elements."""
-        menu_style_cfg = """<style>MainMenu {visibility: hidden;}</style>"""  # Hide main menu style
+        menu_style_cfg = (
+            """<style>MainMenu {visibility: hidden;}</style>"""  # Hide main menu style
+        )
 
         # Main title of streamlit application
         main_title_cfg = """<div><h1 style="color:#FF64DA; text-align:center; font-size:40px; margin-top:-50px;
@@ -105,16 +115,22 @@ class Inference:
             logo = "https://raw.githubusercontent.com/ultralytics/assets/main/logo/Ultralytics_Logotype_Original.svg"
             self.st.image(logo, width=250)
 
-        self.st.sidebar.title("User Configuration")  # Add elements to vertical setting menu
+        self.st.sidebar.title(
+            "User Configuration"
+        )  # Add elements to vertical setting menu
         self.source = self.st.sidebar.selectbox(
             "Video",
             ("webcam", "video"),
         )  # Add source selection dropdown
-        self.enable_trk = self.st.sidebar.radio("Enable Tracking", ("Yes", "No")) == "Yes"  # Enable object tracking
+        self.enable_trk = (
+            self.st.sidebar.radio("Enable Tracking", ("Yes", "No")) == "Yes"
+        )  # Enable object tracking
         self.conf = float(
             self.st.sidebar.slider("Confidence Threshold", 0.0, 1.0, self.conf, 0.01)
         )  # Slider for confidence
-        self.iou = float(self.st.sidebar.slider("IoU Threshold", 0.0, 1.0, self.iou, 0.01))  # Slider for NMS threshold
+        self.iou = float(
+            self.st.sidebar.slider("IoU Threshold", 0.0, 1.0, self.iou, 0.01)
+        )  # Slider for NMS threshold
 
         col1, col2 = self.st.columns(2)  # Create two columns for displaying frames
         self.org_frame = col1.empty()  # Container for original frame
@@ -124,10 +140,14 @@ class Inference:
         """Handle video file uploads through the Streamlit interface."""
         self.vid_file_name = ""
         if self.source == "video":
-            vid_file = self.st.sidebar.file_uploader("Upload Video File", type=["mp4", "mov", "avi", "mkv"])
+            vid_file = self.st.sidebar.file_uploader(
+                "Upload Video File", type=["mp4", "mov", "avi", "mkv"]
+            )
             if vid_file is not None:
                 g = io.BytesIO(vid_file.read())  # BytesIO Object
-                with open("ultralytics.mp4", "wb") as out:  # Open temporary file as bytes
+                with open(
+                    "ultralytics.mp4", "wb"
+                ) as out:  # Open temporary file as bytes
                     out.write(g.read())  # Read bytes into file
                 self.vid_file_name = "ultralytics.mp4"
         elif self.source == "webcam":
@@ -136,26 +156,41 @@ class Inference:
     def configure(self) -> None:
         """Configure the model and load selected classes for inference."""
         # Add dropdown menu for model selection
-        M_ORD, T_ORD = ["yolo11n", "yolo11s", "yolo11m", "yolo11l", "yolo11x"], ["", "-seg", "-pose", "-obb", "-cls"]
+        M_ORD, T_ORD = ["yolo11n", "yolo11s", "yolo11m", "yolo11l", "yolo11x"], [
+            "",
+            "-seg",
+            "-pose",
+            "-obb",
+            "-cls",
+        ]
         available_models = sorted(
             [
                 x.replace("yolo", "YOLO")
                 for x in GITHUB_ASSETS_STEMS
                 if any(x.startswith(b) for b in M_ORD) and "grayscale" not in x
             ],
-            key=lambda x: (M_ORD.index(x[:7].lower()), T_ORD.index(x[7:].lower() or "")),
+            key=lambda x: (
+                M_ORD.index(x[:7].lower()),
+                T_ORD.index(x[7:].lower() or ""),
+            ),
         )
-        if self.model_path:  # If user provided the custom model, insert model without suffix as *.pt is added later
+        if (
+            self.model_path
+        ):  # If user provided the custom model, insert model without suffix as *.pt is added later
             available_models.insert(0, self.model_path.split(".pt", 1)[0])
         selected_model = self.st.sidebar.selectbox("Model", available_models)
 
         with self.st.spinner("Model is downloading..."):
             self.model = YOLO(f"{selected_model.lower()}.pt")  # Load the YOLO model
-            class_names = list(self.model.names.values())  # Convert dictionary to list of class names
+            class_names = list(
+                self.model.names.values()
+            )  # Convert dictionary to list of class names
         self.st.success("Model loaded successfully!")
 
         # Multiselect box with class names and get indices of selected classes
-        selected_classes = self.st.sidebar.multiselect("Classes", class_names, default=class_names[:3])
+        selected_classes = self.st.sidebar.multiselect(
+            "Classes", class_names, default=class_names[:3]
+        )
         self.selected_ind = [class_names.index(option) for option in selected_classes]
 
         if not isinstance(self.selected_ind, list):  # Ensure selected_options is a list
@@ -178,16 +213,24 @@ class Inference:
             while cap.isOpened():
                 success, frame = cap.read()
                 if not success:
-                    self.st.warning("Failed to read frame from webcam. Please verify the webcam is connected properly.")
+                    self.st.warning(
+                        "Failed to read frame from webcam. Please verify the webcam is connected properly."
+                    )
                     break
 
                 # Process frame with model
                 if self.enable_trk:
                     results = self.model.track(
-                        frame, conf=self.conf, iou=self.iou, classes=self.selected_ind, persist=True
+                        frame,
+                        conf=self.conf,
+                        iou=self.iou,
+                        classes=self.selected_ind,
+                        persist=True,
                     )
                 else:
-                    results = self.model(frame, conf=self.conf, iou=self.iou, classes=self.selected_ind)
+                    results = self.model(
+                        frame, conf=self.conf, iou=self.iou, classes=self.selected_ind
+                    )
 
                 annotated_frame = results[0].plot()  # Add annotations on frame
 
@@ -196,7 +239,9 @@ class Inference:
                     self.st.stop()  # Stop streamlit app
 
                 self.org_frame.image(frame, channels="BGR")  # Display original frame
-                self.ann_frame.image(annotated_frame, channels="BGR")  # Display processed frame
+                self.ann_frame.image(
+                    annotated_frame, channels="BGR"
+                )  # Display processed frame
 
             cap.release()  # Release the capture
         cv2.destroyAllWindows()  # Destroy all OpenCV windows
@@ -207,6 +252,8 @@ if __name__ == "__main__":
 
     # Check if a model name is provided as a command-line argument
     args = len(sys.argv)
-    model = sys.argv[1] if args > 1 else None  # Assign first argument as the model name if provided
+    model = (
+        sys.argv[1] if args > 1 else None
+    )  # Assign first argument as the model name if provided
     # Create an instance of the Inference class and run inference
     Inference(model=model).inference()

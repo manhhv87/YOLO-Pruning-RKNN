@@ -92,7 +92,9 @@ def _log_confusion_matrix(validator) -> None:
             targets.extend([names[ti]] * num)
             preds.extend([names[pi]] * num)
 
-    live.log_sklearn_plot("confusion_matrix", targets, preds, name="cf.json", normalized=True)
+    live.log_sklearn_plot(
+        "confusion_matrix", targets, preds, name="cf.json", normalized=True
+    )
 
 
 def on_pretrain_routine_start(trainer) -> None:
@@ -100,9 +102,13 @@ def on_pretrain_routine_start(trainer) -> None:
     try:
         global live
         live = dvclive.Live(save_dvc_exp=True, cache_images=True)
-        LOGGER.info("DVCLive is detected and auto logging is enabled (run 'yolo settings dvc=False' to disable).")
+        LOGGER.info(
+            "DVCLive is detected and auto logging is enabled (run 'yolo settings dvc=False' to disable)."
+        )
     except Exception as e:
-        LOGGER.warning(f"DVCLive installed but not initialized correctly, not logging this run. {e}")
+        LOGGER.warning(
+            f"DVCLive installed but not initialized correctly, not logging this run. {e}"
+        )
 
 
 def on_pretrain_routine_end(trainer) -> None:
@@ -139,7 +145,11 @@ def on_fit_epoch_end(trainer) -> None:
     """
     global _training_epoch
     if live and _training_epoch:
-        all_metrics = {**trainer.label_loss_items(trainer.tloss, prefix="train"), **trainer.metrics, **trainer.lr}
+        all_metrics = {
+            **trainer.label_loss_items(trainer.tloss, prefix="train"),
+            **trainer.metrics,
+            **trainer.lr,
+        }
         for metric, value in all_metrics.items():
             live.log_metric(metric, value)
 
@@ -174,7 +184,11 @@ def on_train_end(trainer) -> None:
     """
     if live:
         # At the end log the best metrics. It runs validator on the best model internally.
-        all_metrics = {**trainer.label_loss_items(trainer.tloss, prefix="train"), **trainer.metrics, **trainer.lr}
+        all_metrics = {
+            **trainer.label_loss_items(trainer.tloss, prefix="train"),
+            **trainer.metrics,
+            **trainer.lr,
+        }
         for metric, value in all_metrics.items():
             live.log_metric(metric, value, plot=False)
 

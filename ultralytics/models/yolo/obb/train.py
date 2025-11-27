@@ -31,7 +31,12 @@ class OBBTrainer(yolo.detect.DetectionTrainer):
         >>> trainer.train()
     """
 
-    def __init__(self, cfg=DEFAULT_CFG, overrides: Optional[dict] = None, _callbacks: Optional[List[Any]] = None):
+    def __init__(
+        self,
+        cfg=DEFAULT_CFG,
+        overrides: Optional[dict] = None,
+        _callbacks: Optional[List[Any]] = None,
+    ):
         """
         Initialize an OBBTrainer object for training Oriented Bounding Box (OBB) models.
 
@@ -57,7 +62,10 @@ class OBBTrainer(yolo.detect.DetectionTrainer):
         super().__init__(cfg, overrides, _callbacks)
 
     def get_model(
-        self, cfg: Optional[Union[str, dict]] = None, weights: Optional[Union[str, Path]] = None, verbose: bool = True
+        self,
+        cfg: Optional[Union[str, dict]] = None,
+        weights: Optional[Union[str, Path]] = None,
+        verbose: bool = True,
     ) -> OBBModel:
         """
         Return OBBModel initialized with specified config and weights.
@@ -75,7 +83,12 @@ class OBBTrainer(yolo.detect.DetectionTrainer):
             >>> trainer = OBBTrainer()
             >>> model = trainer.get_model(cfg="yolo11n-obb.yaml", weights="yolo11n-obb.pt")
         """
-        model = OBBModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
+        model = OBBModel(
+            cfg,
+            nc=self.data["nc"],
+            ch=self.data["channels"],
+            verbose=verbose and RANK == -1,
+        )
         if weights:
             model.load(weights)
 
@@ -85,5 +98,8 @@ class OBBTrainer(yolo.detect.DetectionTrainer):
         """Return an instance of OBBValidator for validation of YOLO model."""
         self.loss_names = "box_loss", "cls_loss", "dfl_loss"
         return yolo.obb.OBBValidator(
-            self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
+            self.test_loader,
+            save_dir=self.save_dir,
+            args=copy(self.args),
+            _callbacks=self.callbacks,
         )

@@ -4,7 +4,11 @@ from collections import deque
 from math import sqrt
 from typing import Any
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 from ultralytics.utils.plotting import colors
 
 
@@ -56,8 +60,12 @@ class SpeedEstimator(BaseSolution):
         self.spd = {}  # Final speed per object (km/h), once locked
         self.trk_hist = {}  # Track ID → deque of (time, position)
         self.locked_ids = set()  # Track IDs whose speed has been finalized
-        self.max_hist = self.CFG["max_hist"]  # Required frame history before computing speed
-        self.meter_per_pixel = self.CFG["meter_per_pixel"]  # Scene scale, depends on camera details
+        self.max_hist = self.CFG[
+            "max_hist"
+        ]  # Required frame history before computing speed
+        self.meter_per_pixel = self.CFG[
+            "meter_per_pixel"
+        ]  # Scene scale, depends on camera details
         self.max_speed = self.CFG["max_speed"]  # Maximum speed adjustment
 
     def process(self, im0) -> SolutionResults:
@@ -80,7 +88,9 @@ class SpeedEstimator(BaseSolution):
         self.extract_tracks(im0)
         annotator = SolutionAnnotator(im0, line_width=self.line_width)
 
-        for box, track_id, _, _ in zip(self.boxes, self.track_ids, self.clss, self.confs):
+        for box, track_id, _, _ in zip(
+            self.boxes, self.track_ids, self.clss, self.confs
+        ):
             self.store_tracking_history(track_id, box)
 
             if track_id not in self.trk_hist:  # Initialize history if new track found
@@ -94,21 +104,31 @@ class SpeedEstimator(BaseSolution):
                 # Compute and lock speed once enough history is collected
                 if len(trk_hist) == self.max_hist:
                     p0, p1 = trk_hist[0], trk_hist[-1]  # First and last points of track
-                    dt = (self.frame_count - self.trk_frame_ids[track_id]) / self.fps  # Time in seconds
+                    dt = (
+                        self.frame_count - self.trk_frame_ids[track_id]
+                    ) / self.fps  # Time in seconds
                     if dt > 0:
                         dx, dy = p1[0] - p0[0], p1[1] - p0[1]  # Pixel displacement
-                        pixel_distance = sqrt(dx * dx + dy * dy)  # Calculate pixel distance
-                        meters = pixel_distance * self.meter_per_pixel  # Convert to meters
+                        pixel_distance = sqrt(
+                            dx * dx + dy * dy
+                        )  # Calculate pixel distance
+                        meters = (
+                            pixel_distance * self.meter_per_pixel
+                        )  # Convert to meters
                         self.spd[track_id] = int(
                             min((meters / dt) * 3.6, self.max_speed)
                         )  # Convert to km/h and store final speed
                         self.locked_ids.add(track_id)  # Prevent further updates
                         self.trk_hist.pop(track_id, None)  # Free memory
-                        self.trk_frame_ids.pop(track_id, None)  # Remove frame start reference
+                        self.trk_frame_ids.pop(
+                            track_id, None
+                        )  # Remove frame start reference
 
             if track_id in self.spd:
                 speed_label = f"{self.spd[track_id]} km/h"
-                annotator.box_label(box, label=speed_label, color=colors(track_id, True))  # Draw bounding box
+                annotator.box_label(
+                    box, label=speed_label, color=colors(track_id, True)
+                )  # Draw bounding box
 
         plot_im = annotator.result()
         self.display_output(plot_im)  # Display output with base class function

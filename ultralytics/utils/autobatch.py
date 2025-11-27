@@ -38,7 +38,10 @@ def check_train_batch_size(
     """
     with autocast(enabled=amp):
         return autobatch(
-            deepcopy(model).train(), imgsz, fraction=batch if 0.0 < batch < 1.0 else 0.6, max_num_obj=max_num_obj
+            deepcopy(model).train(),
+            imgsz,
+            fraction=batch if 0.0 < batch < 1.0 else 0.6,
+            max_num_obj=max_num_obj,
         )
 
 
@@ -64,13 +67,19 @@ def autobatch(
     """
     # Check device
     prefix = colorstr("AutoBatch: ")
-    LOGGER.info(f"{prefix}Computing optimal batch size for imgsz={imgsz} at {fraction * 100}% CUDA memory utilization.")
+    LOGGER.info(
+        f"{prefix}Computing optimal batch size for imgsz={imgsz} at {fraction * 100}% CUDA memory utilization."
+    )
     device = next(model.parameters()).device  # get model device
     if device.type in {"cpu", "mps"}:
-        LOGGER.warning(f"{prefix}intended for CUDA devices, using default batch-size {batch_size}")
+        LOGGER.warning(
+            f"{prefix}intended for CUDA devices, using default batch-size {batch_size}"
+        )
         return batch_size
     if torch.backends.cudnn.benchmark:
-        LOGGER.warning(f"{prefix}Requires torch.backends.cudnn.benchmark=False, using default batch-size {batch_size}")
+        LOGGER.warning(
+            f"{prefix}Requires torch.backends.cudnn.benchmark=False, using default batch-size {batch_size}"
+        )
         return batch_size
 
     # Inspect CUDA memory
@@ -81,7 +90,9 @@ def autobatch(
     r = torch.cuda.memory_reserved(device) / gb  # GiB reserved
     a = torch.cuda.memory_allocated(device) / gb  # GiB allocated
     f = t - (r + a)  # GiB free
-    LOGGER.info(f"{prefix}{d} ({properties.name}) {t:.2f}G total, {r:.2f}G reserved, {a:.2f}G allocated, {f:.2f}G free")
+    LOGGER.info(
+        f"{prefix}{d} ({properties.name}) {t:.2f}G total, {r:.2f}G reserved, {a:.2f}G allocated, {f:.2f}G free"
+    )
 
     # Profile batch sizes
     batch_sizes = [1, 2, 4, 8, 16] if t < 16 else [1, 2, 4, 8, 16, 32, 64]
@@ -96,7 +107,9 @@ def autobatch(
             if y  # valid result
             and isinstance(y[2], (int, float))  # is numeric
             and 0 < y[2] < t  # between 0 and GPU limit
-            and (i == 0 or not results[i - 1] or y[2] > results[i - 1][2])  # first item or increasing memory
+            and (
+                i == 0 or not results[i - 1] or y[2] > results[i - 1][2]
+            )  # first item or increasing memory
         ]
         fit_x, fit_y = zip(*xy) if xy else ([], [])
         p = np.polyfit(fit_x, fit_y, deg=1)  # first-degree polynomial fit in log space
@@ -106,14 +119,20 @@ def autobatch(
             if b >= batch_sizes[i]:  # y intercept above failure point
                 b = batch_sizes[max(i - 1, 0)]  # select prior safe point
         if b < 1 or b > 1024:  # b outside of safe range
-            LOGGER.warning(f"{prefix}batch={b} outside safe range, using default batch-size {batch_size}.")
+            LOGGER.warning(
+                f"{prefix}batch={b} outside safe range, using default batch-size {batch_size}."
+            )
             b = batch_size
 
         fraction = (np.polyval(p, b) + r + a) / t  # predicted fraction
-        LOGGER.info(f"{prefix}Using batch-size {b} for {d} {t * fraction:.2f}G/{t:.2f}G ({fraction * 100:.0f}%) ✅")
+        LOGGER.info(
+            f"{prefix}Using batch-size {b} for {d} {t * fraction:.2f}G/{t:.2f}G ({fraction * 100:.0f}%) ✅"
+        )
         return b
     except Exception as e:
-        LOGGER.warning(f"{prefix}error detected: {e},  using default batch-size {batch_size}.")
+        LOGGER.warning(
+            f"{prefix}error detected: {e},  using default batch-size {batch_size}."
+        )
         return batch_size
     finally:
         torch.cuda.empty_cache()

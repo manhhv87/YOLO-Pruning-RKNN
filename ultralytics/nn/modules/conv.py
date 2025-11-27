@@ -9,8 +9,7 @@ import torch
 import torch.nn as nn
 
 __all__ = (
-    "MP"
-    "Conv",
+    "MP" "Conv",
     "Conv2",
     "LightConv",
     "DWConv",
@@ -30,10 +29,13 @@ __all__ = (
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
     """Pad to 'same' shape outputs."""
     if d > 1:
-        k = d * (k - 1) + 1 if isinstance(k, int) else [d * (x - 1) + 1 for x in k]  # actual kernel-size
+        k = (
+            d * (k - 1) + 1 if isinstance(k, int) else [d * (x - 1) + 1 for x in k]
+        )  # actual kernel-size
     if p is None:
         p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
     return p
+
 
 class MP(nn.Module):
     def __init__(self, k=2):
@@ -42,6 +44,7 @@ class MP(nn.Module):
 
     def forward(self, x):
         return self.m(x)
+
 
 class Conv(nn.Module):
     """
@@ -71,9 +74,15 @@ class Conv(nn.Module):
             act (bool | nn.Module): Activation function.
         """
         super().__init__()
-        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        self.conv = nn.Conv2d(
+            c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False
+        )
         self.bn = nn.BatchNorm2d(c2)
-        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+        self.act = (
+            self.default_act
+            if act is True
+            else act if isinstance(act, nn.Module) else nn.Identity()
+        )
 
     def forward(self, x):
         """
@@ -126,7 +135,9 @@ class Conv2(Conv):
             act (bool | nn.Module): Activation function.
         """
         super().__init__(c1, c2, k, s, p, g=g, d=d, act=act)
-        self.cv2 = nn.Conv2d(c1, c2, 1, s, autopad(1, p, d), groups=g, dilation=d, bias=False)  # add 1x1 conv
+        self.cv2 = nn.Conv2d(
+            c1, c2, 1, s, autopad(1, p, d), groups=g, dilation=d, bias=False
+        )  # add 1x1 conv
 
     def forward(self, x):
         """
@@ -265,7 +276,11 @@ class ConvTranspose(nn.Module):
         super().__init__()
         self.conv_transpose = nn.ConvTranspose2d(c1, c2, k, s, p, bias=not bn)
         self.bn = nn.BatchNorm2d(c2) if bn else nn.Identity()
-        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+        self.act = (
+            self.default_act
+            if act is True
+            else act if isinstance(act, nn.Module) else nn.Identity()
+        )
 
     def forward(self, x):
         """
@@ -331,7 +346,17 @@ class Focus(nn.Module):
         Returns:
             (torch.Tensor): Output tensor.
         """
-        return self.conv(torch.cat((x[..., ::2, ::2], x[..., 1::2, ::2], x[..., ::2, 1::2], x[..., 1::2, 1::2]), 1))
+        return self.conv(
+            torch.cat(
+                (
+                    x[..., ::2, ::2],
+                    x[..., 1::2, ::2],
+                    x[..., ::2, 1::2],
+                    x[..., 1::2, 1::2],
+                ),
+                1,
+            )
+        )
         # return self.conv(self.contract(x))
 
 
@@ -399,7 +424,9 @@ class RepConv(nn.Module):
 
     default_act = nn.SiLU()  # default activation
 
-    def __init__(self, c1, c2, k=3, s=1, p=1, g=1, d=1, act=True, bn=False, deploy=False):
+    def __init__(
+        self, c1, c2, k=3, s=1, p=1, g=1, d=1, act=True, bn=False, deploy=False
+    ):
         """
         Initialize RepConv module with given parameters.
 
@@ -420,9 +447,15 @@ class RepConv(nn.Module):
         self.g = g
         self.c1 = c1
         self.c2 = c2
-        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+        self.act = (
+            self.default_act
+            if act is True
+            else act if isinstance(act, nn.Module) else nn.Identity()
+        )
 
-        self.bn = nn.BatchNorm2d(num_features=c1) if bn and c2 == c1 and s == 1 else None
+        self.bn = (
+            nn.BatchNorm2d(num_features=c1) if bn and c2 == c1 and s == 1 else None
+        )
         self.conv1 = Conv(c1, c2, k, s, p=p, g=g, act=False)
         self.conv2 = Conv(c1, c2, 1, s, p=(p - k // 2), g=g, act=False)
 
@@ -462,7 +495,10 @@ class RepConv(nn.Module):
         kernel3x3, bias3x3 = self._fuse_bn_tensor(self.conv1)
         kernel1x1, bias1x1 = self._fuse_bn_tensor(self.conv2)
         kernelid, biasid = self._fuse_bn_tensor(self.bn)
-        return kernel3x3 + self._pad_1x1_to_3x3_tensor(kernel1x1) + kernelid, bias3x3 + bias1x1 + biasid
+        return (
+            kernel3x3 + self._pad_1x1_to_3x3_tensor(kernel1x1) + kernelid,
+            bias3x3 + bias1x1 + biasid,
+        )
 
     @staticmethod
     def _pad_1x1_to_3x3_tensor(kernel1x1):
@@ -620,7 +656,14 @@ class SpatialAttention(nn.Module):
         Returns:
             (torch.Tensor): Spatial-attended output tensor.
         """
-        return x * self.act(self.cv1(torch.cat([torch.mean(x, 1, keepdim=True), torch.max(x, 1, keepdim=True)[0]], 1)))
+        return x * self.act(
+            self.cv1(
+                torch.cat(
+                    [torch.mean(x, 1, keepdim=True), torch.max(x, 1, keepdim=True)[0]],
+                    1,
+                )
+            )
+        )
 
 
 class CBAM(nn.Module):
