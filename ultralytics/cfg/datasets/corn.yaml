@@ -1,0 +1,17 @@
+# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
+# CORN dataset https://universe.roboflow.com/ds/Y2dKA37Em6?key=IMjom40cZY
+# Example usage: python train.py --data corn.yaml
+# parent
+# ├── ultralytics
+# └── datasets ← downloads here
+
+
+# Train/val/test sets
+path: datasets        # dataset root dir
+train: train/images   # train images (relative to 'path')
+val: valid/images     # val images (relative to 'path')
+test: test/images     # test images (optional)
+
+# Classes
+nc: 1  # number of classes
+names: ['Crops']

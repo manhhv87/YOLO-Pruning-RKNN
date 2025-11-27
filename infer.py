@@ -1,4 +1,12 @@
 from ultralytics import YOLO
 
-model = YOLO("yolo11.pt")  # model = YOLO('prune.pt')
-model.predict("ultralytics/assets/bus.jpg", save=True, device=[0], line_width=2)
+# Load a model (original or pruned)
+model = YOLO('yolo11.pt')  # or model = YOLO('pruned.pt')
+
+# Run inference
+model.predict(
+    'ultralytics/assets/bus.jpg',  # Input image path
+    save=True,                     # Save results
+    device=[0],                    # Use GPU 0
+    line_width=2                   # Detection box line width
+)
