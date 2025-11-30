@@ -14,4 +14,4 @@ test: test/images     # test images (optional)
 
 # Classes
 nc: 1  # number of classes
-names: ['Crops']
+names: ['Crop']
