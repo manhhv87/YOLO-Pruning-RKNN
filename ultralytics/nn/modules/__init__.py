@@ -60,6 +60,9 @@ from .block import (
     ResNetLayer,
     SCDown,
     TorchVision,
+    DSPF,
+    L_FPN,
+    LFPNSplit,
 )
 from .conv import (
     MP,
@@ -183,4 +186,7 @@ __all__ = (
     "TorchVision",
     "Index",
     "A2C2f",
+    "DSPF",
+    "L_FPN",
+    "LFPNSplit",
 )
