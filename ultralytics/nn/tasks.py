@@ -70,6 +70,9 @@ from ultralytics.nn.modules import (
     YOLOEDetect,
     YOLOESegment,
     v10Detect,
+    DSPF, 
+    L_FPN,
+    LFPNSplit,
 )
 from ultralytics.utils import (
     DEFAULT_CFG_DICT,
@@ -1796,6 +1799,8 @@ def parse_model(d, ch, verbose=True):
         )
     ch = [ch]
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
+    lfpn_ch = {}  # map: layer_index (L_FPN) -> list channel [C2, C3, C4, C5]
+
     base_modules = frozenset(
         {
             RepConv,
@@ -1834,6 +1839,7 @@ def parse_model(d, ch, verbose=True):
             SCDown,
             C2fCIB,
             A2C2f,
+            DSPF,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1914,6 +1920,47 @@ def parse_model(d, ch, verbose=True):
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
+        elif m is L_FPN:
+            # L_FPN: from phải là list 4 feature [P2, P3, P4, P5]
+            if not isinstance(f, (list, tuple)) or len(f) != 4:
+                raise ValueError(f"L_FPN expects from=[idx_P2, idx_P3, idx_P4, idx_P5], but got f={f}")
+
+            # channels đầu vào cho P2, P3, P4, P5
+            ch_in = [ch[x] for x in f]
+            # L_FPN(ch_in)
+            args = [ch_in]
+
+            # lưu lại để các layer LFPNSplit dùng
+            lfpn_ch[i] = ch_in
+
+            # để tiếp tục parse, ta gán c2 = kênh của P5 (hoặc max), thật ra layer sau không dùng trực tiếp ch[i]
+            c2 = ch_in[-1]
+        elif m is LFPNSplit:
+            # from phải trỏ đến đúng 1 layer L_FPN
+            if isinstance(f, (list, tuple)):
+                if len(f) != 1:
+                    raise ValueError(f"LFPNSplit expects from single L_FPN layer, got f={f}")
+                f0 = f[0]
+            else:
+                f0 = f
+
+            if f0 not in lfpn_ch:
+                raise KeyError(f"LFPNSplit: from={f0} is not an L_FPN layer or L_FPN not parsed yet.")
+
+            # args[0] là idx nhánh (0: P2, 1: P3, 2: P4, 3: P5)
+            branch_idx = int(args[0])
+            ch_list = lfpn_ch[f0]
+
+            if branch_idx < 0 or branch_idx >= len(ch_list):
+                raise IndexError(
+                    f"LFPNSplit idx={branch_idx} out of range for L_FPN with {len(ch_list)} branches"
+                )
+
+            # số kênh output của nhánh này
+            c2 = ch_list[branch_idx]
+
+            # LFPNSplit chỉ nhận idx
+            args = [branch_idx]  
         elif m in frozenset(
             {
                 Detect,
@@ -1931,7 +1978,7 @@ def parse_model(d, ch, verbose=True):
             if m is Segment or m is YOLOESegment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             if m in {Detect, YOLOEDetect, Segment, YOLOESegment, Pose, OBB}:
-                m.legacy = legacy
+                m.legacy = legacy     
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
         elif m is CBLinear:
