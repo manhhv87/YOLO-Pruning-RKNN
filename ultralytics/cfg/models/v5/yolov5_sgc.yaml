@@ -29,27 +29,27 @@ backbone:
 # SGC head v2: P3 (stride 8), P4 (stride 16), P5 (stride 32); P2 is optional (stride 4, not used in Detect)
 head:
   # ---------- P5: context from C5 with AMRF ----------
-  - [ 9, 1, Conv, [512, 1, 1]]                  # 10: C5 -> 512 channels
-  - [ -1, 1, AMRF, [512] ]                      # 11: P5 (stride 32, 512 channels)
+  - [ 9, 1, Conv, [512, 1, 1]]                    # 10: C5 -> 512 channels
+  - [ -1, 1, AMRF, [512] ]                        # 11: P5 (stride 32, 512 channels)
 
   # ---------- Scale maps from C2 ----------
-  - [ 2, 1, ScaleMapHead, [1, 64] ]             # 12: S2 (stride 4, 1 channel), c_mid=64
-  - [ -1, 1, ScaleMapDown, [1] ]                # 13: S3 (stride 8, 1 channel)
-  - [ -1, 1, ScaleMapDown, [1] ]                # 14: S4 (stride 16, 1 channel)
+  - [ 2, 1, ScaleMapHead, [1, 64] ]               # 12: S2 (stride 4, 1 channel), c_mid=64
+  - [ -1, 1, ScaleMapDown, [1] ]                  # 13: S3 (stride 8, 1 channel)
+  - [ -1, 1, ScaleMapDown, [1] ]                  # 14: S4 (stride 16, 1 channel)
 
   # ---------- P4 (stride 16) with SGCBlock ----------
   # 3 feature branches:
   #  - from C3 (layer 4), downsample -> stride 16, 256 channels
   #  - from C4 (layer 6), keep stride 16, reduce to 256 channels
   #  - from P5 (layer 11), upsample -> stride 16, 256 channels
-  - [ 4, 1, Conv, [256, 3, 2] ]                 # 15: C3 -> 40x40, 256
-  - [ 6, 1, Conv, [256, 1, 1] ]                 # 16: C4 -> 40x40, 256
-  - [ 11, 1, nn.Upsample, [None, 2, "nearest"] ]# 17: P5 20x20 -> 40x40
-  - [ -1, 1, Conv, [256, 1, 1] ]                # 18: -> 40x40, 256
+  - [ 4, 1, Conv, [256, 3, 2] ]                   # 15: C3 -> 40x40, 256
+  - [ 6, 1, Conv, [256, 1, 1] ]                   # 16: C4 -> 40x40, 256
+  - [ 11, 1, nn.Upsample, [None, 2, "nearest"] ]  # 17: P5 20x20 -> 40x40
+  - [ -1, 1, Conv, [256, 1, 1] ]                  # 18: -> 40x40, 256
 
   # concat 3 features (3*256) + scale map S4 (layer 14, 1 channel) -> 3*C+1 channels
-  - [ [15, 16, 18, 14], 1, Concat, [1] ]        # 19: (3*256 + 1) channels
-  - [ -1, 1, SGCBlock, [256] ]                  # 20: P4 (stride 16, 256 channels)
+  - [ [15, 16, 18, 14], 1, Concat, [1] ]          # 19: (3*256 + 1) channels
+  - [ -1, 1, SGCBlock, [256] ]                    # 20: P4 (stride 16, 256 channels)
 
   # ---------- P3 (stride 8) with SGCBlock ----------
   # 3 feature branches:
