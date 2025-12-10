@@ -1,4 +1,4 @@
-# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# Ultralytics ?? AGPL-3.0 License - https://ultralytics.com/license
 
 import contextlib
 import pickle
@@ -73,6 +73,10 @@ from ultralytics.nn.modules import (
     DSPF, 
     L_FPN,
     LFPNSplit,
+    AMRF,
+    ScaleMapHead,
+    ScaleMapDown,
+    SGCBlock,
 )
 from ultralytics.utils import (
     DEFAULT_CFG_DICT,
@@ -1618,7 +1622,7 @@ def torch_safe_load(weight, safe_only=False):
         if e.name == "models":
             raise TypeError(
                 emojis(
-                    f"ERROR ❌️ {weight} appears to be an Ultralytics YOLOv5 model originally trained "
+                    f"ERROR ?? {weight} appears to be an Ultralytics YOLOv5 model originally trained "
                     f"with https://github.com/ultralytics/yolov5.\nThis model is NOT forwards compatible with "
                     f"YOLOv8 at https://github.com/ultralytics/ultralytics."
                     f"\nRecommend fixes are to train a new model using the latest 'ultralytics' package or to "
@@ -1628,7 +1632,7 @@ def torch_safe_load(weight, safe_only=False):
         elif e.name == "numpy._core":
             raise ModuleNotFoundError(
                 emojis(
-                    f"ERROR ❌️ {weight} requires numpy>=1.26.1, however numpy=={__import__('numpy').__version__} is installed."
+                    f"ERROR ?? {weight} requires numpy>=1.26.1, however numpy=={__import__('numpy').__version__} is installed."
                 )
             ) from e
         LOGGER.warning(
@@ -1840,6 +1844,10 @@ def parse_model(d, ch, verbose=True):
             C2fCIB,
             A2C2f,
             DSPF,
+            AMRF,
+            ScaleMapHead,
+            ScaleMapDown,
+            SGCBlock,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1921,22 +1929,22 @@ def parse_model(d, ch, verbose=True):
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
         elif m is L_FPN:
-            # L_FPN: from phải là list 4 feature [P2, P3, P4, P5]
+            # L_FPN: from ph?i là list 4 feature [P2, P3, P4, P5]
             if not isinstance(f, (list, tuple)) or len(f) != 4:
                 raise ValueError(f"L_FPN expects from=[idx_P2, idx_P3, idx_P4, idx_P5], but got f={f}")
 
-            # channels đầu vào cho P2, P3, P4, P5
+            # channels d?u vào cho P2, P3, P4, P5
             ch_in = [ch[x] for x in f]
             # L_FPN(ch_in)
             args = [ch_in]
 
-            # lưu lại để các layer LFPNSplit dùng
+            # luu l?i d? các layer LFPNSplit dùng
             lfpn_ch[i] = ch_in
 
-            # để tiếp tục parse, ta gán c2 = kênh của P5 (hoặc max), thật ra layer sau không dùng trực tiếp ch[i]
+            # d? ti?p t?c parse, ta gán c2 = kênh c?a P5 (ho?c max), th?t ra layer sau không dùng tr?c ti?p ch[i]
             c2 = ch_in[-1]
         elif m is LFPNSplit:
-            # from phải trỏ đến đúng 1 layer L_FPN
+            # from ph?i tr? d?n dúng 1 layer L_FPN
             if isinstance(f, (list, tuple)):
                 if len(f) != 1:
                     raise ValueError(f"LFPNSplit expects from single L_FPN layer, got f={f}")
@@ -1956,10 +1964,10 @@ def parse_model(d, ch, verbose=True):
                     f"LFPNSplit idx={branch_idx} out of range for L_FPN with {len(ch_list)} branches"
                 )
 
-            # số kênh output của nhánh này
+            # s? kênh output c?a nhánh này
             c2 = ch_list[branch_idx]
 
-            # LFPNSplit chỉ nhận idx
+            # LFPNSplit ch? nh?n idx
             args = [branch_idx]  
         elif m in frozenset(
             {
