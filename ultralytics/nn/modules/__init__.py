@@ -62,7 +62,12 @@ from .block import (
     TorchVision,
     DSPF,
     L_FPN,
+    DySample,
     LFPNSplit,
+    AMRF,
+    ScaleMapHead,
+    ScaleMapDown,
+    SGCBlock,
 )
 from .conv import (
     MP,
@@ -189,4 +194,8 @@ __all__ = (
     "DSPF",
     "L_FPN",
     "LFPNSplit",
+    "AMRF",
+    "ScaleMapHead",
+    "ScaleMapDown",
+    "SGCBlock",
 )
