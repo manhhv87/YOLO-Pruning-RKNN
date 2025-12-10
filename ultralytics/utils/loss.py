@@ -136,10 +136,14 @@ class BboxLoss(nn.Module):
       destabilizing training.
     """
 
-    def __init__(self, reg_max: int = 16):
+    def __init__(self, reg_max: int = 16, iou_type: str = "ciou", alpha_iou: float = 2.0):
         """Initialize the BboxLoss module with regularization maximum and DFL settings."""
         super().__init__()
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+
+        # IoU type: "iou", "giou", "diou", "ciou", "eiou", "siou", "alpha_iou"
+        self.iou_type = (iou_type or "ciou").lower()
+        self.alpha_iou = alpha_iou
 
         # ---- Custom hyper-parameters for crop-row optimization ----
         # Centerline loss (horizontal center)
@@ -245,9 +249,54 @@ class BboxLoss(nn.Module):
         weight = base_weight[fg_mask].unsqueeze(-1)  # (N_pos, 1)
 
         # IoU loss (CIoU) as in original YOLO
-        iou = bbox_iou(
-            pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True
-        )
+        # iou = bbox_iou(
+        #     pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True
+        # )
+
+        # IoU loss: type selected by self.iou_type
+        if self.iou_type == "siou":
+            iou = bbox_iou(
+                pred_bboxes[fg_mask],
+                target_bboxes[fg_mask],
+                xywh=False,
+                SIoU=True,
+            )
+        elif self.iou_type == "eiou":
+            iou = bbox_iou(
+                pred_bboxes[fg_mask],
+                target_bboxes[fg_mask],
+                xywh=False,
+                EIoU=True,
+            )
+        elif self.iou_type == "alpha_iou":
+            iou = bbox_iou(
+                pred_bboxes[fg_mask],
+                target_bboxes[fg_mask],
+                xywh=False,
+                alpha_iou=self.alpha_iou,
+            )
+        elif self.iou_type == "giou":
+            iou = bbox_iou(
+                pred_bboxes[fg_mask],
+                target_bboxes[fg_mask],
+                xywh=False,
+                GIoU=True,
+            )
+        elif self.iou_type == "diou":
+            iou = bbox_iou(
+                pred_bboxes[fg_mask],
+                target_bboxes[fg_mask],
+                xywh=False,
+                DIoU=True,
+            )
+        else:  # default: CIoU
+            iou = bbox_iou(
+                pred_bboxes[fg_mask],
+                target_bboxes[fg_mask],
+                xywh=False,
+                CIoU=True,
+            )
+
         loss_iou = ((1.0 - iou) * weight).sum() / (target_scores_sum + self.eps)
 
         # --- extra terms specialized for crop-row detection ---
@@ -377,7 +426,21 @@ class v8DetectionLoss:
         self.assigner = TaskAlignedAssigner(
             topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0
         )
-        self.bbox_loss = BboxLoss(m.reg_max).to(device)
+
+        # Read IoU type and alpha from hyperparameters if available
+        if isinstance(h, dict):
+            iou_type = h.get("iou_type", "ciou")
+            alpha_iou = h.get("alpha_iou", 2.0)
+        else:
+            iou_type = getattr(h, "iou_type", "ciou")
+            alpha_iou = getattr(h, "alpha_iou", 2.0)
+
+        self.bbox_loss = BboxLoss(
+            m.reg_max,
+            iou_type=iou_type,
+            alpha_iou=alpha_iou,
+        ).to(device)
+
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
 
     def preprocess(

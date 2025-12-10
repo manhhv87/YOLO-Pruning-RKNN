@@ -116,6 +116,9 @@ def bbox_iou(
     DIoU: bool = False,
     CIoU: bool = False,
     eps: float = 1e-7,
+    SIoU: bool = False,
+    EIoU: bool = False,
+    alpha_iou: float = 0.0,
 ) -> torch.Tensor:
     """
     Calculate the Intersection over Union (IoU) between bounding boxes.
@@ -134,9 +137,20 @@ def bbox_iou(
         DIoU (bool, optional): If True, calculate Distance IoU.
         CIoU (bool, optional): If True, calculate Complete IoU.
         eps (float, optional): A small value to avoid division by zero.
+        SIoU (bool, optional): If True, calculate Scylla IoU.
+        EIoU (bool, optional): If True, calculate Efficient IoU.
+        alpha_iou (float, optional): If > 0, return alpha-IoU = IoU ** alpha_iou
+                                     (only used when no other IoU variant flag is True).
 
     Returns:
-        (torch.Tensor): IoU, GIoU, DIoU, or CIoU values depending on the specified flags.
+        (torch.Tensor): IoU, GIoU, DIoU, CIoU, EIoU, SIoU or alpha-IoU values depending on the specified flags.
+    
+    References:
+        - GIoU: https://arxiv.org/pdf/1902.09630.pdf
+        - DIoU: https://arxiv.org/abs/1911.08287
+        - CIoU: https://arxiv.org/abs/1911.08287
+        - EIoU: https://arxiv.org/abs/2205.12740
+        - SIoU: https://arxiv.org/abs/2205.12740
     """
     # Get the coordinates of bounding boxes
     if xywh:  # transform from xywh to xyxy
@@ -157,32 +171,77 @@ def bbox_iou(
 
     # Union Area
     union = w1 * h1 + w2 * h2 - inter + eps
-
+    
     # IoU
     iou = inter / union
-    if CIoU or DIoU or GIoU:
+
+    # alpha-IoU (only used when GIoU/DIoU/CIoU/EIoU/SIoU are not available)
+    if alpha_iou > 0.0 and not (GIoU or DIoU or CIoU or EIoU or SIoU):
+        return iou.clamp(min=eps).pow(alpha_iou)
+    
+    # Advanced IoU variants
+    if CIoU or DIoU or GIoU or SIoU or EIoU:
         cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(
             b2_x1
         )  # convex (smallest enclosing box) width
         ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
-        if CIoU or DIoU:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
+
+        if CIoU or DIoU or SIoU or EIoU:  # need center distance, etc.
             c2 = cw.pow(2) + ch.pow(2) + eps  # convex diagonal squared
             rho2 = (
                 (b2_x1 + b2_x2 - b1_x1 - b1_x2).pow(2)
                 + (b2_y1 + b2_y2 - b1_y1 - b1_y2).pow(2)
             ) / 4  # center dist**2
-            if (
-                CIoU
-            ):  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
+
+            if CIoU:  # Complete IoU
                 v = (4 / math.pi**2) * ((w2 / h2).atan() - (w1 / h1).atan()).pow(2)
                 with torch.no_grad():
                     alpha = v / (v - iou + (1 + eps))
                 return iou - (rho2 / c2 + v * alpha)  # CIoU
-            return iou - rho2 / c2  # DIoU
+            if DIoU:
+                return iou - rho2 / c2  # DIoU
+            if EIoU:
+                # Efficient IoU: IoU - (center + width + height penalties)
+                w_diff2 = (w2 - w1).pow(2)
+                h_diff2 = (h2 - h1).pow(2)
+                cw2 = cw.pow(2) + eps
+                ch2 = ch.pow(2) + eps
+                return iou - (rho2 / c2 + w_diff2 / cw2 + h_diff2 / ch2)
+            if SIoU:
+                # Scylla IoU (SIoU) components: angle cost, distance cost, shape cost
+                center_dx = (b2_x1 + b2_x2 - b1_x1 - b1_x2) / 2.0
+                center_dy = (b2_y1 + b2_y2 - b1_y1 - b1_y2) / 2.0
+
+                sigma = (center_dx.pow(2) + center_dy.pow(2)).sqrt() + eps
+                sin_alpha_x = center_dx.abs() / sigma
+                sin_alpha_y = center_dy.abs() / sigma
+                threshold = math.sqrt(2.0) / 2.0
+                sin_alpha = torch.where(
+                    sin_alpha_x > threshold, sin_alpha_y, sin_alpha_x
+                )
+
+                angle_cost = torch.cos(
+                    2.0 * torch.arcsin(sin_alpha) - math.pi / 2.0
+                )
+
+                rho_x = (center_dx / (cw + eps)).pow(2)
+                rho_y = (center_dy / (ch + eps)).pow(2)
+                gamma = angle_cost - 2.0
+                distance_cost = 2.0 - torch.exp(gamma * rho_x) - torch.exp(
+                    gamma * rho_y
+                )
+
+                omega_w = (w1 - w2).abs() / (torch.max(w1, w2) + eps)
+                omega_h = (h1 - h2).abs() / (torch.max(h1, h2) + eps)
+                shape_cost = (1.0 - torch.exp(-omega_w)).pow(4) + (
+                    1.0 - torch.exp(-omega_h)
+                ).pow(4)
+
+                # "Siou score" so that loss = 1 - siou ≈ SIoU loss
+                siou = iou - 0.5 * (distance_cost + shape_cost)
+                return siou
         c_area = cw * ch + eps  # convex area
-        return (
-            iou - (c_area - union) / c_area
-        )  # GIoU https://arxiv.org/pdf/1902.09630.pdf
+        return iou - (c_area - union) / c_area  # GIoU
     return iou  # IoU
 
 

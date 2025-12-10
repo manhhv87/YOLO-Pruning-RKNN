@@ -7,30 +7,46 @@ def parse_args():
         description="Train YOLO model with Ultralytics using command-line arguments"
     )
 
-    # Các tham số chính
+    # Main arguments
     parser.add_argument(
         "--model",
         type=str,
         default="yolov5.yaml",
-        help="Đường dẫn file model (yaml hoặc weights), vd: yolov5.yaml hoặc best.pt",
+        help="Path to model file (yaml or weights), e.g. yolov5.yaml or best.pt",
+    )
+    parser.add_argument(
+        "--iou_type",
+        type=str,
+        default="ciou",
+        choices=["iou", "giou", "diou", "ciou", "eiou", "siou", "alpha_iou"],
+        help=(
+            "IoU variant used in bbox regression loss. "
+            "Options: iou, giou, diou, ciou, eiou, siou, alpha_iou"
+        ),
+    )
+    parser.add_argument(
+        "--alpha_iou",
+        type=float,
+        default=2.0,
+        help="Exponent for alpha-IoU (used only when iou_type='alpha_iou')",
     )
     parser.add_argument(
         "--data",
         type=str,
         default="c2a_yolo.yaml",
-        help="Đường dẫn file data config (data.yaml)",
+        help="Path to data config file (data.yaml)",
     )
     parser.add_argument(
         "--epochs",
         type=int,
         default=200,
-        help="Số epoch train",
+        help="Number of training epochs",
     )
     parser.add_argument(
         "--imgsz",
         type=int,
         default=640,
-        help="Kích thước ảnh input (img size)",
+        help="Input image size",
     )
     parser.add_argument(
         "--batch",
@@ -42,18 +58,18 @@ def parse_args():
         "--device",
         type=str,
         default="0",
-        help="Thiết bị: 'cpu', '0', '0,1'...",
+        help="Device: 'cpu', '0', '0,1', ...",
     )
     parser.add_argument(
         "--name",
         type=str,
         default="yolov5",
-        help="Tên experiment (tên folder lưu weights)",
+        help="Experiment name (folder name for saving weights)",
     )
     parser.add_argument(
         "--prune",
         action="store_true",
-        help="Bật prune (mặc định là False, chỉ bật khi thêm --prune)",
+        help="Enable pruning (default is False, enable by adding --prune)",
     )
 
     return parser.parse_args()
@@ -62,8 +78,12 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # Khởi tạo model
+    # Initialize model
     model = YOLO(args.model)
+
+    # Pass IoU configuration to the model so loss.py can read it
+    model.args.iou_type = args.iou_type
+    model.args.alpha_iou = args.alpha_iou
 
     # Train
     results = model.train(
@@ -71,12 +91,12 @@ def main():
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch,
-        device=args.device,  # '0' hoặc '0,1' hoặc 'cpu'
+        device=args.device,  # '0' or '0,1' or 'cpu'
         name=args.name,
         prune=args.prune,
     )
 
-    # Nếu muốn in gì đó sau khi train:
+    # Optional: print something after training
     print("Training finished.")
     print(f"Results saved to: {results.save_dir}")
 
