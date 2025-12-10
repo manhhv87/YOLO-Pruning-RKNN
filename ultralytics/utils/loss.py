@@ -1,4 +1,4 @@
-# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# Ultralytics ?? AGPL-3.0 License - https://ultralytics.com/license
 
 from typing import Any, Dict, List, Tuple
 
@@ -124,12 +124,110 @@ class DFLoss(nn.Module):
 
 
 class BboxLoss(nn.Module):
-    """Criterion class for computing training losses for bounding boxes."""
+    """Criterion class for computing training losses for bounding boxes.
+
+    Extended for crop-row detection and robot control:
+    - Keeps the original IoU + DFL formulation from YOLO (stable).
+    - Adds a small centerline loss on the horizontal center of the box,
+      encouraging accurate row center estimation (important to keep the robot
+      in the middle of two crop rows).
+    - Optionally adds a lightweight thickness loss on the short side
+      (min(width, height)), encouraging more accurate row thickness without
+      destabilizing training.
+    """
 
     def __init__(self, reg_max: int = 16):
         """Initialize the BboxLoss module with regularization maximum and DFL settings."""
         super().__init__()
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+
+        # ---- Custom hyper-parameters for crop-row optimization ----
+        # Centerline loss (horizontal center)
+        self.use_center = True
+        self.center_lambda = 0.01          # weight vs IoU term
+        self.center_max_rel_error = 1.0    # clip relative center error
+
+        # Thickness loss (short side)
+        self.use_thickness = True
+        self.thickness_lambda = 0.01       # weight vs IoU term
+        self.thickness_max_rel_error = 1.0 # clip relative thickness error
+
+        self.eps = 1e-6
+        # -----------------------------------------------------------
+
+    def _centerline_loss(
+        self,
+        pred_bboxes: torch.Tensor,
+        target_bboxes: torch.Tensor,
+        base_weight: torch.Tensor,
+        target_scores_sum: torch.Tensor,
+        fg_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Centerline loss: penalizes relative error of the horizontal center (x-center).
+
+        This directly reflects lateral error of the robot with respect to the crop row.
+        The error is normalized by the GT box width to remain scale-invariant.
+        """
+        if not fg_mask.any():
+            return torch.tensor(0.0, device=pred_bboxes.device)
+
+        # Select positive samples
+        pb = pred_bboxes[fg_mask]      # (N_pos, 4)  xyxy in grid units
+        tb = target_bboxes[fg_mask]    # (N_pos, 4)
+        bw = base_weight[fg_mask]      # (N_pos,)
+
+        # centers: cx = (x1 + x2)/2
+        tcx = (tb[:, 0] + tb[:, 2]) * 0.5
+        pcx = (pb[:, 0] + pb[:, 2]) * 0.5
+
+        # width for normalization (horizontal extent)
+        t_w = (tb[:, 2] - tb[:, 0]).clamp(min=1.0)
+
+        # relative horizontal center error
+        rel_err = (pcx - tcx).abs() / t_w
+        rel_err = rel_err.clamp(max=self.center_max_rel_error)
+
+        # weight and normalize similar to IoU loss
+        loss_center = (rel_err * bw).sum() / (target_scores_sum + self.eps)
+        return loss_center
+
+    def _thickness_loss(
+        self,
+        pred_bboxes: torch.Tensor,
+        target_bboxes: torch.Tensor,
+        base_weight: torch.Tensor,
+        target_scores_sum: torch.Tensor,
+        fg_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Thickness loss: penalizes relative error on the short side (min(w, h)).
+
+        This encourages more accurate estimation of crop-row thickness, which can
+        be useful for precise watering and coverage, while staying numerically stable.
+        """
+        if not fg_mask.any():
+            return torch.tensor(0.0, device=pred_bboxes.device)
+
+        pb = pred_bboxes[fg_mask]      # (N_pos, 4) xyxy in grid units
+        tb = target_bboxes[fg_mask]    # (N_pos, 4)
+        bw = base_weight[fg_mask]      # (N_pos,)
+
+        # widths/heights
+        t_wh = tb[:, 2:4] - tb[:, 0:2]  # (N_pos, 2)
+        p_wh = pb[:, 2:4] - pb[:, 0:2]  # (N_pos, 2)
+
+        t_short = t_wh.min(dim=1).values.clamp(min=1.0)  # (N_pos,)
+        p_short = p_wh.min(dim=1).values                 # (N_pos,)
+        
+        p_short = p_wh.min(dim=1).values.clamp(min=1.0)  # avoid 0 or negative values.
+
+        # relative thickness error
+        rel_err = (p_short - t_short).abs() / t_short
+        rel_err = rel_err.clamp(max=self.thickness_max_rel_error)
+
+        loss_thick = (rel_err * bw).sum() / (target_scores_sum + self.eps)
+        return loss_thick
 
     def forward(
         self,
@@ -141,14 +239,36 @@ class BboxLoss(nn.Module):
         target_scores_sum: torch.Tensor,
         fg_mask: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute IoU and DFL losses for bounding boxes."""
-        weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
+        """Compute IoU(+center/thickness) and DFL losses for bounding boxes."""
+        # base YOLO weight from class scores
+        base_weight = target_scores.sum(-1)  # (B, A)
+        weight = base_weight[fg_mask].unsqueeze(-1)  # (N_pos, 1)
+
+        # IoU loss (CIoU) as in original YOLO
         iou = bbox_iou(
             pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True
         )
-        loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+        loss_iou = ((1.0 - iou) * weight).sum() / (target_scores_sum + self.eps)
 
-        # DFL loss
+        # --- extra terms specialized for crop-row detection ---
+
+        # Centerline loss (robot lateral error)
+        if self.use_center and fg_mask.any():
+            loss_center = self._centerline_loss(
+                pred_bboxes, target_bboxes, base_weight, target_scores_sum, fg_mask
+            )
+            loss_iou = loss_iou + self.center_lambda * loss_center
+
+        # Thickness loss (row thickness)
+        if self.use_thickness and fg_mask.any():
+            loss_thick = self._thickness_loss(
+                pred_bboxes, target_bboxes, base_weight, target_scores_sum, fg_mask
+            )
+            loss_iou = loss_iou + self.thickness_lambda * loss_thick
+
+        # -----------------------------------------------------
+
+        # DFL loss (unchanged)
         if self.dfl_loss:
             target_ltrb = bbox2dist(
                 anchor_points, target_bboxes, self.dfl_loss.reg_max - 1
@@ -160,9 +280,9 @@ class BboxLoss(nn.Module):
                 )
                 * weight
             )
-            loss_dfl = loss_dfl.sum() / target_scores_sum
+            loss_dfl = loss_dfl.sum() / (target_scores_sum + self.eps)
         else:
-            loss_dfl = torch.tensor(0.0).to(pred_dist.device)
+            loss_dfl = torch.tensor(0.0, device=pred_dist.device)
 
         return loss_iou, loss_dfl
 
@@ -415,7 +535,7 @@ class v8SegmentationLoss(v8DetectionLoss):
             mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
         except RuntimeError as e:
             raise TypeError(
-                "ERROR ❌ segment dataset incorrectly formatted or not a segment dataset.\n"
+                "ERROR ? segment dataset incorrectly formatted or not a segment dataset.\n"
                 "This error can occur when incorrectly training a 'segment' model on a 'detect' dataset, "
                 "i.e. 'yolo train model=yolo11n-seg.pt data=coco8.yaml'.\nVerify your dataset is a "
                 "correctly formatted 'segment' dataset using 'data=coco8-seg.yaml' "
@@ -888,7 +1008,7 @@ class v8OBBLoss(v8DetectionLoss):
             mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
         except RuntimeError as e:
             raise TypeError(
-                "ERROR ❌ OBB dataset incorrectly formatted or not a OBB dataset.\n"
+                "ERROR ? OBB dataset incorrectly formatted or not a OBB dataset.\n"
                 "This error can occur when incorrectly training a 'OBB' model on a 'detect' dataset, "
                 "i.e. 'yolo train model=yolo11n-obb.pt data=coco8.yaml'.\nVerify your dataset is a "
                 "correctly formatted 'OBB' dataset using 'data=dota8.yaml' "
