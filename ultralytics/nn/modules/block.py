@@ -1,4 +1,4 @@
-# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# Ultralytics ?? AGPL-3.0 License - https://ultralytics.com/license
 """Block modules."""
 
 from typing import List, Optional, Tuple
@@ -57,6 +57,10 @@ __all__ = (
     "DySample",
     "L_FPN",
     "LFPNSplit",
+    "AMRF",
+    "ScaleMapHead",
+    "ScaleMapDown",
+    "SGCBlock",
 )
 
 
@@ -2317,230 +2321,372 @@ class SAVPE(nn.Module):
 class DSPF(nn.Module):
     def __init__(self, in_channels, out_channels=None, dilation_rates=(1, 2, 3)):
         """
-        DSPF module: thay thế khối residual bằng cách sử dụng các convolution chụm depthwise (theo kênh) với các độ giãn (dilation) khác nhau.
-        - in_channels: số kênh đầu vào.
-        - out_channels: số kênh đầu ra mong muốn. Nếu None, mặc định bằng in_channels.
-        - dilation_rates: bộ giá trị dilation cho các conv chụm (mặc định là (1,2,3)).
+        DSPF module: replaces a residual block by using depthwise (per-channel)
+        convolutions with different dilation rates.
+
+        - in_channels: number of input channels.
+        - out_channels: number of output channels. If None, defaults to in_channels.
+        - dilation_rates: dilation values for depthwise convolutions (default: (1, 2, 3)).
         """
         super(DSPF, self).__init__()
-        # Số kênh đầu ra mặc định bằng số kênh đầu vào nếu không chỉ định khác
+        # If out_channels is not specified, use in_channels by default
         if out_channels is None:
             out_channels = in_channels
         self.in_channels = in_channels
         self.out_channels = out_channels
 
-        # Chuẩn bị các tầng convolution chụm (depthwise) với các dilation khác nhau
+        # Build a sequence of depthwise convolutions with different dilations
         layers = []
-        # Sử dụng kernel 3x3, nhóm = in_channels (depthwise conv), với các độ giãn khác nhau
         for d in dilation_rates:
-            # Tính padding phù hợp để output giữ nguyên kích thước (padding = dilation)
+            # Use 3x3 kernel, groups = in_channels (depthwise conv), with proper padding
             pad = d
-            layers.append(nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1,
-                                     padding=pad, dilation=d, groups=in_channels, bias=False))
+            layers.append(
+                nn.Conv2d(
+                    in_channels,
+                    in_channels,
+                    kernel_size=3,
+                    stride=1,
+                    padding=pad,
+                    dilation=d,
+                    groups=in_channels,
+                    bias=False,
+                )
+            )
             layers.append(nn.BatchNorm2d(in_channels))
             layers.append(nn.SiLU(inplace=True))
-        # Đóng gói các lớp depthwise conv + BN + activation vào Sequential
         self.dw_conv_sequence = nn.Sequential(*layers)
 
-        # Tầng conv 1x1 để trộn kênh (pointwise convolution) sau khi ghép (concatenate) với đầu vào ban đầu.
-        # Sau khi chuỗi depthwise conv, ta sẽ concat output với input => số kênh = in_channels * 2.
-        # Sau đó dùng conv1x1 để giảm số kênh về out_channels.
-        self.conv_fuse = nn.Conv2d(in_channels * 2, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
+        # 1x1 conv to fuse channels after concatenation with the original input.
+        # After the depthwise conv sequence, we concatenate output with input:
+        # channels = in_channels * 2. Then we reduce to out_channels.
+        self.conv_fuse = nn.Conv2d(
+            in_channels * 2, out_channels, kernel_size=1, stride=1, padding=0, bias=False
+        )
         self.bn_fuse = nn.BatchNorm2d(out_channels)
         self.act_fuse = nn.SiLU(inplace=True)
 
     def forward(self, x):
         """
-        Truyền xuôi DSPF:
-        - Đầu vào x: tensor có kích thước [N, in_channels, H, W].
-        - Output: tensor có kích thước [N, out_channels, H, W], đã tích hợp đặc trưng không gian đa tỉ lệ.
+        Forward pass of DSPF:
+        - Input x: [N, in_channels, H, W]
+        - Output: [N, out_channels, H, W] with multi-scale spatial fusion.
         """
-        # Sao chép tensor đầu vào để giữ nguyên (sẽ dùng trong skip connection)
         identity = x
-        # Chuỗi convolution chụm với các dilation khác nhau (tăng vùng nhận diện)
-        out = self.dw_conv_sequence(x)
-        # Ghép kênh (concatenate) output sau các conv dilated với đặc trưng gốc ban đầu theo chiều kênh
-        out = torch.cat([out, identity], dim=1)
-        # Áp dụng conv 1x1 + BN + activation để trộn và giảm số kênh
+        out = self.dw_conv_sequence(x)        # depthwise convs with different dilations
+        out = torch.cat([out, identity], 1)   # concatenate along channel dimension
         out = self.conv_fuse(out)
         out = self.bn_fuse(out)
         out = self.act_fuse(out)
         return out
 
 
-# DySample: module upsampling động, nhẹ, dùng content-aware sampling
 class DySample(nn.Module):
+    """
+    DySample: lightweight, content-aware dynamic upsampling module.
+    """
+
     def __init__(self, in_channels, scale_factor=2):
         """
-        DySample: Toán tử upsampling động (học cách lấy mẫu) dựa trên nội dung đặc trưng.
-        - in_channels: số kênh của feature map đầu vào.
-        - scale_factor: hệ số phóng đại (ví dụ 2x, mặc định = 2).
-        Module này học một lưới lấy mẫu động (offset) để upsample đặc trưng thay vì nội suy cố định.
+        Dynamic upsampling operator (content-aware sampling).
+
+        - in_channels: number of channels in the input feature map.
+        - scale_factor: upsampling factor (e.g., 2).
         """
         super(DySample, self).__init__()
         self.scale = scale_factor
-        # Tầng linear (conv1x1) sinh offset: đầu ra 2 * (scale^2) kênh.
-        # 2 kênh cho mỗi vị trí (độ lệch x và y), (scale^2) nhóm để trải ra lưới điểm sau PixelShuffle.
-        self.conv_offset = nn.Conv2d(in_channels, 2 * (self.scale ** 2), kernel_size=1, stride=1, padding=0)
-        # Sử dụng pixel shuffle để biến tensor offset [N, 2*(r^2), H, W] thành [N, 2, H*r, W*r]
+        # 1x1 conv to generate offsets: output channels = 2 * (scale^2)
+        # 2 channels per location (x and y offsets).
+        self.conv_offset = nn.Conv2d(
+            in_channels,
+            2 * (self.scale ** 2),
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        )
+        # Mark this conv as not prunable
+        self.conv_offset.no_prune = True
+        # PixelShuffle to reshape [N, 2*(r^2), H, W] -> [N, 2, H*r, W*r]
         self.pixel_shuffle = nn.PixelShuffle(self.scale)
-        # Hàm kích hoạt sigmoid để giới hạn offset trong khoảng [0,1] (sau đó sẽ nhân với scale_factor)
         self.activation = nn.Sigmoid()
 
     def forward(self, x):
         """
-        Truyền xuôi DySample:
-        - x: tensor [N, C, H, W] đầu vào cần upsample.
-        - Kết quả: tensor [N, C, H*scale, W*scale] đã được upsample bằng lấy mẫu động.
+        Forward pass of DySample:
+        - x: [N, C, H, W]
+        - Output: [N, C, H * scale, W * scale]
         """
         N, C, H, W = x.shape
         r = self.scale
-        # Tính offset qua conv1x1
-        offset = self.conv_offset(x)                # [N, 2*(r^2), H, W]
-        # Sắp xếp lại (pixel shuffle) để có offset cho từng điểm output
-        offset = self.pixel_shuffle(offset)         # [N, 2, H*r, W*r]
-        # Kích hoạt sigmoid giới hạn offset từ 0 đến 1, sau đó nhân với hệ số upsample
-        offset = self.activation(offset) * r        # [N, 2, H_out, W_out], mỗi giá trị offset giới hạn trong [0, r]
 
-        # Tạo grid tọa độ gốc (original grid) cho phép lấy mẫu theo tỉ lệ cố định
-        # Sử dụng hệ quy chiếu chuẩn hóa của grid_sample ([-1,1]), align_corners=True để tính toán dễ dàng
+        offset = self.conv_offset(x)            # [N, 2*(r^2), H, W]
+        offset = self.pixel_shuffle(offset)     # [N, 2, H*r, W*r]
+        offset = self.activation(offset) * r    # [N, 2, H_out, W_out]
+
         H_out, W_out = H * r, W * r
-        # Tọa độ chuẩn hóa theo chiều Y và X
+
+        # Build base sampling grid in normalized coordinates [-1, 1]
         if H_out == 1:
-            # Trường hợp đặc biệt: nếu H_out=1, đặt y_norm = -1 (vì chỉ có một hàng, góc trên và dưới trùng nhau)
             y_norm = torch.tensor([-1.0], device=x.device, dtype=x.dtype)
         else:
             y = torch.linspace(0, H - 1, steps=H_out, device=x.device, dtype=x.dtype)
-            y_norm = (y / (H - 1)) * 2 - 1           # chuẩn hóa về [-1,1]
+            y_norm = (y / (H - 1)) * 2 - 1
+
         if W_out == 1:
-            # Nếu chỉ có một cột
             x_norm = torch.tensor([-1.0], device=x.device, dtype=x.dtype)
         else:
             x_lin = torch.linspace(0, W - 1, steps=W_out, device=x.device, dtype=x.dtype)
-            x_norm = (x_lin / (W - 1)) * 2 - 1       # chuẩn hóa về [-1,1]
-        # Tạo meshgrid cho toàn bộ tọa độ output
-        Y_grid, X_grid = torch.meshgrid(y_norm, x_norm, indexing='ij')  # Y_grid, X_grid kích thước [H_out, W_out]
-        base_grid = torch.stack((X_grid, Y_grid), dim=-1)  # [H_out, W_out, 2], (:,:,0)=x, (:,:,1)=y
-        # Mở rộng grid cho batch
-        base_grid = base_grid.expand(N, H_out, W_out, 2)   # [N, H_out, W_out, 2]
+            x_norm = (x_lin / (W - 1)) * 2 - 1
 
-        # Chuyển offset từ hệ tọa độ pixel (đơn vị pixel trong ảnh gốc) sang hệ chuẩn hóa [-1,1]
-        # offset hiện tại đang ở thang đo pixel (0->r). Chúng ta cần chia cho (H-1) hoặc (W-1) rồi *2.
-        # Tách offset theo trục x và y
+        Y_grid, X_grid = torch.meshgrid(y_norm, x_norm, indexing="ij")
+        base_grid = torch.stack((X_grid, Y_grid), dim=-1)      # [H_out, W_out, 2]
+        base_grid = base_grid.expand(N, H_out, W_out, 2)       # [N, H_out, W_out, 2]
+
         offset_x = offset[:, 0, :, :]  # [N, H_out, W_out]
         offset_y = offset[:, 1, :, :]  # [N, H_out, W_out]
-        # Bình thường, original grid G (base_grid) đã là vị trí mẫu mặc định nếu offset = 0.
-        # Giờ thêm offset (đã được scale) vào grid.
-        # Tuy nhiên cần chuyển offset thành dạng normalized tương ứng với input.
-        # offset_x (0->r) tương ứng tối đa r pixel theo chiều rộng. Để đổi sang [-1,1]:
+
         if W > 1:
-            offset_x_norm = (offset_x / (W - 1)) * 2  # giá trị trong khoảng [0, 2*r/(W-1)], nhỏ vì r << W
+            offset_x_norm = (offset_x / (W - 1)) * 2
         else:
-            offset_x_norm = 0 * offset_x  # nếu W=1, offset không có ý nghĩa, đặt 0
+            offset_x_norm = torch.zeros_like(offset_x)
+
         if H > 1:
             offset_y_norm = (offset_y / (H - 1)) * 2
         else:
-            offset_y_norm = 0 * offset_y
+            offset_y_norm = torch.zeros_like(offset_y)
 
-        # Thêm offset đã chuẩn hóa vào grid cơ bản
-        # Cần đảm bảo shape phù hợp để cộng: [N, H_out, W_out, 2]
         offset_grid = torch.stack((offset_x_norm, offset_y_norm), dim=-1)  # [N, H_out, W_out, 2]
-        # Lưới lấy mẫu động = lưới gốc + offset
-        sampling_grid = base_grid + offset_grid  # [N, H_out, W_out, 2]
+        sampling_grid = base_grid + offset_grid
 
-        # Áp dụng lấy mẫu grid_sample để nội suy giá trị từ x (input) theo sampling_grid
-        # Sử dụng bilinear interpolation, padding_mode='zeros', align_corners=True (tương ứng với cách tạo grid trên)
-        out = F.grid_sample(x, sampling_grid, mode='bilinear', padding_mode='zeros', align_corners=True)
+        out = F.grid_sample(
+            x,
+            sampling_grid,
+            mode="bilinear",
+            padding_mode="zeros",
+            align_corners=True,
+        )
         return out
 
 
-# L-FPN: Light Feature Pyramid Network tích hợp DAFF (Dual-phase Asymptotic Feature Fusion) và DEI
 class L_FPN(nn.Module):
+    """
+    L-FPN: Light Feature Pyramid Network integrating DAFF and DEI.
+    """
+
     def __init__(self, ch_in):
         """
-        L-FPN: Mạng pyramid đặc trưng nhẹ cho detection, kết hợp cơ chế DAFF và DEI.
-        - ch_in: list chứa số kênh ngõ vào từ backbone cho các cấp P2, P3, P4, P5 (theo thứ tự).
-          Ví dụ: ch_in = [C2, C3, C4, C5].
-        Module này sẽ tạo các nhánh neck, bao gồm:
-          + DSPF để trộn đặc trưng đa tỉ lệ thay thế PANet thông thường.
-          + DySample cho upsampling để đảm bảo căn chỉnh đặc trưng.
-          + Detection heads ở P2 (stride 4), P3 (8), P4 (16), P5 (32).
+        - ch_in: list of channels from backbone for P2, P3, P4, P5 (in order),
+          e.g., ch_in = [C2, C3, C4, C5].
         """
         super(L_FPN, self).__init__()
-        # Các số kênh đầu vào cho P2, P3, P4, P5 từ backbone
         C2, C3, C4, C5 = ch_in
 
-        # 1. Giảm số kênh cho P5 để kết hợp với P4 (ví dụ: đưa C5 -> C4 để concat)
+        # P5 -> P4 path
         self.conv5_to_4 = nn.Conv2d(C5, C4, kernel_size=1, stride=1, padding=0, bias=True)
-        # 2. Module DySample để upsample P5 lên kích thước P4
         self.upsample5_to_4 = DySample(in_channels=C4, scale_factor=2)
-        # 3. DSPF module để fusion P5 (upsampled) với P4
-        # Sau khi concat P5_up (C4) và P4 (C4) => tổng kênh C4*2, DSPF sẽ trả về C4
-        self.dspf_P4 = DSPF(in_channels=C4*2, out_channels=C4)
+        self.dspf_P4 = DSPF(in_channels=C4 * 2, out_channels=C4)
 
-        # Tương tự cho P4 -> P3
+        # P4 -> P3 path
         self.conv4_to_3 = nn.Conv2d(C4, C3, kernel_size=1, stride=1, padding=0, bias=True)
         self.upsample4_to_3 = DySample(in_channels=C3, scale_factor=2)
-        # Sau khi concat P4_up (C3) và P3 (C3) => kênh 2*C3, DSPF trả về C3
-        self.dspf_P3 = DSPF(in_channels=C3*2, out_channels=C3)
+        self.dspf_P3 = DSPF(in_channels=C3 * 2, out_channels=C3)
 
-        # Tương tự cho P3 -> P2
+        # P3 -> P2 path
         self.conv3_to_2 = nn.Conv2d(C3, C2, kernel_size=1, stride=1, padding=0, bias=True)
         self.upsample3_to_2 = DySample(in_channels=C2, scale_factor=2)
-        # Sau khi concat P3_up (C2) và P2 (C2) => kênh 2*C2, DSPF trả về C2
-        self.dspf_P2 = DSPF(in_channels=C2*2, out_channels=C2)
+        self.dspf_P2 = DSPF(in_channels=C2 * 2, out_channels=C2)
 
-        # Ngoài ra, ta giữ nguyên P5 từ backbone làm output (sẽ là detection head P5)
-        # Có thể thêm một conv để điều chỉnh kênh P5 nếu cần
-        self.out_P5_conv = nn.Identity()  # placeholder, có thể thay bằng Conv nếu muốn đổi kênh đầu ra P5
+        # Optional processing for P5 (identity here)
+        self.out_P5_conv = nn.Identity()
 
     def forward(self, x):
         """
-        Truyền xuôi L-FPN:
-        - x: list hoặc tuple [P2, P3, P4, P5] từ backbone (đặc trưng các mức).
-        - Trả về: tuple (P2_out, P3_out, P4_out, P5_out) đã fusion theo kiến trúc L-FPN.
+        - x: [P2, P3, P4, P5] from the backbone.
+        - returns: (P2_out, P3_out, P4_out, P5_out)
         """
-        P2, P3, P4, P5 = x  # đặc trưng từ backbone cho các mức độ phân giải khác nhau
+        P2, P3, P4, P5 = x
 
-        # Giai đoạn 1: kết hợp đặc trưng sâu nhất (P5) với đặc trưng nông (P4)
-        # 1. Điều chỉnh kênh P5 cho phù hợp với P4, sau đó upsample lên kích thước P4
-        P5_to_P4 = self.conv5_to_4(P5)              # [N, C4, H_P5, W_P5] -> [N, C4, H_P5, W_P5]
-        P5_up = self.upsample5_to_4(P5_to_P4)        # [N, C4, H_P4, W_P4] (upsampled P5 to match P4 spatial size)
-        # 2. Ghép P5_up với P4
-        P4_cat = torch.cat([P5_up, P4], dim=1)       # [N, C4*2, H_P4, W_P4]
-        # 3. Trộn đặc trưng bằng DSPF (giảm khoảng cách ngữ nghĩa giữa P5 và P4)
-        P4_out = self.dspf_P4(P4_cat)               # [N, C4, H_P4, W_P4] (tích hợp đặc trưng P4)
+        # Stage 1: P5 + P4
+        P5_to_P4 = self.conv5_to_4(P5)
+        P5_up = self.upsample5_to_4(P5_to_P4)
+        P4_cat = torch.cat([P5_up, P4], dim=1)
+        P4_out = self.dspf_P4(P4_cat)
 
-        # Giai đoạn 2: tiếp tục kết hợp đặc trưng trung gian (P4_out) với P3
-        P4_to_P3 = self.conv4_to_3(P4_out)           # Điều chỉnh kênh P4_out thành C3
-        P4_up = self.upsample4_to_3(P4_to_P3)        # Upsample P4_out lên kích thước P3
-        P3_cat = torch.cat([P4_up, P3], dim=1)       # Ghép với P3 gốc [N, C3*2, H_P3, W_P3]
-        P3_out = self.dspf_P3(P3_cat)               # Kết quả tích hợp P3 [N, C3, H_P3, W_P3]
+        # Stage 2: P4_out + P3
+        P4_to_P3 = self.conv4_to_3(P4_out)
+        P4_up = self.upsample4_to_3(P4_to_P3)
+        P3_cat = torch.cat([P4_up, P3], dim=1)
+        P3_out = self.dspf_P3(P3_cat)
 
-        # Giai đoạn 3: kết hợp đặc trưng nông hơn (P3_out) với P2
-        P3_to_P2 = self.conv3_to_2(P3_out)           # Điều chỉnh kênh P3_out thành C2
-        P3_up = self.upsample3_to_2(P3_to_P2)        # Upsample P3_out lên kích thước P2
-        P2_cat = torch.cat([P3_up, P2], dim=1)       # Ghép với P2 gốc [N, C2*2, H_P2, W_P2]
-        P2_out = self.dspf_P2(P2_cat)               # Kết quả tích hợp P2 [N, C2, H_P2, W_P2]
+        # Stage 3: P3_out + P2
+        P3_to_P2 = self.conv3_to_2(P3_out)
+        P3_up = self.upsample3_to_2(P3_to_P2)
+        P2_cat = torch.cat([P3_up, P2], dim=1)
+        P2_out = self.dspf_P2(P2_cat)
 
-        # Đầu ra P5 cũng có thể trải qua một số xử lý (ví dụ SPPF nếu cần). Ở đây ta để nguyên hoặc Identity.
-        P5_out = self.out_P5_conv(P5)               # [N, C5 (hoặc đã điều chỉnh), H_P5, W_P5]
+        P5_out = self.out_P5_conv(P5)
 
-        # Trả về các feature map đã tích hợp để đưa vào đầu phát hiện (detection head) cho từng mức.
-        # Thứ tự: P2 (stride 4), P3 (stride 8), P4 (stride 16), P5 (stride 32)
         return P2_out, P3_out, P4_out, P5_out
 
 
 class LFPNSplit(nn.Module):
     """
-    LFPNSplit: lấy 1 nhánh (P2, P3, P4 hoặc P5) từ output của L_FPN.
-    - x: đầu vào là tuple/list (P2_out, P3_out, P4_out, P5_out)
-    - idx: chỉ số nhánh cần lấy (0: P2, 1: P3, 2: P4, 3: P5)
+    LFPNSplit: select a single branch (P2, P3, P4 or P5) from L_FPN output.
+
+    - x: tuple/list (P2_out, P3_out, P4_out, P5_out)
+    - idx: index of the branch to select (0: P2, 1: P3, 2: P4, 3: P5)
     """
+
     def __init__(self, idx: int):
         super().__init__()
         self.idx = int(idx)
 
     def forward(self, x):
-        # x là tuple hoặc list 4 phần tử, trả về x[idx]
         return x[self.idx]
+
+
+class AMRF(nn.Module):
+    """
+    Adaptive Multi-Receptive-Field block.
+
+    Uses three depthwise convolution branches with different dilations
+    and an attention mechanism to adaptively fuse them.
+
+    - c1, c2: input/output channels (must be equal).
+    """
+
+    def __init__(self, c1: int, c2: int, r: int = 4):
+        super().__init__()
+        assert c1 == c2, f"AMRF expects c1 == c2, got {c1} vs {c2}"
+        c = c2
+        self.c = c
+
+        # Three depthwise conv branches with dilations 1, 2, 3
+        self.dw1 = nn.Conv2d(c, c, 3, 1, 1, dilation=1, groups=c)
+        self.dw2 = nn.Conv2d(c, c, 3, 1, 2, dilation=2, groups=c)
+        self.dw3 = nn.Conv2d(c, c, 3, 1, 3, dilation=3, groups=c)
+
+
+        self.bn1 = nn.BatchNorm2d(c)
+        self.bn2 = nn.BatchNorm2d(c)
+        self.bn3 = nn.BatchNorm2d(c)
+
+        # Attention across the 3 branches
+        hidden = max(c // r, 1)
+        self.fc1 = nn.Linear(c, hidden)
+        self.fc2 = nn.Linear(hidden, 3)
+
+        # Output refinement
+        self.conv1x1 = nn.Conv2d(c, c, 1, 1, 0)
+        self.bn_out = nn.BatchNorm2d(c)
+        self.act = nn.SiLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, c, h, w = x.shape
+
+        f1 = self.act(self.bn1(self.dw1(x)))
+        f2 = self.act(self.bn2(self.dw2(x)))
+        f3 = self.act(self.bn3(self.dw3(x)))
+
+        # Global descriptor from the input
+        z = F.adaptive_avg_pool2d(x, 1).view(b, c)
+        z = self.act(self.fc1(z))
+        a = self.fc2(z)                     # (B, 3)
+        w123 = F.softmax(a, dim=1).view(b, 3, 1, 1, 1)  # (B, 3, 1, 1, 1)
+
+        f_stack = torch.stack([f1, f2, f3], dim=1)      # (B, 3, C, H, W)
+        out = (w123 * f_stack).sum(1)                   # (B, C, H, W)
+
+        out = self.act(self.bn_out(self.conv1x1(out)))
+        return out
+
+
+class ScaleMapHead(nn.Module):
+    """
+    Scale map head.
+
+    Generates a scale map S2 (single-channel) from feature C2 (stride 4).
+    In YAML/parse_model it is called with args: [out_ch (=1), c_mid].
+    """
+
+    def __init__(self, c1: int, c2: int, c_mid: int = 64):
+        super().__init__()
+        # c2 is usually 1 (number of channels of the scale map), but kept as a parameter for generality
+        self.conv1 = Conv(c1, c_mid, 3, 1)
+        self.conv2 = Conv(c_mid, max(c_mid // 2, 1), 3, 1)
+        self.conv_out = nn.Conv2d(max(c_mid // 2, 1), c2, 1, 1, 0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv1(x)
+        x = self.conv2(x)
+        s2 = self.conv_out(x)  # (B, c2, H, W) – typically c2 = 1
+        return s2
+
+
+class ScaleMapDown(nn.Module):
+    """
+    Scale map downsampling block.
+
+    Downsamples a scale map using 2x2 average pooling.
+    c1 and c2 must be equal (channel count is preserved, usually = 1).
+    """
+
+    def __init__(self, c1: int, c2: int, k: int = 2):
+        super().__init__()
+        assert c1 == c2, f"ScaleMapDown expects c1 == c2, got {c1} vs {c2}"
+        self.pool = nn.AvgPool2d(kernel_size=k, stride=k)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.pool(x)
+
+
+class SGCBlock(nn.Module):
+    """
+    Scale-Guided Context fusion block v2.
+
+    Input: x shape (B, 3*C + 1, H, W):
+        - C channels: feature level 1
+        - C channels: feature level 2
+        - C channels: feature level 3
+        - 1 channel : scale map S
+
+    Output: (B, C, H, W)
+    """
+
+    def __init__(self, c1: int, c2: int):
+        super().__init__()
+        self.c = c2
+
+        self.amrf1 = AMRF(c2, c2)
+        self.amrf2 = AMRF(c2, c2)
+        self.amrf3 = AMRF(c2, c2)
+
+        # learnable weights for 3 branches conditioned on (f1, f2, f3, S)
+        self.weight_conv = nn.Conv2d(3 * c2 + 1, 3, kernel_size=1, stride=1, padding=0)
+
+        self.refine = Conv(c2, c2, 3, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, ch, h, w = x.shape
+        C = self.c
+        assert ch >= 3 * C + 1, f"SGCBlock expects at least 3*C+1 channels, got {ch}"
+
+        f1 = x[:, 0:C]
+        f2 = x[:, C:2*C]
+        f3 = x[:, 2*C:3*C]
+        S  = x[:, 3*C:3*C+1]  # (B,1,H,W)
+
+        f1 = self.amrf1(f1)
+        f2 = self.amrf2(f2)
+        f3 = self.amrf3(f3)
+
+        f_cat = torch.cat([f1, f2, f3, S], dim=1)    # (B, 3C+1, H, W)
+        w = self.weight_conv(f_cat)                  # (B, 3, H, W)
+        w = torch.softmax(w, dim=1)                  # softmax over branch dimension
+
+        w1 = w[:, 0:1]
+        w2 = w[:, 1:2]
+        w3 = w[:, 2:3]
+
+        fused = f1 * w1 + f2 * w2 + f3 * w3
+        fused = self.refine(fused)
+        return fused
