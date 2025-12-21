@@ -68,6 +68,7 @@ from .block import (
     ScaleMapHead,
     ScaleMapDown,
     SGCBlock,
+    SGCBlockLite,
 )
 from .conv import (
     MP,
@@ -198,4 +199,5 @@ __all__ = (
     "ScaleMapHead",
     "ScaleMapDown",
     "SGCBlock",
+    "SGCBlockLite",
 )

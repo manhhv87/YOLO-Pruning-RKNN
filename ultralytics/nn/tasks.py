@@ -77,6 +77,7 @@ from ultralytics.nn.modules import (
     ScaleMapHead,
     ScaleMapDown,
     SGCBlock,
+    SGCBlockLite,
 )
 from ultralytics.utils import (
     DEFAULT_CFG_DICT,
@@ -1848,6 +1849,7 @@ def parse_model(d, ch, verbose=True):
             ScaleMapHead,
             ScaleMapDown,
             SGCBlock,
+            SGCBlockLite,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1887,11 +1889,18 @@ def parse_model(d, ch, verbose=True):
                     args[j] = locals()[a] if a in locals() else ast.literal_eval(a)
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m in base_modules:
-            c1, c2 = ch[f], args[0]
-            if (
-                c2 != nc
-            ):  # if c2 not equal to number of classes (i.e. for Classify() output)
-                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            c1 = ch[f] if isinstance(f, int) else sum(ch[x] for x in f)
+            c2 = args[0]
+
+            # NEW: Keep fixed-channel scale maps (avoid 1 -> 8 by make_divisible)
+            if m in (ScaleMapHead, ScaleMapDown):
+                c2 = int(c2)
+            else:
+                if (
+                    c2 != nc
+                ):  # if c2 not equal to number of classes (i.e. for Classify() output)
+                    c2 = make_divisible(min(c2, max_channels) * width, 8)
+
             if m is C2fAttn:  # set 1) embed channels and 2) num heads
                 args[1] = make_divisible(min(args[1], max_channels // 2) * width, 8)
                 args[2] = int(

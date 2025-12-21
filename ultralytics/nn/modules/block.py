@@ -61,6 +61,7 @@ __all__ = (
     "ScaleMapHead",
     "ScaleMapDown",
     "SGCBlock",
+    "SGCBlockLite",
 )
 
 
@@ -2565,15 +2566,14 @@ class AMRF(nn.Module):
         self.dw2 = nn.Conv2d(c, c, 3, 1, 2, dilation=2, groups=c)
         self.dw3 = nn.Conv2d(c, c, 3, 1, 3, dilation=3, groups=c)
 
-
         self.bn1 = nn.BatchNorm2d(c)
         self.bn2 = nn.BatchNorm2d(c)
         self.bn3 = nn.BatchNorm2d(c)
 
         # Attention across the 3 branches
         hidden = max(c // r, 1)
-        self.fc1 = nn.Linear(c, hidden)
-        self.fc2 = nn.Linear(hidden, 3)
+        self.fc1 = nn.Conv2d(c, hidden, kernel_size=1, stride=1, padding=0, bias=True)
+        self.fc2 = nn.Conv2d(hidden, 3, kernel_size=1, stride=1, padding=0, bias=True)
 
         # Output refinement
         self.conv1x1 = nn.Conv2d(c, c, 1, 1, 0)
@@ -2588,10 +2588,10 @@ class AMRF(nn.Module):
         f3 = self.act(self.bn3(self.dw3(x)))
 
         # Global descriptor from the input
-        z = F.adaptive_avg_pool2d(x, 1).view(b, c)
-        z = self.act(self.fc1(z))
-        a = self.fc2(z)                     # (B, 3)
-        w123 = F.softmax(a, dim=1).view(b, 3, 1, 1, 1)  # (B, 3, 1, 1, 1)
+        z = F.adaptive_avg_pool2d(x, 1)      # (B, C, 1, 1)
+        z = self.act(self.fc1(z))            # (B, hidden, 1, 1)
+        a = self.fc2(z)                      # (B, 3, 1, 1)
+        w123 = torch.softmax(a, dim=1).view(b, 3, 1, 1, 1)
 
         f_stack = torch.stack([f1, f2, f3], dim=1)      # (B, 3, C, H, W)
         out = (w123 * f_stack).sum(1)                   # (B, C, H, W)
@@ -2610,6 +2610,7 @@ class ScaleMapHead(nn.Module):
 
     def __init__(self, c1: int, c2: int, c_mid: int = 64):
         super().__init__()
+        
         # c2 is usually 1 (number of channels of the scale map), but kept as a parameter for generality
         self.conv1 = Conv(c1, c_mid, 3, 1)
         self.conv2 = Conv(c_mid, max(c_mid // 2, 1), 3, 1)
@@ -2666,27 +2667,64 @@ class SGCBlock(nn.Module):
         self.refine = Conv(c2, c2, 3, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        b, ch, h, w = x.shape
-        C = self.c
-        assert ch >= 3 * C + 1, f"SGCBlock expects at least 3*C+1 channels, got {ch}"
-
-        f1 = x[:, 0:C]
-        f2 = x[:, C:2*C]
-        f3 = x[:, 2*C:3*C]
-        S  = x[:, 3*C:3*C+1]  # (B,1,H,W)
+        # NEW: nhận list/tuple [f1, f2, f3, S]
+        if isinstance(x, (list, tuple)):
+            f1, f2, f3, S = x
+        else:
+            # fallback (giữ tương thích nếu bạn còn dùng kiểu concat cũ)
+            b, ch, h, w = x.shape
+            assert (ch - 1) % 3 == 0, f"SGCBlock expects 3*C+1 channels, got {ch}"
+            C = self.c
+            f1 = x[:, 0:C]
+            f2 = x[:, C:2*C]
+            f3 = x[:, 2*C:3*C]
+            S  = x[:, 3*C:3*C+1]
 
         f1 = self.amrf1(f1)
         f2 = self.amrf2(f2)
         f3 = self.amrf3(f3)
 
-        f_cat = torch.cat([f1, f2, f3, S], dim=1)    # (B, 3C+1, H, W)
-        w = self.weight_conv(f_cat)                  # (B, 3, H, W)
-        w = torch.softmax(w, dim=1)                  # softmax over branch dimension
+        f_cat = torch.cat([f1, f2, f3, S], dim=1)
+        w = self.weight_conv(f_cat)
+        w = torch.softmax(w, dim=1)
 
-        w1 = w[:, 0:1]
-        w2 = w[:, 1:2]
-        w3 = w[:, 2:3]
-
+        w1, w2, w3 = w[:, 0:1], w[:, 1:2], w[:, 2:3]
         fused = f1 * w1 + f2 * w2 + f3 * w3
-        fused = self.refine(fused)
-        return fused
+        return self.refine(fused)
+
+
+class SGCBlockLite(nn.Module):
+    def __init__(self, c1: int, c2: int):
+        super().__init__()
+        self.c = c2
+
+        # dùng chung AMRF cho 3 nhánh
+        self.amrf = AMRF(c2, c2)
+
+        self.weight_conv = nn.Conv2d(3 * c2 + 1, 3, kernel_size=1, stride=1, padding=0)
+        self.refine = Conv(c2, c2, 3, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # NEW: nhận list/tuple [f1, f2, f3, S]
+        if isinstance(x, (list, tuple)):
+            f1, f2, f3, S = x
+        else:
+            # fallback (giữ tương thích nếu bạn còn dùng kiểu concat cũ)
+            b, ch, h, w = x.shape
+            C = self.c
+            f1 = x[:, 0:C]
+            f2 = x[:, C:2*C]
+            f3 = x[:, 2*C:3*C]
+            S  = x[:, 3*C:3*C+1]
+
+        f1 = self.amrf1(f1)
+        f2 = self.amrf2(f2)
+        f3 = self.amrf3(f3)
+
+        f_cat = torch.cat([f1, f2, f3, S], dim=1)
+        w = self.weight_conv(f_cat)
+        w = torch.softmax(w, dim=1)
+
+        w1, w2, w3 = w[:, 0:1], w[:, 1:2], w[:, 2:3]
+        fused = f1 * w1 + f2 * w2 + f3 * w3
+        return self.refine(fused)

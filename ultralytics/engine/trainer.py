@@ -15,7 +15,7 @@ import warnings
 from copy import copy, deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
-from ultralytics.nn.modules import Detect, Attention
+from ultralytics.nn.modules import Detect, Attention, AMRF, ScaleMapHead, SGCBlock
 
 import numpy as np
 import torch
@@ -301,16 +301,33 @@ class BaseTrainer:
 
         if self.pruner is None:
             example_inputs = torch.randn(1, 3, self.args.imgsz, self.args.imgsz)
+            # ignored_layers = []
+            # for m in self.model.modules():
+            #     if isinstance(
+            #         m,
+            #         (
+            #             Detect,
+            #             Attention,
+            #         ),
+            #     ):
+            #         ignored_layers.append(m)
+            
             ignored_layers = []
             for m in self.model.modules():
-                if isinstance(
-                    m,
-                    (
-                        Detect,
-                        Attention,
-                    ),
-                ):
+                # giữ nguyên logic cũ
+                if isinstance(m, (Detect, Attention)):
                     ignored_layers.append(m)
+
+                # freeze output channels cho các conv "đầu ra cố định"
+                if isinstance(m, ScaleMapHead):
+                    ignored_layers.append(m.conv_out)     # out_channels = 1
+
+                if isinstance(m, AMRF):
+                    ignored_layers.append(m.fc2)          # out_channels = 3
+
+                if isinstance(m, SGCBlock):
+                    ignored_layers.append(m.weight_conv)  # out_channels = 3
+
             self.pruner = tp.pruner.MagnitudePruner(
                 self.model,
                 example_inputs,
