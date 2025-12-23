@@ -30,28 +30,23 @@ backbone:
 
 # YOLOv8.0n head (SGC - larger)
 head:
-  # P5 refine
-  - [9, 1, Conv, [512, 1, 1]]                    # 10: C5
-  - [-1, 1, AMRF, [512]]                         # 11: P5_refined
+  - [9, 1, Conv, [192, 1, 1]]                            # 10  [512,192,1,1]
+  - [-1, 1, AMRF, [192, 192]]                            # 11
 
-  # scale map (tang c_mid 64 -> 96)
-  - [2, 1, ScaleMapHead, [1, 96]]                # 12: S2
-  - [-1, 1, ScaleMapDown, [1]]                   # 13: S3
-  - [-1, 1, ScaleMapDown, [1]]                   # 14: S4
+  - [2, 1, ScaleMapHead, [1, 24]]                        # 12  S2: stride4 => 64x64
+  - [-1, 1, ScaleMapDown, [1, 2]]                        # 13  down x2: 64->32 (S3, stride8)
+  - [-1, 1, ScaleMapDown, [1, 2]]                        # 14  down x2: 32->16 (S4, stride16)
 
-  # -------- Fuse at P4/16 (C = 384) --------
-  - [4, 1, Conv, [384, 3, 2]]                    # 15: from P3 -> down to P4
-  - [6, 1, Conv, [384, 1, 1]]                    # 16: P4 lateral
-  - [11, 1, nn.Upsample, [None, 2, "nearest"]]   # 17: P5 -> P4
-  - [-1, 1, Conv, [384, 1, 1]]                   # 18
-  - [[15, 16, 18, 14], 1, SGCBlock, [384]]       # 19: P4_fused (input list: f1,f2,f3,S4)
+  - [4, 1, Conv, [128, 3, 2]]                            # 15
+  - [6, 1, Conv, [128, 1, 1]]                            # 16
+  - [11, 1, nn.Upsample, [None, 2, 'nearest']]           # 17
+  - [-1, 1, Conv, [128, 1, 1]]                           # 18
+  - [[15, 16, 18, 14], 1, SGCBlock, [128]]               # 19  dùng S4 (16x16)
 
-  # -------- Fuse at P3/8 (C = 384) --------
-  - [2, 1, Conv, [384, 3, 2]]                    # 20: from P2 -> down to P3
-  - [4, 1, Conv, [384, 1, 1]]                    # 21: P3 lateral
-  - [6, 1, nn.Upsample, [None, 2, "nearest"]]    # 22: P4 -> P3
-  - [-1, 1, Conv, [384, 1, 1]]                   # 23
-  - [[20, 21, 23, 13], 1, SGCBlock, [384]]       # 24: P3_fused (input list: f1,f2,f3,S3)
-  
-  # Detect: [P3_fused, P4_fused, P5_refined]
-  - [[24, 19, 11], 1, Detect, [nc]]              # 25: Detect(P3, P4, P5)   
+  - [2, 1, Conv, [128, 3, 2]]                            # 20
+  - [4, 1, Conv, [128, 1, 1]]                            # 21
+  - [6, 1, nn.Upsample, [None, 2, 'nearest']]            # 22
+  - [-1, 1, Conv, [128, 1, 1]]                           # 23
+  - [[20, 21, 23, 13], 1, SGCBlock, [128]]               # 24  dùng S3 (32x32)
+
+  - [[24, 19, 11], 1, Detect, [nc]]                      # 25  # Detect(P3/8, P4/16, P5/32)

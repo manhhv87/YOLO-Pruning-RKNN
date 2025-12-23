@@ -31,28 +31,26 @@ backbone:
 
 # YOLO11n head
 head:
-  - [10, 1, Conv, [512, 1, 1]]
-  - [-1, 1, AMRF, [512]]
-  - [2, 1, ScaleMapHead, [1, 64]]
-  - [-1, 1, ScaleMapDown, [1]]
-  - [-1, 1, ScaleMapDown, [1]]
-  - [4, 1, Conv, [256, 3, 2]]
-  - [6, 1, Conv, [256, 1, 1]]
-  - [12, 1, nn.Upsample, [None, 2, "nearest"]]
-  - [-1, 1, Conv, [256, 1, 1]]
-  - [[16, 17, 19, 15], 1, Concat, [1]]
-  - [-1, 1, SGCBlock, [256]]
-  - [2, 1, Conv, [256, 3, 2]]
-  - [4, 1, Conv, [256, 1, 1]]
-  - [6, 1, nn.Upsample, [None, 2, "nearest"]]
-  - [-1, 1, Conv, [256, 1, 1]]
-  - [[22, 23, 25, 14], 1, Concat, [1]]
-  - [-1, 1, SGCBlock, [256]]
-  - [2, 1, Conv, [128, 1, 1]]
-  - [4, 1, nn.Upsample, [None, 2, "nearest"]]
-  - [-1, 1, Conv, [128, 1, 1]]
-  - [6, 1, nn.Upsample, [None, 4, "nearest"]]
-  - [-1, 1, Conv, [128, 1, 1]]
-  - [[28, 30, 32, 13], 1, Concat, [1]]
-  - [-1, 1, SGCBlock, [128]]
-  - [[27, 21, 12], 1, Detect, [nc]]
+  - [10, 1, Conv, [384, 1, 1]]                                # 11: P5 1024->384
+  - [-1, 1, AMRF, [384]]                                      # 12: P5 refined
+
+  - [2, 1, ScaleMapHead, [1, 64]]                             # 13: S2 from C2(stride4), 1ch map
+  - [-1, 1, ScaleMapDown, [1]]                                # 14: down -> S3(stride8)
+  - [-1, 1, ScaleMapDown, [1]]                                # 15: down -> S4(stride16)
+
+  # --- Fuse at P4/16 (C=256): (P3->P4) + P4 + (P5->P4) + S4 ---
+  - [4, 1, Conv, [192, 3, 2]]                                 # 16: P3 down -> P4
+  - [6, 1, Conv, [192, 1, 1]]                                 # 17: P4 lateral
+  - [12, 1, nn.Upsample, [None, 2, "nearest"]]                # 18: P5 up -> P4
+  - [-1, 1, Conv, [192, 1, 1]]                                # 19
+  - [[16, 17, 19, 15], 1, SGCBlock, [192]]                    # 20: P4_fused (list input)
+
+  # --- Fuse at P3/8 (C=256): (P2->P3) + P3 + (P4->P3) + S3 ---
+  - [2, 1, Conv, [192, 3, 2]]                                 # 21: P2 down -> P3
+  - [4, 1, Conv, [192, 1, 1]]                                 # 22: P3 lateral
+  - [6, 1, nn.Upsample, [None, 2, "nearest"]]                 # 23: P4 up -> P3
+  - [-1, 1, Conv, [192, 1, 1]]                                # 24
+  - [[21, 22, 24, 14], 1, SGCBlock, [192]]                    # 25: P3_fused (list input)
+
+  # Detect: [P3_fused, P4_fused, P5_refined]
+  - [[25, 20, 12], 1, Detect, [nc]]                           # 32: Detect(P3_fused, P4_fused, P5_refined)

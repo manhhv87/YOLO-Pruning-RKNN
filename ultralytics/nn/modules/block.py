@@ -2662,8 +2662,8 @@ class SGCBlock(nn.Module):
         self.amrf3 = AMRF(c2, c2)
 
         # learnable weights for 3 branches conditioned on (f1, f2, f3, S)
-        self.weight_conv = nn.Conv2d(3 * c2 + 1, 3, kernel_size=1, stride=1, padding=0)
-
+        # self.weight_conv = nn.Conv2d(3 * c2 + 1, 3, kernel_size=1, stride=1, padding=0)
+        self.weight_conv = nn.Conv2d(c1, 3, kernel_size=1, stride=1, padding=0)
         self.refine = Conv(c2, c2, 3, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

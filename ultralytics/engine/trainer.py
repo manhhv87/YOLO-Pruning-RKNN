@@ -15,7 +15,7 @@ import warnings
 from copy import copy, deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
-from ultralytics.nn.modules import Detect, Attention, AMRF, ScaleMapHead, SGCBlock
+from ultralytics.nn.modules import Detect, Attention, AMRF, ScaleMapHead, SGCBlock, RepNCSPELAN4
 
 import numpy as np
 import torch
@@ -301,32 +301,38 @@ class BaseTrainer:
 
         if self.pruner is None:
             example_inputs = torch.randn(1, 3, self.args.imgsz, self.args.imgsz)
-            # ignored_layers = []
-            # for m in self.model.modules():
-            #     if isinstance(
-            #         m,
-            #         (
-            #             Detect,
-            #             Attention,
-            #         ),
-            #     ):
-            #         ignored_layers.append(m)
-            
             ignored_layers = []
+
+            def ignore_conv_bn(x):
+                # x có thể là ultralytics Conv wrapper hoặc Conv2d/BN2d
+                if hasattr(x, "conv"):  # ultralytics Conv wrapper
+                    ignored_layers.append(x.conv)
+                if hasattr(x, "bn"):
+                    ignored_layers.append(x.bn)
+                # nếu x là leaf conv/bn thì thêm trực tiếp
+                import torch.nn as nn
+                if isinstance(x, (nn.Conv2d, nn.BatchNorm2d)):
+                    ignored_layers.append(x)
+
             for m in self.model.modules():
                 # giữ nguyên logic cũ
                 if isinstance(m, (Detect, Attention)):
                     ignored_layers.append(m)
 
-                # freeze output channels cho các conv "đầu ra cố định"
                 if isinstance(m, ScaleMapHead):
-                    ignored_layers.append(m.conv_out)     # out_channels = 1
+                    ignore_conv_bn(m.conv_out)     # (nếu conv_out là wrapper Conv)
 
                 if isinstance(m, AMRF):
-                    ignored_layers.append(m.fc2)          # out_channels = 3
+                    ignored_layers.append(m.fc2)
 
                 if isinstance(m, SGCBlock):
-                    ignored_layers.append(m.weight_conv)  # out_channels = 3
+                    ignored_layers.append(m.weight_conv)
+
+                # FIX CHÍNH: tránh split/chunk trong RepNCSPELAN4.cv1
+                if isinstance(m, RepNCSPELAN4):
+                    ignore_conv_bn(m.cv1)          # Conv(512->256) + BN(256) gây idx 639
+                    # optional cho chắc
+                    ignore_conv_bn(m.cv4)
 
             self.pruner = tp.pruner.MagnitudePruner(
                 self.model,
@@ -336,6 +342,53 @@ class BaseTrainer:
                 pruning_ratio=self.prune_ratio,
                 ignored_layers=ignored_layers,
             )
+
+        # # ========= PRUNE DEBUG (CHÈN Ở ĐÂY) =========
+        # orig_est = self.pruner.estimate_importance
+
+        # def debug_estimate(group):
+        #     try:
+        #         return orig_est(group)
+        #     except Exception as e:
+        #         print("\n========== PRUNE DEBUG ==========")
+        #         print("Exception:", repr(e))
+        #         print("Group length:", len(group))
+
+        #         for i, item in enumerate(group):
+        #             try:
+        #                 dep, idxs = item
+        #                 layer = dep.target.module
+        #                 lname = layer.__class__.__name__
+
+        #                 # idx_max + idx_len
+        #                 idx_max, idx_len = None, 0
+        #                 if idxs is not None:
+        #                     try:
+        #                         idx_len = len(idxs)
+        #                         idx_max = int(max(idxs)) if idx_len else None
+        #                     except Exception:
+        #                         import torch
+        #                         t = torch.as_tensor(idxs)
+        #                         idx_len = int(t.numel())
+        #                         idx_max = int(t.max().item()) if t.numel() else None
+
+        #                 wshape = None
+        #                 if hasattr(layer, "weight") and layer.weight is not None:
+        #                     try:
+        #                         wshape = tuple(layer.weight.shape)
+        #                     except Exception:
+        #                         wshape = "<?>"
+
+        #                 print(f"[{i:02d}] {lname:>18}  weight_shape={wshape}  idx_len={idx_len}  idx_max={idx_max}")
+
+        #             except Exception as ee:
+        #                 print(f"[{i:02d}] (decode failed) {repr(ee)} item={item}")
+
+        #         print("========== END DEBUG ==========\n")
+        #         raise
+
+        # self.pruner.estimate_importance = debug_estimate
+        # # ========= END PRUNE DEBUG =========
 
         if self.prune:
             example_inputs = torch.randn(1, 3, self.args.imgsz, self.args.imgsz)

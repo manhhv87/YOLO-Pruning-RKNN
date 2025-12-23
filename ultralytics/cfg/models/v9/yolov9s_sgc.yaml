@@ -22,29 +22,20 @@ backbone:
   - [-1, 1, SPPELAN, [256, 128]]               # 9
 
 head:
-  # --- Original YOLOv9s head (unchanged) ---
-  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]          # 10
-  - [[-1, 6], 1, Concat, [1]]                           # 11 cat backbone P4
-  - [-1, 1, RepNCSPELAN4, [192, 192, 96, 3]]            # 12
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]         # 10
+  - [[-1, 6], 1, Concat, [1]]                          # 11
+  - [-1, 1, RepNCSPELAN4, [192, 192, 96, 1]]           # 12
 
-  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]          # 13
-  - [[-1, 4], 1, Concat, [1]]                           # 14 cat backbone P3
-  - [-1, 1, RepNCSPELAN4, [128, 128, 64, 3]]            # 15 (P3/8)
+  - [-1, 1, AConv, [256]]                              # 13
+  - [[-1, 9], 1, Concat, [1]]                          # 14
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 1]]          # 15
 
-  - [-1, 1, AConv, [96]]                                # 16
-  - [[-1, 12], 1, Concat, [1]]                          # 17 cat head P4
-  - [-1, 1, RepNCSPELAN4, [192, 192, 96, 3]]            # 18 (P4/16)
+  - [2, 1, ScaleMapHead, [8, 16]]                      # 16 
+  - [-1, 1, ScaleMapDown, [8, 4]]                      # 17
 
-  - [-1, 1, AConv, [128]]                               # 19
-  - [[-1, 9], 1, Concat, [1]]                           # 20 cat head P5
-  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 3]]           # 21 (P5/32)
+  - [12, 1, Conv, [96, 1, 1]]                          # 18
+  - [15, 1, Conv, [96, 1, 1]]                          # 19
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]         # 20
+  - [[18, 18, 20, 17], 1, SGCBlock, [96]]              # 21
 
-  # --- Ultra-min SGC: refine ONLY P4 using your modules (no P3/P5 fusion) ---
-  - [2, 1, ScaleMapHead, [1, 16]]                       # 22: S2 from C2(stride4), 1ch map
-  - [-1, 1, ScaleMapDown, [1, 4]]                       # 23: down k=4 -> S4(stride16)
-
-  - [18, 1, Conv, [96, 1, 1]]                           # 24: P4 192->96
-  - [[24, 24, 24, 23], 1, SGCBlock, [96]]               # 25: refine P4 (96)
-  - [-1, 1, Conv, [192, 1, 1]]                          # 26: back 96->192
-
-  - [[15, 26, 21], 1, Detect, [nc]]                     # 27: Detect(P3, P4_refined, P5)
+  - [[21, 15], 1, Detect, [nc]]                        # 22
