@@ -2701,7 +2701,8 @@ class SGCBlockLite(nn.Module):
         # dùng chung AMRF cho 3 nhánh
         self.amrf = AMRF(c2, c2)
 
-        self.weight_conv = nn.Conv2d(3 * c2 + 1, 3, kernel_size=1, stride=1, padding=0)
+        # self.weight_conv = nn.Conv2d(3 * c2 + 1, 3, kernel_size=1, stride=1, padding=0)
+        self.weight_conv = nn.Conv2d(c1, 3, kernel_size=1, stride=1, padding=0)
         self.refine = Conv(c2, c2, 3, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -2711,15 +2712,16 @@ class SGCBlockLite(nn.Module):
         else:
             # fallback (giữ tương thích nếu bạn còn dùng kiểu concat cũ)
             b, ch, h, w = x.shape
+            assert (ch - 1) % 3 == 0, f"SGCBlock expects 3*C+1 channels, got {ch}"
             C = self.c
             f1 = x[:, 0:C]
             f2 = x[:, C:2*C]
             f3 = x[:, 2*C:3*C]
             S  = x[:, 3*C:3*C+1]
 
-        f1 = self.amrf1(f1)
-        f2 = self.amrf2(f2)
-        f3 = self.amrf3(f3)
+        f1 = self.amrf(f1)
+        f2 = self.amrf(f2)
+        f3 = self.amrf(f3)
 
         f_cat = torch.cat([f1, f2, f3, S], dim=1)
         w = self.weight_conv(f_cat)

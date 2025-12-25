@@ -24,11 +24,11 @@ backbone:
 head:
   - [-1, 1, nn.Upsample, [None, 2, "nearest"]]         # 10
   - [[-1, 6], 1, Concat, [1]]                          # 11
-  - [-1, 1, RepNCSPELAN4, [192, 192, 96, 1]]           # 12
+  - [-1, 1, RepNCSPELAN4, [192, 192, 96, 3]]           # 12
 
   - [-1, 1, AConv, [256]]                              # 13
   - [[-1, 9], 1, Concat, [1]]                          # 14
-  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 1]]          # 15
+  - [-1, 1, RepNCSPELAN4, [256, 256, 128, 3]]          # 15
 
   - [2, 1, ScaleMapHead, [8, 16]]                      # 16 
   - [-1, 1, ScaleMapDown, [8, 4]]                      # 17
