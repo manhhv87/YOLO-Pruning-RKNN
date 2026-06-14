@@ -8,9 +8,8 @@ DFL box detector. This script:
 
   1) extracts the CENTRAL crop row (the line reaching nearest image-centre-bottom
      -- the navigation row) from each mask, by a bottom-centre-seeded upward trace;
-  2) writes YOLO detection labels: a few boxes placed along that central row at
-     successive distances, class = ordinal distance bin (0=near ... 3=far),
-     box size perspective-scaled (small/far -> large/near);
+  2) writes YOLO detection labels: boxes on ALL crop rows (single class 'crop_row'),
+     perspective-scaled in size (the central navigation row is selected at EVAL time);
   3) exports the detector-independent GT guidance line (robust linear fit
      x = a*y + b, in pixels) per image to gtlines_<split>.json for eval_guidance.py.
 
@@ -23,7 +22,7 @@ Usage:
   python prepare_crdld.py --root datasets/CRDLD --splits train validation test \
       --out-images datasets/CRDLD_yolo/images --out-labels datasets/CRDLD_yolo/labels \
       --n-boxes 6 --overlay-dir datasets/CRDLD_yolo/overlay   # overlay optional (debug)
-Then point a data.yaml at datasets/CRDLD_yolo (4 classes: near,mid_near,mid_far,far).
+Then point a data.yaml at datasets/CRDLD_yolo (nc=1, names=[crop_row]).
 """
 from __future__ import annotations
 import argparse, json, os
@@ -56,14 +55,19 @@ def extract_central_line(mask, max_jump_frac=0.06, min_pts=20):
     cx0 = W / 2.0
     max_jump = max_jump_frac * W
 
-    # seed: lowest row that has any fg; pick run-centre nearest image centre
+    # seed in a near-bottom BAND (not merely the lowest fg row, which can be a stray
+    # side row) and take the run-centre nearest image centre -> the navigation row.
+    # This matches eval's select_central (bottom-centre seed) so GT and prediction
+    # pick the SAME row.
     seed_y = None
-    for y in range(H - 1, -1, -1):
-        c = row_run_centers(fg[y])
-        if c:
-            seed_y = y
-            cur_x = min(c, key=lambda x: abs(x - cx0))
-            break
+    scan = list(range(int(0.88 * H), H)) + list(range(int(0.88 * H) - 1, -1, -1))
+    for y in scan:
+        if 0 <= y < H:
+            c = row_run_centers(fg[y])
+            if c:
+                seed_y = y
+                cur_x = min(c, key=lambda x: abs(x - cx0))
+                break
     if seed_y is None:
         return None, None
 
