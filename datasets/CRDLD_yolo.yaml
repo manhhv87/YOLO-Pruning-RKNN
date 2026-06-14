@@ -1,0 +1,15 @@
+# CALM-Row detection dataset, synthesised from CRDLD line-masks by prepare_crdld.py.
+# Boxes are placed along the central crop row (4 ordinal distance bins).
+# Run first:
+#   python prepare_crdld.py --root datasets/CRDLD --splits train validation test \
+#     --out-images datasets/CRDLD_yolo/images --out-labels datasets/CRDLD_yolo/labels --n-boxes 6
+path: CRDLD_yolo          # relative to the datasets/ root (Ultralytics resolves under settings 'datasets_dir')
+train: images/train
+val: images/val
+test: images/test
+nc: 4
+names:
+  0: near
+  1: mid_near
+  2: mid_far
+  3: far
