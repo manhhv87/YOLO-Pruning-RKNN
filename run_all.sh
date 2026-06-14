@@ -18,6 +18,7 @@ IMGSZ="${IMGSZ:-640}"
 DEVICE="${DEVICE:-0}"             # "0" GPU, or "cpu"
 SEEDS="${SEEDS:-0 1 2 3 4}"
 NBOXES="${NBOXES:-8}"   # y-bands (boxes per row); fewer+larger boxes train more stably
+CONF="${CONF:-0.10}"    # low eval conf: keep uncertain boxes -> CALM-Row down-weights them by DFL variance (boosts the frames-with-a-line rate)
 RUNDIR="${RUNDIR:-runs/detect}"
 OUT="${OUT:-results}"
 mkdir -p "$OUT"
@@ -65,17 +66,17 @@ for S in $SEEDS; do
 
   # arms A/A'/B0/qual/oracle share the BASE checkpoint; B uses the CALM checkpoint
   for R in equalLS ransac calm qual oracle; do
-    python eval_guidance.py --weights "$BASE" --device "$DEVICE" \
+    python eval_guidance.py --weights "$BASE" --device "$DEVICE" --conf "$CONF" \
       --images datasets/CRDLD_yolo/images/test --gt-json "$GTTEST" \
       --readout "$R" --out "$OUT/${R}_s$S.csv" --calib-out "$OUT/calib_${R}_s$S.csv"
   done
-  python eval_guidance.py --weights "$CALM" --device "$DEVICE" \
+  python eval_guidance.py --weights "$CALM" --device "$DEVICE" --conf "$CONF" \
     --images datasets/CRDLD_yolo/images/test --gt-json "$GTTEST" \
     --readout calm --out "$OUT/B_s$S.csv" --calib-out "$OUT/calib_B_s$S.csv"
 
   # cross-dataset transfer (CRDLD-trained CALM -> CRBD, no retrain)
   if [ -f "$GTCRBD" ]; then
-    python eval_guidance.py --weights "$CALM" --device "$DEVICE" \
+    python eval_guidance.py --weights "$CALM" --device "$DEVICE" --conf "$CONF" \
       --images datasets/CRBD/Images --gt-json "$GTCRBD" \
       --readout calm --out "$OUT/B_crbd_s$S.csv" || echo "[warn] CRBD eval failed (seed $S)"
   fi
@@ -94,7 +95,7 @@ FS=$(set -- $SEEDS; echo "$1")
 CALM0="$RUNDIR/calm_v8n_s$FS/weights/best.pt"
 if [ -f "$CALM0" ]; then
   echo "[assets] qualitative overlays (first seed)..."
-  python eval_guidance.py --weights "$CALM0" --device "$DEVICE" \
+  python eval_guidance.py --weights "$CALM0" --device "$DEVICE" --conf "$CONF" \
     --images datasets/CRDLD_yolo/images/test --gt-json "$GTTEST" \
     --readout calm --out "$OUT/_overlay_tmp.csv" \
     --overlay-dir paper/figures/qualitative --overlay-n 6 --limit 60 || echo "[warn] overlay step failed"
