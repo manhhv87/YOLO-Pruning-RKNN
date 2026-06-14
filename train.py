@@ -277,6 +277,7 @@ def parse_args():
         help="Root directory to save results (e.g., /content/my_runs or runs/detect)",
     )
     p.add_argument("--name", type=str, default="exp")
+    p.add_argument("--seed", type=int, default=0, help="random seed (for multi-seed rigor)")
     p.add_argument(
         "--prune", action="store_true", help="Enable pruning (your fork-specific flag)."
     )
@@ -517,6 +518,7 @@ def main():
             device=args.device,
             project=args.dir,
             name=args.name,
+            seed=args.seed,
             prune=args.prune,
             workers=0,
             cache=False,

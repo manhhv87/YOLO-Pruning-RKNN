@@ -1,0 +1,11 @@
+# c2a_yolo.yaml
+# Cấu hình dataset cho YOLO (Ultralytics) – 1 class: human
+
+path: datasets   # sửa thành path thật trên máy bạn
+
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: human

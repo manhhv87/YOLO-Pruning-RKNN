@@ -1,5 +1,6 @@
 # ---- data & model weights: do NOT commit (large/binary; >100MB GitHub limit) ----
-datasets/
+datasets/*
+!datasets/CRDLD_yolo.yaml   # keep the dataset CONFIG, not the data
 weights/
 runs/
 *.pt
