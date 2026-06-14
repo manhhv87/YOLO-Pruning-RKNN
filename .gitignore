@@ -19,11 +19,10 @@ calib_*.csv
 gtlines_*.json
 datasets/CRDLD_yolo.local.yaml
 
-# ---- auto-generated paper assets (reproducible via make_paper_assets.py) ----
-paper/tables/
-paper/figures/fig_ab_heading.pdf
-paper/figures/fig_reliability.pdf
-paper/figures/fig_qualitative.pdf
+# ---- auto-generated paper assets ----
+# Tables + result figures ARE tracked: training runs on Linux (no LaTeX) and the
+# paper is compiled on Windows, so these must travel via git. Only the raw
+# per-frame overlays are ignored (the montage fig_qualitative.pdf is kept).
 paper/figures/qualitative/
 
 # ---- python ----

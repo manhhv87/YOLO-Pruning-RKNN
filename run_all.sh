@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # =====================================================================
 # CALM-Row end-to-end runner (Linux).
-#   prepare CRDLD/CRBD -> train base+calm (xN seeds) -> A/B eval -> stats
+#   prepare CRDLD/CRBD -> train base+calm (xN seeds) -> A/B eval -> stats -> assets
 # Run from the repo root:  bash run_all.sh
 # Override via env, e.g.:  EPOCHS=2 SEEDS=0 DEVICE=0 bash run_all.sh   # quick smoke
 # Needs the torch env active (pip install -r requirements.txt). Do NOT pip-install
 # ultralytics — this uses the local fork; always run from the repo root.
+#
+# LaTeX is NOT required here: on a Linux box without latexmk the script generates
+# paper/tables + paper/figures (tracked by git) and stops short of compiling.
+# Compile the PDF on Windows:  PUSH_ASSETS=1 bash run_all.sh  (auto commit+push),
+# then on Windows  git pull  and  cd paper && latexmk -pdf main.tex.
 # =====================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -107,7 +112,25 @@ if command -v latexmk >/dev/null 2>&1; then
   ( cd paper && latexmk -pdf -interaction=nonstopmode -f main.tex >/tmp/calmrow_latex.log 2>&1 ) \
     && echo "[assets] -> paper/main.pdf" || echo "[warn] LaTeX issues — see /tmp/calmrow_latex.log"
 else
-  echo "[assets] latexmk not found — generated paper/tables + paper/figures; compile paper/main.tex elsewhere (e.g. Overleaf)."
+  # No LaTeX here (Linux training box). Tables + figures are tracked by git, so the
+  # handoff to the Windows compile machine is just a commit+push -> pull.
+  echo "[assets] no latexmk here (Linux) — paper/tables + paper/figures are ready to compile on Windows."
+  if [ "${PUSH_ASSETS:-0}" = "1" ]; then
+    echo "[assets] PUSH_ASSETS=1 -> committing + pushing paper assets..."
+    git add -f paper/tables paper/figures/fig_*.pdf 2>/dev/null || true
+    if git diff --cached --quiet; then
+      echo "[assets] nothing changed — skip commit."
+    else
+      git commit -q -m "results: paper tables + figures (auto from run_all.sh on Linux)" \
+        && git push && echo "[assets] pushed -> on Windows: git pull, then compile paper/main.tex" \
+        || echo "[warn] commit/push failed — push the assets manually."
+    fi
+  else
+    echo "  Next, to compile on Windows:"
+    echo "    (Linux)   git add -f paper/tables paper/figures/fig_*.pdf && git commit -m results && git push"
+    echo "    (Windows) git pull   then   cd paper && latexmk -pdf main.tex   (or your LaTeX editor)"
+    echo "  Tip: run with  PUSH_ASSETS=1 bash run_all.sh  to auto commit+push the assets."
+  fi
 fi
 
-echo "[done] checkpoints in $RUNDIR/ ; CSVs+stats in $OUT/ ; tables in paper/tables/ ; figures in paper/figures/ ; paper/main.pdf"
+echo "[done] checkpoints in $RUNDIR/ ; CSVs+stats in $OUT/ ; tables in paper/tables/ ; figures in paper/figures/"
