@@ -17,7 +17,7 @@ EPOCHS="${EPOCHS:-200}"
 IMGSZ="${IMGSZ:-640}"
 DEVICE="${DEVICE:-0}"             # "0" GPU, or "cpu"
 SEEDS="${SEEDS:-0 1 2 3 4}"
-NBOXES="${NBOXES:-6}"
+NBOXES="${NBOXES:-12}"   # y-bands (boxes per row); boxes are placed on ALL rows
 RUNDIR="${RUNDIR:-runs/detect}"
 OUT="${OUT:-results}"
 mkdir -p "$OUT"

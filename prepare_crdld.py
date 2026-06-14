@@ -31,7 +31,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-CLASSES = ["near", "mid_near", "mid_far", "far"]  # 0..3 by distance (near=bottom)
+CLASSES = ["crop_row"]  # single class: every crop-row segment is the same object
+# NOTE: boxes are placed on ALL visible rows (not just the central one). Labelling only
+# the central row gives the detector contradictory supervision (identical-looking rows
+# labelled both positive and background) and it fails to learn (mAP ~0). The central
+# (navigation) row is selected from the detections at EVAL time, not at training time.
 
 
 def row_run_centers(row_fg):
@@ -96,25 +100,18 @@ def extract_central_line(mask, max_jump_frac=0.06, min_pts=20):
     return pts, (a, b)
 
 
-def boxes_along_line(pts, H, W, n_boxes=6, base=0.018, grow=0.06):
-    """Place n_boxes along the traced central row at evenly spaced y; class=distance bin.
-    Returns list of (cls, cx, cy, w, h) normalized to [0,1]."""
-    y_lo, y_hi = pts[:, 1].min(), pts[:, 1].max()          # top(far)..bottom(near)
-    span = y_hi - y_lo
-    if span < 8:
-        return []
-    # interpolate x at evenly spaced y using the traced points (follows curvature)
-    order = np.argsort(pts[:, 1]); ys, xs = pts[order, 1], pts[order, 0]
+def boxes_all_rows(mask, H, W, n_bands=12, base=0.020, grow=0.060):
+    """Place a box on EVERY crop row at each of n_bands image rows (single class 0).
+    Box size grows with image-row y (perspective). Returns (cls,cx,cy,w,h) normalized."""
+    fg = mask > 127
     out = []
-    for i in range(n_boxes):
-        frac = (i + 0.5) / n_boxes                          # 0=far(top) .. 1=near(bottom)
-        y = y_lo + frac * span
-        x = float(np.interp(y, ys, xs))
-        size = (base + grow * (y / H)) * W                  # perspective: larger near bottom
-        w = h = size
-        # distance bin: 0 near (bottom) .. 3 far (top)
-        cls = int(np.clip((1.0 - frac) * len(CLASSES), 0, len(CLASSES) - 1))
-        out.append((cls, x / W, y / H, w / W, h / H))
+    for y in np.linspace(0.08 * H, 0.97 * H, n_bands):
+        yi = int(round(y))
+        if yi < 0 or yi >= H:
+            continue
+        size = (base + grow * (yi / H)) * W
+        for xc in row_run_centers(fg[yi]):
+            out.append((0, xc / W, yi / H, size / W, size / H))
     return out
 
 
@@ -124,7 +121,7 @@ def main():
     ap.add_argument("--splits", nargs="+", default=["train", "validation", "test"])
     ap.add_argument("--out-images", default="datasets/CRDLD_yolo/images")
     ap.add_argument("--out-labels", default="datasets/CRDLD_yolo/labels")
-    ap.add_argument("--n-boxes", type=int, default=6)
+    ap.add_argument("--n-boxes", type=int, default=12, help="number of y-bands (boxes per row)")
     ap.add_argument("--overlay-dir", default=None, help="optional: write debug overlays")
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
@@ -147,25 +144,24 @@ def main():
                 skip += 1; continue
             mask = np.array(Image.open(mp).convert("L"))
             H, W = mask.shape
-            pts, ab = extract_central_line(mask)
-            if pts is None:
-                skip += 1; continue
-            boxes = boxes_along_line(pts, H, W, args.n_boxes)
+            boxes = boxes_all_rows(mask, H, W, args.n_boxes)   # boxes on ALL rows, class 0
             if not boxes:
                 skip += 1; continue
-            # symlink/copy image (copy to be safe across FS)
             dst = out_img / ip.name
             if not dst.exists():
                 Image.open(ip).save(dst)
             with open(out_lbl / (ip.stem + ".txt"), "w") as f:
                 for cls, cx, cy, w, h in boxes:
                     f.write(f"{cls} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n")
-            a, b = ab
-            gtlines[ip.name] = {"a": a, "b": b,
-                                "y_lo": float(pts[:, 1].min()), "y_hi": float(pts[:, 1].max()),
-                                "W": W, "H": H}
+            # central (navigation) row -> detector-independent GT guidance line for eval
+            pts, ab = extract_central_line(mask)
+            if ab is not None:
+                a, b = ab
+                gtlines[ip.name] = {"a": a, "b": b,
+                                    "y_lo": float(pts[:, 1].min()), "y_hi": float(pts[:, 1].max()),
+                                    "W": W, "H": H}
             ok += 1
-            if args.overlay_dir:
+            if args.overlay_dir and pts is not None:
                 _overlay(ip, pts, ab, boxes, Path(args.overlay_dir) / s)
         gp = Path(args.out_labels) / f"gtlines_{s}.json"
         json.dump(gtlines, open(gp, "w"))

@@ -46,7 +46,7 @@ try:
     from ultralytics import YOLO
     from ultralytics.utils.tal import make_anchors, dist2bbox
     from ultralytics.utils import ops
-    from ultralytics.utils.calm_row import dfl_mean_var, centroid_cov_from_edges, gls_line_fit
+    from ultralytics.utils.calm_row import dfl_mean_var, centroid_cov_from_edges, gls_line_fit, line_heading
 except Exception as e:  # keep importable for py_compile in a torch-less env
     torch = None
     _IMPORT_ERR = e
@@ -183,44 +183,69 @@ def fit_ransac(cx, cy, iters=100, thr=8.0):
     return float(a), float(b)
 
 
-def fit_calm(det):
-    from ultralytics.utils.calm_row import predict_guidance_line
-    a, b, theta, sig_theta, _ = predict_guidance_line(
-        det["edge_logits"], det["boxes"], det["strides"], det["reg_max"])
-    return float(a), float(b), (float(sig_theta) if sig_theta is not None else None)
+def select_central(cx, cy, imgsz, corridor=0.14):
+    """Bool mask of detections on the CENTRAL navigation row. The detector fires on
+    ALL rows; the guidance line is the central one (nearest image-centre at the
+    bottom). Seed at the bottom-centre detection and greedily keep detections whose
+    x stays within a corridor while walking up; diverging rows are dropped."""
+    xn = cx.detach().cpu().numpy(); yn = cy.detach().cpu().numpy()
+    n = len(xn)
+    if n < 3:
+        return torch.ones(n, dtype=torch.bool, device=cx.device)
+    cxc = imgsz / 2.0; maxj = corridor * imgsz
+    cand = np.where(yn >= np.quantile(yn, 0.6))[0]
+    if len(cand) == 0:
+        cand = np.arange(n)
+    seed = int(cand[int(np.argmin(np.abs(xn[cand] - cxc)))])
+    keep = {seed}; cur = xn[seed]
+    for i in np.argsort(-yn):                 # bottom -> top
+        i = int(i)
+        if i == seed:
+            continue
+        if abs(xn[i] - cur) <= maxj:
+            keep.add(i); cur = xn[i]
+    m = torch.zeros(n, dtype=torch.bool, device=cx.device)
+    m[list(keep)] = True
+    return m
 
 
 def guidance_line(det, readout, gt_line=None):
-    cx = 0.5 * (det["boxes"][:, 0] + det["boxes"][:, 2])
-    cy = 0.5 * (det["boxes"][:, 1] + det["boxes"][:, 3])
+    boxes = det["boxes"]; imgsz = det.get("imgsz", 640)
+    cx = 0.5 * (boxes[:, 0] + boxes[:, 2])
+    cy = 0.5 * (boxes[:, 1] + boxes[:, 3])
     if cx.numel() < 2:
         return None
+    m = select_central(cx, cy, imgsz)          # central (navigation) row only
+    cxs, cys = cx[m], cy[m]
+    if cxs.numel() < 2:
+        return None
+    sig_theta = None
     if readout == "equalLS":
-        a, b = fit_equal_ls(cx, cy); sig_theta = None
+        a, b = fit_equal_ls(cxs, cys)
     elif readout == "ransac":
-        out = fit_ransac(cx, cy)
+        out = fit_ransac(cxs, cys)
         if out is None:
             return None
-        a, b = out; sig_theta = None
-    elif readout == "calm":
-        a, b, sig_theta = fit_calm(det)
-    elif readout == "qual":
-        # COMPETING SIGNAL arm: weight by detector confidence^2 (a GFLv2-style /
-        # quality proxy available at zero cost) instead of the DFL variance.
-        a, b, _ = gls_line_fit(cx, cy, det["scores"] ** 2 + 1e-6, with_cov=False)
-        a, b, sig_theta = float(a), float(b), None
-    elif readout == "oracle":
-        # UPPER-BOUND arm: weight by the TRUE inverse squared residual to the GT
-        # line (how good could any reliability weight be?). Needs gt_line.
+        a, b = out
+    elif readout == "calm":          # precision-weighted by DFL variance (B0 / B)
+        _, var, _ = dfl_mean_var(det["edge_logits"][m], det["reg_max"])
+        sig_cx2, _ = centroid_cov_from_edges(var, det["strides"][m])
+        at, bt, cov = gls_line_fit(cxs, cys, 1.0 / (sig_cx2 + 1e-6))
+        a, b = float(at), float(bt)
+        _, st = line_heading(at, cov); sig_theta = float(st) if st is not None else None
+    elif readout == "qual":          # competing signal: detector confidence^2
+        at, bt, _ = gls_line_fit(cxs, cys, det["scores"][m] ** 2 + 1e-6, with_cov=False)
+        a, b = float(at), float(bt)
+    elif readout == "oracle":        # upper bound: weight by TRUE residual to GT
         if gt_line is None:
             return None
         a_g, b_g = gt_line
-        resid2 = (cx - (a_g * cy + b_g)) ** 2
-        a, b, _ = gls_line_fit(cx, cy, 1.0 / (resid2 + 1.0), with_cov=False)
-        a, b, sig_theta = float(a), float(b), None
+        resid2 = (cxs - (a_g * cys + b_g)) ** 2
+        at, bt, _ = gls_line_fit(cxs, cys, 1.0 / (resid2 + 1.0), with_cov=False)
+        a, b = float(at), float(bt)
     else:
         raise ValueError(f"unknown readout {readout}")
-    return {"a": a, "b": b, "sig_theta": sig_theta, "cx": cx, "cy": cy}
+    return {"a": a, "b": b, "sig_theta": sig_theta, "cx": cxs, "cy": cys}
 
 
 # --------------------------------------------------------------------------- #

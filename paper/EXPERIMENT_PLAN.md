@@ -35,13 +35,13 @@ replace with *calibrated, validated* uncertainty.
 - [ ] Add **Data & Code Availability** statements.
 
 ### 1.0 Preprocessing (REQUIRED): line-GT → YOLO boxes  [`prepare_crdld.py`]
-Neither dataset has boxes; CALM-Row needs a DFL box detector. `prepare_crdld.py` (repo root, **validated on the real masks**) extracts the **central crop row** (the line reaching nearest image-centre-bottom — the navigation row) from each CRDLD mask, places **N boxes along it** at successive distances (class = ordinal bin near…far, perspective-scaled size), and exports the **detector-independent GT line** (robust `x=a y+b` fit) to `gtlines_<split>.json`. Box labels are clean, but the detector still learns image difficulty, so the DFL distribution is naturally flatter (higher variance) for far rows — the signal CALM-Row exploits.
+Neither dataset has boxes; CALM-Row needs a DFL box detector. `prepare_crdld.py` (repo root, **validated on the real masks**) places **boxes on all visible crop rows** (single `crop_row` class) at successive image rows (perspective-scaled size) — labelling all rows gives the detector consistent supervision (central-row-only fails: identical rows labelled positive vs background), and the central navigation row is selected from detections at eval. It also extracts the central row and exports the **detector-independent GT line** (robust `x=a y+b` fit) to `gtlines_<split>.json`. Box labels are clean, but the detector still learns image difficulty, so the DFL distribution is naturally flatter (higher variance) for far rows — the signal CALM-Row exploits.
 ```bash
 python prepare_crdld.py --root datasets/CRDLD --splits train validation test \
   --out-images datasets/CRDLD_yolo/images --out-labels datasets/CRDLD_yolo/labels --n-boxes 6
 # add --overlay-dir datasets/CRDLD_yolo/overlay to eyeball box/line placement first
 ```
-**Design choice (please confirm):** boxes are labelled on the **central row only** (matches the detect→centroid→line recipe and keeps the line unambiguous). Alternative = label all rows and select the central cluster at inference (more robust, more code). Recommended: central-row-only.
+**Design (resolved):** boxes are labelled on **all visible rows** (single class). Central-row-only was tried first and gave the detector contradictory supervision (identical rows labelled positive vs.\ background) — it failed to train (mAP ≈0.06 at 50 epochs). The central navigation row is selected from the detections at eval time (`select_central` in `eval_guidance.py`).
 
 ### 1.1 px → cm calibration (else "cm" is meaningless)
 - [ ] For datasets with intrinsics+extrinsics or a checkerboard: recover the image→ground homography H under a **flat-ground assumption**; state it.
@@ -250,7 +250,7 @@ python ultralytics/utils/calm_row.py          # prints var near<far and weighted
 - [ ] **Circularity check**: report train-set agreement (deg+cm) between the LSL training-target line (unweighted GT-box-centroid fit) and the mask-derived eval GT line.
 
 ## Step 2 — datasets
-- [ ] Run `prepare_crdld.py` (Sec 1.0) → `datasets/CRDLD_yolo/{images,labels}/{train,val,test}` + `gtlines_*.json`. Write `datasets/CRDLD_yolo.yaml` (`nc: 4`, `names: [near, mid_near, mid_far, far]`, train/val/test paths).
+- [ ] Run `prepare_crdld.py` (Sec 1.0) → `datasets/CRDLD_yolo/{images,labels}/{train,val,test}` + `gtlines_*.json`. Write `datasets/CRDLD_yolo.yaml` (`nc: 1`, `names: [crop_row]`, train/val/test paths).
 - [ ] CRBD = cross-dataset **test only** (no training). Parse `.crp`/`.tmg` → GT lines (parser TODO — confirm the `.crp` coordinate frame against the 320×240 images) for eval; or run the official CRBD CRDA metric.
 
 ## Step 3 — train the shared (base) and CALM (B) checkpoints
