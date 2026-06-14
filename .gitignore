@@ -19,6 +19,13 @@ calib_*.csv
 gtlines_*.json
 datasets/CRDLD_yolo.local.yaml
 
+# ---- auto-generated paper assets (reproducible via make_paper_assets.py) ----
+paper/tables/
+paper/figures/fig_ab_heading.pdf
+paper/figures/fig_reliability.pdf
+paper/figures/fig_qualitative.pdf
+paper/figures/qualitative/
+
 # ---- python ----
 __pycache__/
 *.py[cod]

@@ -92,5 +92,24 @@ for S in $SEEDS; do
   python stats_ab.py "$OUT/calm_s$S.csv" "$OUT/B_s$S.csv"       --metric heading_err_deg --family-size 3 || true
 done
 
-echo "[done] checkpoints in $RUNDIR/ ; per-frame CSVs + stats in $OUT/"
-echo "Aggregate across seeds (mean+/-std + paired tests) per EXPERIMENT_PLAN Sec 6 to fill the result tables."
+# ---- 3. paper assets: qualitative overlays + tables + figures + compile ----
+FS=$(set -- $SEEDS; echo "$1")
+CALM0="$RUNDIR/calm_v8n_s$FS/weights/best.pt"
+if [ -f "$CALM0" ]; then
+  echo "[assets] qualitative overlays (first seed)..."
+  python eval_guidance.py --weights "$CALM0" --device "$DEVICE" \
+    --images datasets/CRDLD_yolo/images/test --gt-json "$GTTEST" \
+    --readout calm --out "$OUT/_overlay_tmp.csv" \
+    --overlay-dir paper/figures/qualitative --overlay-n 6 --limit 60 || echo "[warn] overlay step failed"
+fi
+echo "[assets] aggregating -> paper/tables + paper/figures ..."
+python make_paper_assets.py --results "$OUT" --paper paper || echo "[warn] asset generation failed"
+if command -v latexmk >/dev/null 2>&1; then
+  echo "[assets] compiling paper/main.pdf ..."
+  ( cd paper && latexmk -pdf -interaction=nonstopmode -f main.tex >/tmp/calmrow_latex.log 2>&1 ) \
+    && echo "[assets] -> paper/main.pdf" || echo "[warn] LaTeX issues — see /tmp/calmrow_latex.log"
+else
+  echo "[assets] latexmk not found — generated paper/tables + paper/figures; compile paper/main.tex elsewhere (e.g. Overleaf)."
+fi
+
+echo "[done] checkpoints in $RUNDIR/ ; CSVs+stats in $OUT/ ; tables in paper/tables/ ; figures in paper/figures/ ; paper/main.pdf"

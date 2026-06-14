@@ -301,6 +301,21 @@ def simulate_cross_track(*args, **kwargs):
 # --------------------------------------------------------------------------- #
 # Dataset-specific hooks
 # --------------------------------------------------------------------------- #
+def save_overlay(img, imgsz, a_p, b_p, a_g, b_g, cx, cy, path):
+    """Qualitative figure: GT line (green), predicted line (red), detected centroids (cyan)."""
+    canvas, *_ = _letterbox(img, imgsz)
+    for y in range(0, imgsz, 2):
+        xg, xp = int(a_g * y + b_g), int(a_p * y + b_p)
+        if 0 <= xg < imgsz:
+            cv2.circle(canvas, (xg, y), 1, (0, 200, 0), -1)
+        if 0 <= xp < imgsz:
+            cv2.circle(canvas, (xp, y), 1, (0, 0, 230), -1)
+    for x, yv in zip(cx.cpu().numpy(), cy.cpu().numpy()):
+        cv2.circle(canvas, (int(x), int(yv)), 3, (230, 230, 0), -1)
+    cv2.putText(canvas, "GT(green) pred(red)", (5, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+    cv2.imwrite(str(path), canvas)
+
+
 def find_mask_path(img_path, mask_dir):
     # >>> DATASET: adapt to your mask naming (CRDLD/CRBD layouts differ).
     if mask_dir is None:
@@ -335,6 +350,8 @@ def main():
     ap.add_argument("--out", default="results_eval.csv")
     ap.add_argument("--calib-out", default=None, help="optional CSV of (sigma_cx, realised_err) pairs")
     ap.add_argument("--limit", type=int, default=0, help="cap #images (debug)")
+    ap.add_argument("--overlay-dir", default=None, help="save qualitative GT-vs-pred overlays here")
+    ap.add_argument("--overlay-n", type=int, default=6, help="number of overlay images to save")
     args = ap.parse_args()
 
     if torch is None:
@@ -352,6 +369,11 @@ def main():
     imgs = sorted(p for p in Path(args.images).rglob("*") if p.suffix.lower() in IMG_EXTS)
     if args.limit:
         imgs = imgs[: args.limit]
+
+    ovdir = Path(args.overlay_dir) if args.overlay_dir else None
+    if ovdir is not None:
+        ovdir.mkdir(parents=True, exist_ok=True)
+    n_ov = 0
 
     rows, calib_pairs = [], []
     for ip in imgs:
@@ -384,6 +406,10 @@ def main():
         gl = guidance_line(det, args.readout, gt_line=(a_g, b_g))
         if gl is None:
             rows.append({"image": ip.name, "status": "no_line"}); continue
+
+        if ovdir is not None and n_ov < args.overlay_n:
+            save_overlay(img, args.imgsz, gl["a"], gl["b"], a_g, b_g, gl["cx"], gl["cy"], ovdir / ip.name)
+            n_ov += 1
 
         cy = gl["cy"].cpu().numpy()
         y_lo, y_hi = float(cy.min()), float(cy.max())

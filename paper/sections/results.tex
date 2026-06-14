@@ -12,6 +12,7 @@ We restate the canonical evaluation design so the tables are self-contained. Fou
 
 Table~\ref{tab:res-main} is the headline result. For each stock detector (YOLOv8n, YOLOv10n) and each arm we report navigation accuracy, calibration, detection, and edge throughput, as mean\,$\pm$\,std over five seeds on the CRDLD test split (in-domain), with cross-dataset transfer to CRBD reported alongside. The final row, $\Delta$(B$-$A) with its 95\,\% bootstrap confidence interval, summarizes the end-to-end effect of CALM-Row over the equal-weight baseline. The table is designed to show whether CALM-Row reduces heading and line-fit error without degrading mAP, and whether the FPS column confirms zero added on-device cost: the exported detector graph is a vanilla YOLO and CALM-Row is post-NMS CPU math, so the detector FPS for A, A$'$, B0, and B should coincide up to measurement noise.
 
+\IfFileExists{tables/tab_main.tex}{\input{tables/tab_main.tex}}{%
 {\renewcommand{\arraystretch}{1.3}
 \begin{table}[!ht]
   \centering
@@ -38,14 +39,34 @@ Table~\ref{tab:res-main} is the headline result. For each stock detector (YOLOv8
   \end{tabular}}
   \medskip
 \end{table}}
+}
 
 \noindent We additionally report mAP@50--95 with its across-seed variance alongside Table~\ref{tab:res-main} (omitted from the main table for width). Because CALM-Row adds no learnable detector parameters and its losses act only on the existing DFL distribution, the expectation is that detection accuracy is unchanged within noise while navigation accuracy improves; this expectation will be confirmed or refuted by the completed runs.
+
+
+% --- auto-generated figures (appear after run_all.sh / make_paper_assets.py) ---
+\IfFileExists{figures/fig_ab_heading.pdf}{%
+\begin{figure}[!ht]\centering
+\includegraphics[width=0.62\linewidth]{figures/fig_ab_heading.pdf}
+\caption{Heading error per A/B arm on CRDLD test (mean$\pm$std over seeds). \emph{Auto-generated from the run.}}\label{fig:ab-heading}
+\end{figure}}{}
+\IfFileExists{figures/fig_reliability.pdf}{%
+\begin{figure}[!ht]\centering
+\includegraphics[width=0.5\linewidth]{figures/fig_reliability.pdf}
+\caption{Localisation-uncertainty calibration: predicted $\sigma$ vs.\ realised RMS error (CALM-Row), with ECE.}\label{fig:reliability}
+\end{figure}}{}
+\IfFileExists{figures/fig_qualitative.pdf}{%
+\begin{figure}[!ht]\centering
+\includegraphics[width=0.92\linewidth]{figures/fig_qualitative.pdf}
+\caption{Qualitative guidance lines on CRDLD test frames: ground truth (green) vs.\ CALM-Row prediction (red), with detected row-segment centroids.}\label{fig:qual}
+\end{figure}}{}
 
 \subsection{Paired significance tests (T2)}
 \label{sec:res-stats}
 
 Because A, A$'$, and B0 are evaluated on the identical checkpoint and B is paired per frame against them, the comparisons are tested with the Wilcoxon signed-rank test on per-frame heading error (with 5 seeds, normality cannot be assumed for a $t$-test). Table~\ref{tab:res-stats} reports the median paired difference, the Holm--Bonferroni-adjusted $p$-value across the confirmatory family, and the Cliff's $\delta$ effect size. The pre-registered primary hypothesis H1 (CALM-Row beats equal-weight LS on heading error) passes only if the adjusted $p<0.05$ \emph{and} $|\delta|\ge 0.33$, i.e.\ the effect must be both significant and non-trivial. The two decomposition rows (B0 vs.\ A; B vs.\ B0) are reported regardless of outcome so that the source of any gain --- free weighting versus calibrated training --- is stated plainly.
 
+\IfFileExists{tables/tab_stats.tex}{\input{tables/tab_stats.tex}}{%
 {\renewcommand{\arraystretch}{1.3}
 \begin{table}[!ht]
   \centering
@@ -68,6 +89,7 @@ Because A, A$'$, and B0 are evaluated on the identical checkpoint and B is paire
   \end{tabular}}
   \medskip
 \end{table}}
+}
 
 \noindent A far-field-focused replicate of Table~\ref{tab:res-stats}, restricted to the genuinely-far held-out rows (top-of-frame, smallest boxes; the de-circularized far-field test of Section~\ref{sec:setup-stats}), is reported separately. The pre-registered expectation is that the CALM-Row advantage is \emph{larger} in this stratum, because the far boxes are where the DFL distribution is flattest (largest $\sigma_e^2$, hence largest centroid variance $\sigma_{c_x}^2$), where the precision weights $w_i$ down-weight most aggressively, and where heading is most sensitive. This is the mechanism the method is designed to exploit, measured here on real, un-manipulated frames with mask-derived ground-truth lines rather than on injected noise.
 
