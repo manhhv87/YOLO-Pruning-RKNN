@@ -13,9 +13,11 @@ runs/
 _cleanup_backup_sgc.zip
 
 # ---- generated A/B outputs ----
+results/
 results_*.csv
 calib_*.csv
 gtlines_*.json
+datasets/CRDLD_yolo.local.yaml
 
 # ---- python ----
 __pycache__/

@@ -340,6 +340,10 @@ def main():
     if torch is None:
         raise SystemExit(f"This script needs torch+ultralytics: {_IMPORT_ERR}")
 
+    # normalize device: "0" -> "cuda:0"; leave "cpu"/"cuda:N"/"mps" as-is
+    if args.device.isdigit():
+        args.device = f"cuda:{args.device}"
+
     model = YOLO(args.weights)
     model.model.to(args.device)
     H = load_homography(args.homography)
