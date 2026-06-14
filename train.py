@@ -520,6 +520,7 @@ def main():
             name=args.name,
             seed=args.seed,
             prune=args.prune,
+            max_det=300,   # ~60 row-segment boxes/image -> default 50 caps recall
             workers=0,
             cache=False,
             verbose=True,

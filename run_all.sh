@@ -31,12 +31,9 @@ path: $ROOT/datasets/CRDLD_yolo
 train: images/train
 val: images/val
 test: images/test
-nc: 4
+nc: 1
 names:
-  0: near
-  1: mid_near
-  2: mid_far
-  3: far
+  0: crop_row
 EOF
 echo "[data] $DATA -> path: $ROOT/datasets/CRDLD_yolo"
 

@@ -100,12 +100,13 @@ def extract_central_line(mask, max_jump_frac=0.06, min_pts=20):
     return pts, (a, b)
 
 
-def boxes_all_rows(mask, H, W, n_bands=12, base=0.020, grow=0.060):
+def boxes_all_rows(mask, H, W, n_bands=12, base=0.030, grow=0.060):
     """Place a box on EVERY crop row at each of n_bands image rows (single class 0).
-    Box size grows with image-row y (perspective). Returns (cls,cx,cy,w,h) normalized."""
+    Box size grows with image-row y (perspective). Returns (cls,cx,cy,w,h) normalized.
+    Bands start at 0.12H to skip the extreme top where rows merge at the vanishing point."""
     fg = mask > 127
     out = []
-    for y in np.linspace(0.08 * H, 0.97 * H, n_bands):
+    for y in np.linspace(0.12 * H, 0.97 * H, n_bands):
         yi = int(round(y))
         if yi < 0 or yi >= H:
             continue
