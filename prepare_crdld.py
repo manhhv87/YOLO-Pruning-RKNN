@@ -21,7 +21,7 @@ of the detector, so the weighted-vs-unweighted comparison is not circular.
 Usage:
   python prepare_crdld.py --root datasets/CRDLD --splits train validation test \
       --out-images datasets/CRDLD_yolo/images --out-labels datasets/CRDLD_yolo/labels \
-      --n-boxes 6 --overlay-dir datasets/CRDLD_yolo/overlay   # overlay optional (debug)
+      --n-boxes 8 --overlay-dir datasets/CRDLD_yolo/overlay   # overlay optional (debug)
 Then point a data.yaml at datasets/CRDLD_yolo (nc=1, names=[crop_row]).
 """
 from __future__ import annotations

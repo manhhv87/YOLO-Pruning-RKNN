@@ -23,7 +23,11 @@ IMGSZ="${IMGSZ:-640}"
 DEVICE="${DEVICE:-0}"             # "0" GPU, or "cpu"
 SEEDS="${SEEDS:-0 1 2 3 4}"
 NBOXES="${NBOXES:-8}"   # y-bands (boxes per row); fewer+larger boxes train more stably
-CONF="${CONF:-0.10}"    # low eval conf: keep uncertain boxes -> CALM-Row down-weights them by DFL variance (boosts the frames-with-a-line rate)
+CONF="${CONF:-0.25}"    # eval-time conf for the guidance harness. NOTE (verified): select_central
+                        # gates boxes by x-CORRIDOR, not by score, so a very LOW conf injects false
+                        # centroids into the central corridor and worsens heading. Keep moderate.
+                        # After the full retrain, sweep CONF in {0.15 0.25 0.35} and keep the value
+                        # with the lowest median heading-error (not just the highest frames-with-line).
 RUNDIR="${RUNDIR:-runs/detect}"
 OUT="${OUT:-results}"
 mkdir -p "$OUT"
