@@ -1,7 +1,7 @@
 # ---- data & model weights: do NOT commit (large/binary; >100MB GitHub limit) ----
-# keep the dataset CONFIG file, exclude the actual data
-datasets/*
-!datasets/CRDLD_yolo.yaml
+# datasets: push CRDLD + CRBD source (user requested); exclude only the
+# generated CALM-Row detection set (reproducible via prepare_crdld.py)
+datasets/CRDLD_yolo/
 weights/
 runs/
 *.pt
