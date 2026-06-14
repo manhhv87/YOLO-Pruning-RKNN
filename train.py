@@ -278,6 +278,7 @@ def parse_args():
     )
     p.add_argument("--name", type=str, default="exp")
     p.add_argument("--seed", type=int, default=0, help="random seed (for multi-seed rigor)")
+    p.add_argument("--amp", action="store_true", help="enable AMP (off by default; the fork's AMP self-check is broken and fp16 collapsed mAP)")
     p.add_argument(
         "--prune", action="store_true", help="Enable pruning (your fork-specific flag)."
     )
@@ -521,6 +522,8 @@ def main():
             seed=args.seed,
             prune=args.prune,
             max_det=300,   # ~60 row-segment boxes/image -> default 50 caps recall
+            amp=args.amp,  # AMP off by default: the fork's AMP self-check can't run and
+                           # fp16 was collapsing mAP to ~0 (zero-mAP symptom in the log)
             workers=0,
             cache=False,
             verbose=True,
