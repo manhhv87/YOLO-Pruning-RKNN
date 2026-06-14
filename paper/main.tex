@@ -1,0 +1,94 @@
+% !TeX root = main.tex
+%--------------------------------------------------------%
+
+
+%--------------------------------------------------------%
+%	This is the main .tex file, which controls and combines
+%	the other sections.
+%	See the "sections" folder to edit content
+%--------------------------------------------------------%
+
+\input{sections/preamble} % See preamble.tex to edit the overall layout
+
+% Header from Page Three on: Edit below for left and right headers
+\lhead{}
+\rhead{}
+
+%--------------------------------------------------------%
+%	BEGIN DOCUMENT
+%--------------------------------------------------------%
+
+\begin{document}
+
+
+
+%TC:ignore   %% This region is ignored for the word count
+% COVER PAGE
+
+\input{sections/coverpage} % Comment out to remove cover page
+%TC:endignore
+
+\thispagestyle{empty} % Removes header on page two. Only needed if there is a coverpage
+
+% TITLE SECTION
+
+% Comment out one of the two lines below to include or exclude authors in article title. You may want to exclude them in case of a double-blind peer review submission, since authors appear on the cover page, and reviewers should not see the authors' names in the manuscript draft.
+
+\input{sections/title_noauthors}
+%\input{sections/title_authors}
+
+\maketitle % Insert title
+
+% NOTE: Comment out the lines below to remove line numbers
+% Running line numbers:
+\linenumbers
+\setlength\linenumbersep{15pt}
+\renewcommand\linenumberfont{\normalfont\footnotesize\sffamily\color{gray}}
+%\pagewiselinenumbers % Same, but that reset on every page:
+\modulolinenumbers[1] % Number only every line. Change for fewer.
+
+%--------------------------------------------------------%
+% ABSTRACT
+%--------------------------------------------------------%
+\input{sections/abstract.tex}
+
+\doublespacing
+
+%--------------------------------------------------------%
+% MAIN TEXT
+%--------------------------------------------------------%
+\input{sections/introduction.tex}
+\input{sections/related_works.tex}
+\input{sections/materials_methods.tex}
+\input{sections/results}
+\input{sections/discussion.tex}
+\input{sections/conclusion}
+
+%--------------------------------------------------------%
+% CODE and DATA
+%--------------------------------------------------------%
+%\input{sections/code_data.tex}
+
+%--------------------------------------------------------%
+% ACKNOWLEDGMENTS
+%--------------------------------------------------------%
+\input{sections/acknowledgments.tex}
+
+%--------------------------------------------------------%
+% CONTRIBUTIONS
+%--------------------------------------------------------%
+\input{sections/contributions.tex}
+
+%--------------------------------------------------------%
+%	REFERENCE LIST
+%--------------------------------------------------------%
+\newpage
+\singlespacing
+
+\printbibliography
+
+%--------------------------------------------------------%
+%	END DOCUMENT
+%--------------------------------------------------------%
+
+\end{document}

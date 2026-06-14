@@ -1,0 +1,13 @@
+%!TEX root = ../main.tex
+% TITLE: CALM-Row: Navigation-Native Crop-Row Guidance from the Calibrated Box-Distribution Uncertainty of a Stock Edge Detector
+
+\vspace{2em}
+
+\begin{abstract}
+    \noindent Vision-based navigation in row-crop agriculture estimates a guidance line whose heading and cross-track offset steer the vehicle, yet crop-row detectors are almost always reported in detection terms (mAP) and never tied to the steering error they ultimately produce. Moreover, in the standard detect-then-fit recipe a guidance line is fitted through detected row centroids with equal or heuristic weights, even though far-field boxes---which anchor the look-ahead heading---are the least reliable. We propose CALM-Row, a navigation-native, calibrated-uncertainty post-head module that runs on a \emph{stock} lightweight detector (YOLOv8n/YOLOv10n) and introduces no new network architecture. CALM-Row reads the variance of the box-edge distribution that the Distribution Focal Loss head~\cite{gfl} already emits, propagates it into a per-box centroid covariance, and uses the resulting precision weights $w_i = 1/\sigma_{c_x,i}^2$ in a differentiable generalized-least-squares fit of the guidance line $x = a y + b$. Two auxiliary losses---a distance-aware calibration loss tying the predicted variance to realised localization error, and a line-stability loss that backpropagates the line/heading error through the weights into the existing edge logits---require no new learnable parameters, since they reuse the existing DFL distribution. Because the fit is CPU-side post-NMS math, the exported INT8/RKNN (Rockchip) or TensorRT (Jetson) graph stays a vanilla YOLO, adding zero NPU operations. We evaluate natively in navigation units (heading error in degrees, line-fit RMSE in px and cm via homography, and a static cross-track proxy in cm), together with calibration (ECE and reliability), per-seed and per-field variance, and paired significance tests against an equal-weight least-squares baseline. Headline heading error: [TODO: x.x]$^\circ$ for CALM-Row versus [TODO: x.x]$^\circ$ for the equal-weight baseline; full quantitative results are reported in the experiments.
+\end{abstract}
+% Note: quantitative results to be completed; placeholders [TODO: x.x] denote unmeasured values.
+
+\vspace{1em}
+\noindent \keywords{crop-row navigation, guidance-line estimation, calibrated uncertainty, distribution focal loss, generalized least squares, edge deployment, YOLO.}
+\vspace{1em}

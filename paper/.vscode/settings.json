@@ -1,0 +1,11 @@
+{
+  "latex-workshop.view.pdf.viewer": "tab",
+  "latex-workshop.formatting.latex": "latexindent",
+  "editor.formatOnSave": true,
+  "editor.wordWrap": "wordWrapColumn",
+  "editor.wordWrapColumn": 60,
+  "editor.rulers": [
+    60
+  ],
+  "editor.fontSize": 13
+}

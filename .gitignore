@@ -1,0 +1,45 @@
+# ---- data & model weights: do NOT commit (large/binary; >100MB GitHub limit) ----
+datasets/
+weights/
+runs/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.rknn
+*.torchscript
+_cleanup_backup_sgc.zip
+
+# ---- generated A/B outputs ----
+results_*.csv
+calib_*.csv
+gtlines_*.json
+
+# ---- python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# ---- LaTeX build artifacts (keep .tex, .bib, figures/*.pdf, main.pdf) ----
+paper/main.aux
+paper/main.bcf
+paper/main.bbl
+paper/main.blg
+paper/main.log
+paper/main.out
+paper/main.run.xml
+paper/main.toc
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/sections/*.aux
+
+# ---- large EndNote reference-PDF library (citations live in refs.bib) ----
+paper/ref/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db

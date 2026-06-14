@@ -1,0 +1,151 @@
+%!TEX root = ../main.tex
+% =====================================================================
+% Related work, re-centred on CALM-Row.
+% Story: (1) crop-row / vision-navigation paradigms all fit guidance lines
+% with equal/heuristic weights and report ad-hoc or detection metrics;
+% (2) detection-uncertainty work models box spread but never reads the
+% DFL distribution out as a calibrated covariance for a geometric estimator;
+% (3) multi-scale necks are orthogonal -- explicitly NOT our contribution.
+% The whitespace CALM-Row fills is made explicit at the end of each block.
+% =====================================================================
+
+\section{Related work}
+
+\noindent We organise prior art around the three threads that bound our
+contribution: vision-based crop-row navigation (the application and its
+evaluation conventions), uncertainty modelling in object detection (the signal
+we exploit), and multi-scale feature fusion (an architectural axis we treat as
+orthogonal). After each thread we state explicitly what it leaves unaddressed,
+so that the gap CALM-Row fills is unambiguous.
+
+\subsection{Vision-based navigation in row-crop agriculture}
+\label{subsec:rw_nav}
+\noindent Crop-row guidance from a forward-facing camera has converged on a
+small number of output paradigms, which we group by how the guidance line is
+produced.
+
+\paragraph{Detection plus centroid plus line fit.}
+The de-facto recipe localises row segments or plant clusters with an object
+detector and fits a single guidance (centre) line through the box centroids.
+Representative is the YOLOX-based maize-row system of Diao et
+al.~\cite{diao_yolox}, which detects row patches, takes their centroids, and
+fits a centreline by least squares, reporting angular error. This is the family
+our stock YOLOv8n/YOLOv10n detector belongs to. Earlier and adjacent crop-row
+pipelines similarly localise vegetation and then fit a line or band through
+extracted points~\cite{cth1}. The defining limitation for our purposes is that
+the line fit treats every centroid as equally trustworthy: each point
+contributes with unit (or hand-tuned heuristic) weight, even though the
+far-field boxes that dominate the look-ahead heading are precisely the smallest
+and least reliable detections.
+
+\paragraph{Segmentation plus geometric scan.}
+A second paradigm segments the crop/soil mask and recovers the row geometry by a
+triangle or scan-line search over the mask. The de Silva et al.\ line of
+work~\cite{cth1,cth2} validates this approach across many field conditions and,
+importantly for this paper, reports results in navigation units (cross-track and
+heading error) on the CRDLD benchmark~\cite{cth1}; we adopt its
+mask-derived centreline as our detector-independent ground-truth line. We stress
+that this evaluation line is computed from masks, not from detections, precisely
+to avoid circularity in the weighted-versus-unweighted comparison. The geometric
+scan itself is a hard, non-differentiable search and carries no per-point
+reliability estimate.
+
+\paragraph{Row-anchor and lane-style regression.}
+A third paradigm ports the row-anchor formulation from lane
+detection---UFLD~\cite{ufld} and LaneATT~\cite{laneatt}---to agricultural rows,
+as in ALNet~\cite{alnet} and row--column attention~\cite{rowcolattn}. These
+methods classify or regress a horizontal position per image row and connect the
+selected anchors into a curve. They are accurate but architecture-specific, and
+the per-anchor confidence (when present) is a classification score, not a
+calibrated geometric covariance on the recovered line.
+
+\paragraph{Polynomial / curve regression.}
+A fourth paradigm regresses the row directly as a parametric curve; RowDetr's
+per-row polynomial regression with INT8 edge deployment is
+representative~\cite{rowdetr}. The curve parameters are produced end-to-end, but
+again with no per-segment uncertainty propagated into the curve estimate.
+
+\paragraph{What this thread leaves open.}
+Two observations recur across all four paradigms and motivate our work. First,
+the literature evaluates in \emph{navigation units}---cross-track error (cm),
+heading error (deg), and intervention rate---rather than detection mAP, because
+a detector that scores well on mAP can still yield a poor guidance line, and
+vice versa. A method that aims to improve navigation must therefore be measured
+there. Second, and more specific to our contribution: \emph{regardless of
+paradigm, the guidance line is fit from points or curves with equal or heuristic
+weights} --- intensity-weighted crop-row regression is itself two decades
+old~\cite{sogaard}, but those weights are a pixel-intensity heuristic. None of
+these systems carry a per-detection, calibrated reliability
+estimate into the geometric line estimator, even though far-field predictions
+are systematically the least reliable. This is the gap CALM-Row addresses.
+
+\subsection{Uncertainty in object detection}
+\label{subsec:rw_unc}
+\noindent A parallel line of work models the uncertainty of bounding-box
+regression. KL-Loss~\cite{klloss} predicts a per-coordinate variance under a
+Gaussian assumption and uses it to weight box coordinates during
+variance-voting NMS. Gaussian-YOLO~\cite{gaussianyolo} attaches a predicted
+localisation uncertainty to each YOLO box and uses it to down-weight uncertain
+detections at inference. Most relevant to us, Generalized Focal Loss and its
+Distribution Focal Loss (DFL) head~\cite{gfl} replace the single-value box
+regression with a learned discrete distribution over a set of bins for each box
+edge; this is the regression head used by modern stock YOLO
+detectors~\cite{ct4,ct5,yolov10}, including the YOLOv8n/YOLOv10n we build on. For
+each anchor and edge $e\in\{l,t,r,b\}$ this head produces a softmax distribution
+$p_e(k)$ over bins $k=0,\dots,R-1$, whose mean $\mu_e=\sum_k k\,p_e(k)$ is the
+predicted edge offset and whose variance
+$\sigma_e^2=\sum_k (k-\mu_e)^2 p_e(k)$ already encodes the network's spread
+(sharp distributions for confident edges, flat distributions for ambiguous ones).
+
+\paragraph{What this thread leaves open.}
+In every case above the predicted spread is consumed \emph{within the detector}:
+KL-Loss and Gaussian-YOLO use variance to reweight or suppress boxes for better
+detection metrics. Closest to us, Generalized Focal Loss~V2~\cite{gflv2} explicitly
+reads the \emph{shape} of the DFL distribution (its top-$k$ values and mean), but
+maps it to a scalar localisation-\emph{quality} score used \emph{inside} the detector
+for classification/NMS ranking; the distribution is otherwise collapsed to its
+expectation $\mu_e$ to produce the box coordinate. What remains open is to read the
+distribution's \emph{second moment} as a \emph{metric} per-detection covariance (in
+pixels), calibrate it against realised error, and propagate it as the precision
+matrix of a \emph{downstream differentiable geometric estimator outside the
+detector} --- a role a unitless ranking score cannot serve. CALM-Row does exactly this: it converts the
+existing per-edge DFL variance into a per-box centroid covariance by linear
+error propagation, calibrates it against realised localisation error, and uses
+its inverse as the precision weight in a differentiable generalized-least-squares
+guidance-line fit. Because the signal is already produced by the stock head, no
+new operator runs on the feature maps or the NPU---in contrast to
+KL-Loss/Gaussian-YOLO, which add a dedicated uncertainty branch. Where such a
+dedicated head is runnable, we report it as an exploratory comparison. Our
+differentiable weighted fit is structurally related to end-to-end differentiable
+least-squares lane fitting~\cite{vangansbeke}; the difference is the \emph{source}
+of the weights --- a learned, uncalibrated attention map from an extra head there,
+versus a calibrated metric covariance read for free from the existing DFL head here.
+
+\subsection{Multi-scale feature fusion (orthogonal)}
+\label{subsec:rw_neck}
+\noindent For completeness we note the large body of work on the detector neck. We treat the detector neck as orthogonal to our contribution and make this explicit.
+Feature Pyramid Networks~\cite{ct1} and the bottom-up PANet
+extension~\cite{ct2} established top-down/bottom-up multi-scale fusion;
+EfficientDet's BiFPN~\cite{ct10} learns scalar per-edge importance weights; and
+\emph{Adaptively Spatial Feature Fusion} (ASFF)~\cite{asff} learns
+spatially-varying per-pixel weights over pyramid levels. These methods improve
+the \emph{features} a detector computes. CALM-Row, by contrast, is a post-head,
+CPU-side module over post-NMS boxes and does not modify the neck, the backbone,
+or the exported graph. It is therefore compatible with any of these necks, and
+we verify in our experiments that its benefit is not neck-specific by repeating
+the controlled comparison on a stock PAN neck~\cite{ct2} and on an ASFF
+neck~\cite{asff}. The choice of neck is consequently \emph{not} a claim of this
+paper.
+
+\subsection{Positioning of CALM-Row}
+\label{subsec:rw_position}
+\noindent In summary, CALM-Row sits at the intersection of the three threads
+above and is defined by what it does \emph{not} do: it adds no neck or
+architectural component (Section~\ref{subsec:rw_neck}), it adds no new detector
+branch or NPU operator (Section~\ref{subsec:rw_unc}), and it does not introduce
+a new line-detection architecture (Section~\ref{subsec:rw_nav}). Its single
+contribution is to close the loop between the uncertainty the DFL
+head~\cite{gfl} already produces and the equal-weight line fit that crop-row
+navigation systems~\cite{diao_yolox,cth1,rowdetr,alnet} currently use: a
+calibrated, uncertainty-weighted, navigation-native guidance-line estimator
+trained and evaluated on the navigation task itself.

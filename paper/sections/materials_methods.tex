@@ -1,0 +1,370 @@
+%!TEX root = ../main.tex
+% =====================================================================
+% METHOD SECTION: CALM-Row
+% Calibrated Aleatoric Localization for Maize-row guidance.
+% Honest positioning: stock YOLO detector + post-head module.
+% Equations match ultralytics/utils/calm_row.py. No experimental numbers.
+% =====================================================================
+
+\section{CALM-Row: calibrated, uncertainty-weighted crop-row guidance}
+\label{sec:method}
+
+\noindent We do \emph{not} propose a new backbone, neck, or detection head. CALM-Row is a
+post-head module that sits on top of an unmodified, edge-deployable stock lightweight YOLO
+detector (we use the YOLOv8n and YOLOv10n nano variants of the YOLO family~\cite{ct4,yolov10}) and
+turns its existing box-regression \emph{distribution} into a calibrated per-detection localization
+covariance, which is then used as the precision weight in a differentiable
+generalized-least-squares (GLS) guidance-line fit.
+Crucially, every operation introduced below is read out from quantities the detector already
+computes; the two training losses add \emph{no new learnable parameters} and \emph{no new
+operators on the feature maps}, so the exported INT8/RKNN or TensorRT graph remains a vanilla
+YOLO (Section~\ref{sec:method:inference}). Figure~\ref{fig:pipeline} summarizes the pipeline.
+
+\input{figures/calmrow_pipeline.tex}
+
+\subsection{Problem setup and the detect\,\(\rightarrow\)\,centroid\,\(\rightarrow\)\,line pipeline}
+\label{sec:method:setup}
+
+\noindent Given a forward-facing field image, the detector returns a set of crop-row segment
+boxes after non-maximum suppression (NMS). For box $i$ we take its centroid
+$(c_{x,i},c_{y,i})$ in pixels, where $c_{y}$ is the image row. Following the de-facto
+detection-and-line-fit recipe for row-crop navigation~\cite{diao_yolox}, a single guidance line
+is fit through the centroids. We parameterise the line as
+\begin{equation}
+\label{eq:line}
+x = a\,y + b ,
+\end{equation}
+i.e. image column $x$ as a function of image row $y$. This orientation is deliberate: crop rows
+viewed head-on are near-vertical, so a conventional $y=mx+c$ fit becomes ill-conditioned as the
+slope diverges; expressing $x$ as a function of $y$ removes this vertical-line degeneracy. The
+heading angle is $\theta=\arctan(a)$, reported directly in degrees as the controller-independent
+navigation quantity, and the cross-track offset follows from $(a,b)$ evaluated at the look-ahead
+row.
+
+The departure from the standard recipe is \emph{how} the line is fit. Far-field boxes
+(top-of-frame, small scale) anchor the look-ahead heading yet are the least reliable
+localizations; an equal-weight fit lets their error dominate exactly where navigation is most
+sensitive. CALM-Row instead fits the line by precision-weighting each centroid with a
+\emph{calibrated} estimate of its own localization variance, read directly from the detector's
+box-edge distribution.
+
+\subsection{Uncertainty readout from the DFL distribution}
+\label{sec:method:dfl}
+
+\noindent Modern YOLO heads regress each box edge with a Distribution Focal Loss (DFL)
+head~\cite{gfl}: rather than a single offset, the network emits, per anchor, a softmax
+distribution over $R=\texttt{reg\_max}$ bins for each of the four edges
+$e\in\{l,t,r,b\}$ (left, top, right, bottom), in stride units. Let $p_e(k)$ denote that
+distribution over bins $k=0,\dots,R-1$. The DFL integral (the value the detector already uses to
+decode the box) is the distribution \emph{mean}, and CALM-Row additionally reads its
+\emph{variance}, which the standard pipeline simply discards:
+\begin{equation}
+\label{eq:dfl_moments}
+\mu_e = \sum_{k=0}^{R-1} k\,p_e(k),
+\qquad
+\sigma_e^2 = \sum_{k=0}^{R-1} \bigl(k-\mu_e\bigr)^2\, p_e(k).
+\end{equation}
+A sharp (confident) edge distribution yields a small $\sigma_e^2$; a flat (ambiguous) one yields
+a large $\sigma_e^2$. Both moments are in stride units and become pixels on multiplication by the
+anchor stride $s$.
+
+Treating the four edges as independent and propagating their variance to the centroid by
+first-order (linear) error propagation gives the per-box centroid covariance in pixels$^2$.
+Since $c_x$ depends on the left/right edges and $c_y$ on the top/bottom edges, the diagonal
+centroid covariance is
+\begin{equation}
+\label{eq:centroid_cov}
+\sigma_{c_x}^2 = \frac{s^2}{4}\bigl(\sigma_l^2+\sigma_r^2\bigr),
+\qquad
+\sigma_{c_y}^2 = \frac{s^2}{4}\bigl(\sigma_t^2+\sigma_b^2\bigr).
+\end{equation}
+Equations~\eqref{eq:dfl_moments}--\eqref{eq:centroid_cov} are exactly the readout implemented in
+the reference module (\texttt{dfl\_mean\_var} and \texttt{centroid\_cov\_from\_edges}). Because
+the guidance line~\eqref{eq:line} regresses $x$ on $y$, the relevant per-box precision is
+\begin{equation}
+\label{eq:weights}
+w_i = \frac{1}{\sigma_{c_x,i}^2 + \epsilon},
+\end{equation}
+with a small $\epsilon$ for numerical stability. No parameters are introduced:
+$w_i$ is a deterministic function of the DFL logits the head already produces. We contrast this
+with detection-uncertainty methods that \emph{add} a dedicated variance head
+(KL-Loss~\cite{klloss}, Gaussian-YOLO~\cite{gaussianyolo}); here the uncertainty is free, and we
+make it \emph{calibrated} and \emph{navigation-aware} through the two losses below.
+
+\subsection{Distance-aware calibration loss \texorpdfstring{$L_{\mathrm{DDC}}$}{L\_DDC}}
+\label{sec:method:ddc}
+
+\noindent The raw DFL variance is a sharpness statistic, not a calibrated error bar: nothing ties
+its magnitude to the \emph{realised} localization error. The distance-aware calibration loss
+($L_{\mathrm{DDC}}$) supplies this tie as a heteroscedastic-aleatoric Gaussian negative log-likelihood (NLL)~\cite{kendallgal} over matched
+(foreground) anchors, treating each predicted centroid coordinate as a Gaussian whose variance is
+the propagated $\sigma_{c}^2$ of Equation~\eqref{eq:centroid_cov} and whose target is the matched
+ground-truth centroid. For a matched anchor with predicted centroid $(\hat c_x,\hat c_y)$ and
+ground-truth centroid $(c_x^{\star},c_y^{\star})$,
+\begin{equation}
+\label{eq:ddc}
+L_{\mathrm{DDC}}
+= \frac{1}{|\mathcal{M}|}\sum_{i\in\mathcal{M}}
+\frac{1}{2}\!\sum_{u\in\{x,y\}}
+\left[
+\frac{\bigl(\hat c_{u,i}-c_{u,i}^{\star}\bigr)^2}{\sigma_{c_u,i}^2+\epsilon}
++ \log\!\bigl(\sigma_{c_u,i}^2+\epsilon\bigr)
+\right],
+\end{equation}
+where $\mathcal{M}$ is the set of matched anchors from the detector's own assigner. The
+data-fidelity term penalises over-confident (too-small) variances on boxes whose centroid is
+actually far from the target, while the $\log\sigma^2$ term penalises uniformly inflating the
+variance; their balance makes $\sigma_{c}^2$ a calibrated predictor of localization error. Because
+far/small boxes incur larger realised errors, the loss naturally drives their variance up --- the
+``distance-aware'' behaviour --- without ever using a depth label. The gradient flows back into the
+existing DFL logits, so the detector \emph{learns to express honest uncertainty} in its
+distribution shape. After training (and after INT8 quantization), an optional per-class affine
+recalibrator may be re-fit on a small validation set for reporting; it is an inference-time
+convenience and is not part of the trained graph.
+
+\subsection{Differentiable precision-weighted GLS line fit and the line-stability loss}
+\label{sec:method:gls}
+
+\noindent\textbf{Closed-form GLS fit.}
+Given $N\ge 2$ centroids with precisions $w_i$, fitting line~\eqref{eq:line} is the weighted
+(generalized) least-squares problem
+\begin{equation}
+\label{eq:gls_obj}
+(\hat a,\hat b) = \arg\min_{a,b}\; \sum_{i=1}^{N} w_i\,\bigl(x_i - a\,y_i - b\bigr)^2 ,
+\end{equation}
+which has the closed-form solution of the $2\times2$ normal equations
+\begin{equation}
+\label{eq:normal_eqs}
+\underbrace{\begin{bmatrix}
+\sum_i w_i y_i^2 & \sum_i w_i y_i \\[2pt]
+\sum_i w_i y_i   & \sum_i w_i
+\end{bmatrix}}_{\mathbf{X}^{\!\top}\mathbf{W}\mathbf{X}}
+\begin{bmatrix} a \\ b \end{bmatrix}
+=
+\begin{bmatrix} \sum_i w_i x_i y_i \\[2pt] \sum_i w_i x_i \end{bmatrix}.
+\end{equation}
+The two diagonal entries differ by several orders of magnitude (one scales with $y^2$, the other
+with $N$), so the implementation adds a per-diagonal ridge scaled to each entry's own magnitude
+before solving, which keeps the small intercept entry well-conditioned without biasing the slope.
+The entire fit~\eqref{eq:normal_eqs} is composed of differentiable reductions and a $2\times2$
+solve, so gradients propagate from $(\hat a,\hat b)$ back through the weights $w_i$ into the DFL
+logits; the network can therefore \emph{learn to down-weight unreliable far boxes} so that the
+fitted line is stable. The parameter covariance and heading uncertainty are obtained in closed
+form from the same matrix,
+\begin{equation}
+\label{eq:cov}
+\mathrm{Cov}\!\begin{bmatrix}a\\b\end{bmatrix} = s_0^2\,(\mathbf{X}^{\!\top}\mathbf{W}\mathbf{X})^{-1},
+\qquad
+s_0^2 = \frac{1}{N-2}\sum_{i=1}^{N} w_i\,r_i^2,
+\qquad
+\sigma_\theta^2 = \frac{\mathrm{Var}(a)}{(1+a^2)^2},
+\end{equation}
+where $r_i = x_i-\hat a y_i-\hat b$ are the residuals and $s_0^2$ is the empirical variance factor
+that keeps the heading interval honest when the weights are calibrated-but-not-exact;
+$\sigma_\theta$ follows from $\theta=\arctan(a)$ by error propagation. This yields a predicted
+heading \emph{and} its uncertainty, enabling the heading-level reliability check used in
+evaluation.
+
+\medskip\noindent\textbf{Line-stability loss $L_{\mathrm{LSL}}$.}
+$L_{\mathrm{DDC}}$ makes the per-box variances trustworthy; the line-stability loss
+($L_{\mathrm{LSL}}$) makes the \emph{resulting line} accurate where it matters. For each training
+image we form two lines: the predicted line $(\hat a,\hat b)$ from the weighted GLS fit over the
+detector's predicted centroids and weights, and a ground-truth training line $(a^\star,b^\star)$
+fit \emph{unweighted} through the ground-truth box centroids of that image. We then penalise the
+discrepancy between the two lines, sampled over $y$ extended to the far look-ahead row
+$y_{\mathrm{far}}$ so that far-field stability is explicitly supervised, plus a heading term:
+\begin{equation}
+\label{eq:lsl}
+L_{\mathrm{LSL}}
+= \sqrt{\frac{1}{|\mathcal{Y}|}\sum_{y\in\mathcal{Y}}
+\Bigl[\bigl(\hat a y + \hat b\bigr) - \bigl(a^\star y + b^\star\bigr)\Bigr]^2}
+\;+\; \lambda_\theta\,\bigl|\arctan(\hat a) - \arctan(a^\star)\bigr| ,
+\end{equation}
+where $\mathcal{Y}$ is a set of rows sampled from the observed span down to $y_{\mathrm{far}}$ and
+$\lambda_\theta$ balances the column-RMSE and heading terms. The ground-truth training line is fit
+through ground-truth box \emph{centroids} and is therefore independent of the detector and of the
+weighting scheme; this avoids circularity for the weighted-vs-unweighted comparison, which is
+adjudicated separately at evaluation against a \emph{mask-derived} ground-truth line (the
+detector-independent centerline). Gradients from Equation~\eqref{eq:lsl} flow through $\hat a$ and
+$\hat b$ into $w_i$ and onward into the DFL logits, closing the loop: the detector is trained so
+that its uncertainty-weighted line matches the true row, with far boxes down-weighted when
+unreliable.
+
+\subsection{Total objective}
+\label{sec:method:objective}
+
+\noindent CALM-Row is trained end-to-end by augmenting the standard YOLO detection loss
+$L_{\mathrm{det}}$ (box CIoU $+$ DFL $+$ classification~\cite{gfl,ct4}) with the two auxiliary
+terms:
+\begin{equation}
+\label{eq:total}
+L = L_{\mathrm{det}} + \alpha\,L_{\mathrm{DDC}} + \beta\,L_{\mathrm{LSL}} ,
+\end{equation}
+with non-negative scalars $\alpha,\beta$ (the calibration and line gains). Setting
+$\alpha=\beta=0$ recovers the stock detector exactly, which defines the controlled baseline; the
+two terms are ablated independently in Section~\ref{sec:results} to attribute the gain. Neither
+term introduces learnable parameters: both are computed from the existing DFL distribution and the
+detector's own assigner, so $L_{\mathrm{DDC}}$ and $L_{\mathrm{LSL}}$ change \emph{what the network
+learns to predict}, not \emph{what it computes at inference}.
+
+\subsection{Inference and edge deployment}
+\label{sec:method:inference}
+
+\noindent At inference, the detector runs unmodified and produces post-NMS boxes together with the
+per-box edge logits it already emits. CALM-Row then executes purely on the CPU over these
+post-NMS detections: it reads the DFL variance~\eqref{eq:dfl_moments}, propagates it to the
+centroid covariance~\eqref{eq:centroid_cov} and precisions~\eqref{eq:weights}, and solves the
+$2\times2$ GLS system~\eqref{eq:normal_eqs} to return the guidance line $(\hat a,\hat b)$, the
+heading $\theta=\arctan(\hat a)$, and its uncertainty $\sigma_\theta$~\eqref{eq:cov}. This is a
+handful of reductions and a $2\times2$ solve over the (few) detected boxes, with negligible cost
+relative to the detector forward pass.
+
+The decisive deployment property is that \emph{nothing} CALM-Row adds touches the feature maps or
+the NPU/accelerator graph. All CALM-Row math is post-head, post-NMS CPU arithmetic on quantities
+the detector already outputs, so it introduces \emph{zero new accelerator operators} and
+\emph{zero new learnable parameters in the exported model}. The detector graph exported to INT8 for
+a Rockchip NPU via RKNN, or to FP16/INT8 for a Jetson via TensorRT, is bit-for-bit a vanilla YOLO;
+the edge runtime is therefore unaffected, and the calibrated-uncertainty guidance line is obtained
+for free on the host CPU. Because the DFL distribution is itself quantized, we re-fit the optional
+inference-time recalibrator on a small validation set after INT8 conversion so that calibration is
+preserved across quantization (evaluated in Section~\ref{sec:results}). An illustrative synthetic mechanism check is given in Section~\ref{sec:res-synth}; the empirical navigation evaluation on real data is reported in Section~\ref{sec:results}.
+
+\section{Experimental setup}
+\label{sec:setup}
+
+This section specifies the protocol used to evaluate CALM-Row. The evaluation is deliberately \emph{navigation-native}: the headline quantities are heading (angular) error in degrees and guidance-line error in centimetres, with detection mAP reported only as a secondary diagnostic. All comparisons are organised around a single controlled axis --- how the guidance line is fitted through the detector's box centroids --- so that any measured difference is attributable to the precision weighting and calibration introduced by CALM-Row rather than to a different backbone, neck, or training recipe. No new operator is introduced on the detector graph: CALM-Row is post-head CPU arithmetic over the variance of the existing distribution-focal-loss (DFL) box-edge head~\cite{gfl}, so the exported edge graph is a vanilla YOLO. Because no experiments have yet been run, every quantitative cell below is a placeholder (``\texttt{-{}-}''); the only concrete figure stated anywhere is an explicitly labelled synthetic sanity check of the fitting mechanism (Section~\ref{sec:setup-synth}).
+
+\subsection{Datasets and ground truth}
+\label{sec:setup-data}
+
+\noindent\textbf{Detection labels from line GT.} Neither benchmark provides bounding boxes: CRDLD ground truth is a binary mask of the crop-row \emph{centrelines} and CRBD provides parametric row annotations. As CALM-Row runs on a stock DFL box detector, we synthesise detection labels from the line GT: from each CRDLD mask we extract the central (navigation) crop row and place a short sequence of boxes along it at successive distances (ordinal class near\,$\dots$\,far, perspective-scaled size). The box labels are clean, yet the detector still learns image difficulty, so the DFL distribution is naturally flatter for far rows. The GT guidance line used for \emph{evaluation} is a robust fit through the mask/annotation centreline (Section~\ref{sec:setup-gtline}) and is detector-independent, so the weighted-versus-unweighted comparison is not circular.
+
+\noindent\textbf{In-domain training and test: CRDLD.} The Crop Row Detection dataset of De~Silva~et~al.~\cite{cth1} ($512\times512$; train/validation/test $=1250/250/430$) trains the detector and serves as the in-domain test set on which the confirmatory hypotheses (Section~\ref{sec:setup-stats}) are evaluated.
+
+\noindent\textbf{Cross-dataset generalisation: CRBD.} The Crop Row Benchmark Dataset~\cite{crbd} ($320\times240$; a different camera, crop and resolution; no training split) is a held-out \emph{cross-dataset} transfer test: the CRDLD-trained detector is evaluated on CRBD without retraining --- a stronger generalisation probe than a within-dataset split. The CRDLD download used here carries no per-field metadata, so a within-CRDLD leave-one-field-out protocol is unavailable; cross-dataset transfer to CRBD takes its place.
+
+\noindent The CRDLD train/validation/test splits are disjoint, and CRBD is an entirely separate dataset, so memorisation cannot inflate the transfer result. A Data and Code Availability statement accompanies the manuscript.
+
+Table~\ref{tab:setup-datasets} summarises the role of each dataset.
+
+\begin{table}[!ht]
+\centering
+\caption{Datasets and their role. Boxes are synthesised from the line GT (Section~\ref{sec:setup-data}); the evaluation GT line is annotation-derived and detector-independent. Results to be completed.}
+\label{tab:setup-datasets}
+\resizebox{\columnwidth}{!}{\begin{tabular}{lllc}
+\hline
+\textbf{Dataset} & \textbf{Role} & \textbf{GT guidance line} & \textbf{cm scale?} \\
+\hline
+CRDLD~\cite{cth1} ($512^2$; 1250/250/430) & Train detector + in-domain test & line-mask $\rightarrow$ central row & -- \\
+CRBD~\cite{crbd} ($320{\times}240$; 283) & Cross-dataset transfer test & annotation $\rightarrow$ central row & -- \\
+\hline
+\end{tabular}}
+\end{table}
+
+\subsection{Pixel-to-centimetre calibration}
+\label{sec:setup-homography}
+
+Because ``cm'' is meaningless without a metric anchor, we calibrate image-to-ground scale explicitly and report centimetres only where it is justified. Where camera intrinsics and extrinsics (or a checkerboard reference) are available, we recover the image-to-ground homography $H$ under an explicit \emph{flat-ground assumption} and report it. Otherwise, metric scale is anchored from a \emph{known inter-row spacing} (for instance the nominal $0.75$\,m spacing of maize rows, used purely as a calibration constant, not as a measured outcome); where neither is available we report errors in \emph{pixels} and in pixels normalised by image width, and do not invent a centimetre value.
+
+Flat ground is stated as an explicit limitation, accompanied by an error budget: a camera-pitch perturbation $\theta$ propagates to a look-ahead-distance error that grows with range, so we tabulate the induced centimetre error at the look-ahead row as a function of $\theta$. This makes the conditions under which the centimetre numbers are trustworthy auditable.
+
+\subsection{Frozen ground-truth guidance-line extraction}
+\label{sec:setup-gtline}
+
+The ground-truth (GT) guidance line used for \emph{evaluation} is derived from segmentation masks and is therefore \emph{detector-independent}. The extraction algorithm is frozen as follows. For each crop-row mask, we compute the row-wise (per image row $y$) median of foreground $x$, fit a robust (Huber) regression to these per-row medians, and select as the navigation row the one nearest the image-centre-bottom; gap and occlusion handling are defined as part of the frozen procedure. The resulting line is expressed in the same $x = a\,y + b$ parameterisation used by CALM-Row, where $x$ is predicted as a function of row $y$ to avoid the vertical-line degeneracy of near-vertical crop rows; heading is $\theta = \arctan(a)$.
+
+To validate the auto-extracted GT, we cross-check it against a \emph{human-annotated subset} of at least 100 frames and report inter-annotator agreement in both degrees and centimetres (Table~\ref{tab:setup-gtline}). Crucially, the evaluation GT is mask-derived, \emph{not} an unweighted least-squares fit through GT box centroids: using a centroid-fit line as the evaluation target would be circular for a study whose central claim is that uncertainty-weighted fitting beats unweighted fitting. The unweighted centroid-fit line is used only as a \emph{training} target inside the line-stability loss, where the detector-independent GT-box centroids make it non-circular with respect to the weighting claim, which is itself evaluated separately against the mask-derived line.
+
+\begin{table}[!ht]
+\centering
+\caption{Frozen GT-line extraction: agreement between the automatic mask-derived line and human annotation on the cross-check subset ($\geq$100 frames). Results to be completed.}
+\label{tab:setup-gtline}
+\begin{tabular}{lcc}
+\hline
+\textbf{Quantity} & \textbf{Heading (\textdegree)} & \textbf{Cross-track (cm)} \\
+\hline
+Auto vs.\ human (median $|\Delta|$) & -- & -- \\
+Inter-annotator (median $|\Delta|$) & -- & -- \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{The A/B evaluation protocol}
+\label{sec:setup-ab}
+
+The study rests on one controlled comparison: \emph{does turning the guidance-line fit from equal-weight into DFL-uncertainty-weighted (CALM-Row) reduce navigation error?} To attribute the effect cleanly we separate detector \emph{training} from line \emph{readout} at inference, defining the arms in Table~\ref{tab:setup-arms}. CALM-Row converts the variance of each box-edge DFL distribution into a per-box centroid covariance and uses its inverse as the precision weight $w_i = 1/\sigma_{c_x,i}^2$ in a differentiable generalised-least-squares (GLS) fit of $x = a\,y + b$, with heading variance read from the WLS parameter covariance $s_0^2 (X^\top W X)^{-1}$, where $s_0^2 = \sum_i w_i r_i^2/(N-2)$ is the empirical variance factor over the $N$ fitted boxes.
+
+\begin{table}[!ht]
+\centering
+\caption{A/B arms. A, A$'$ and B0 share one stock checkpoint and differ only in the CPU-side readout, so they are compared paired per frame; B uses its own checkpoint trained with the CALM-Row auxiliary losses. Results to be completed.}
+\label{tab:setup-arms}
+\resizebox{\columnwidth}{!}{\begin{tabular}{llll}
+\hline
+\textbf{Arm} & \textbf{Detector training} & \textbf{Line readout at eval} & \textbf{Isolates} \\
+\hline
+A (baseline) & stock losses & equal-weight LS through centroids~\cite{diao_yolox} & reference \\
+A$'$ & stock losses & RANSAC LS & robust baseline \\
+B0 (readout only) & stock losses & precision-weighted GLS, \emph{raw} DFL variance & gain from weighting alone \\
+\textbf{B (CALM-Row)} & $+$ DDC $+$ LSL aux losses & precision-weighted GLS, calibrated variance & gain from calibrated training \\
+B$-$cal, B$-$line & one aux loss off & weighted GLS & which aux loss carries the gain \\
+\hline
+\end{tabular}}
+\end{table}
+
+\noindent\textbf{Design points.} Arms A, A$'$ and B0 share a single trained checkpoint (the stock detector) and differ only in the post-NMS line readout; their comparison is therefore \emph{paired per test frame} and free of training noise. Arm B requires its own checkpoint trained with the two auxiliary losses. The decomposition is reported honestly: \emph{B0 vs.\ A} answers ``is the free DFL variance already useful?'', and \emph{B vs.\ B0} answers ``does the CALM-Row training add more?''. The auxiliary losses are the distance-aware calibration loss (DDC, a Gaussian negative-log-likelihood tying $\sigma_c^2$ to realised squared centroid error on matched anchors) and the line-stability loss (LSL, an RMSE-to-the-far-look-ahead-row plus heading term between the GLS line over predicted centroids/weights and the GT line); both reuse the existing DFL distribution and add \emph{no new learnable parameters}. The total objective is $L = L_{\mathrm{det}} + \alpha\,L_{\mathrm{DDC}} + \beta\,L_{\mathrm{LSL}}$, with $L_{\mathrm{det}}$ the standard YOLO box-CIoU $+$ DFL $+$ cls loss.
+
+\noindent\textbf{Detectors and necks.} The A/B axis is run on two Nano-deployable stock detectors, YOLOv8n~\cite{ct4} and YOLOv10n~\cite{yolov10}. To show that the gain is not architecture-specific, we repeat the A/B comparison on at least two \emph{published} necks --- the stock PANet fusion~\cite{ct2}, ASFF~\cite{asff}, and BiFPN~\cite{ct10} --- as a neck-agnosticity check. No bespoke neck is introduced; this paper makes no neck-architecture claim.
+
+\noindent\textbf{Evaluation harness.} A single script (\texttt{eval\_guidance.py}) takes a checkpoint, a test split, and a readout choice (\texttt{equalLS} / \texttt{ransac} / \texttt{calm} / \texttt{qual} / \texttt{oracle}) and emits per-frame navigation metrics plus a per-frame CSV for paired statistics. For each image it runs the detector while retaining per-box \emph{edge logits} (pre-DFL-integral), boxes and strides; builds the guidance line with the chosen readout (equal-weight / RANSAC unweighted, or the precision-weighted GLS of CALM-Row); loads the frozen mask-derived GT line (Section~\ref{sec:setup-gtline}); and computes, sampled to the look-ahead row, line-fit RMSE (px and cm), heading error (deg), and the static geometric cross-track proxy (cm) at the look-ahead row (Section~\ref{sec:setup-metrics}). It also logs, per box, predicted $\sigma$ versus realised $|$centroid error$|$ for calibration, stratified by an independent range proxy. Writing one CSV row per frame lets the shared-checkpoint arms be compared paired.
+
+\subsection{Metrics}
+\label{sec:setup-metrics}
+
+\noindent\textbf{Primary (navigation).} Heading / angular error (deg) is the main, controller-independent headline number. Line-fit RMSE is reported in pixels (and cm where Section~\ref{sec:setup-homography} permits), evaluated \emph{including the look-ahead row}, not only the observed span. Edge throughput (FPS), latency, parameters and GFLOPs are reported on the named devices of Section~\ref{sec:setup-edge}.
+
+\noindent\textbf{Secondary.} Cross-track is reported as a \emph{static geometric proxy}: the lateral offset (px, and cm where the homography permits) between the predicted and ground-truth guidance lines at the look-ahead row. A full closed-loop pure-pursuit / kinematic-bicycle simulation (fixed wheelbase, speed, look-ahead $L_d$, control rate, and perception latency injected from the measured edge FPS, with the \emph{same frozen controller} for every arm) is specified in the experiment plan but \emph{left to future work}, as it requires sequential field video rather than the single-frame test sets used here. Detection mAP@50 and mAP@50--95 are reported with variance as secondary diagnostics.
+
+\noindent\textbf{Calibration.} We report expected calibration error (ECE) and reliability diagrams of predicted $\sigma$ versus \emph{realised} localisation error, stratified against an independent range proxy (image row $y$ under flat ground, or box scale in px) by \emph{continuous} regression of $\sigma$ on the proxy rather than treating the categorical distance bins as range labels. Beyond per-box ECE, we report heading-level reliability (whether predicted heading $\sigma$ covers realised heading error at the 68\,\% and 95\,\% levels). Calibration is measured \emph{before and after INT8} quantisation, re-fitting the optional inference-time variance scaler post-INT8, to test the claim that calibration survives quantisation.
+
+\noindent The main A/B results are reported in Table~\ref{tab:res-main}.
+
+\subsection{Statistical protocol}
+\label{sec:setup-stats}
+
+We \emph{pre-register} the confirmatory hypotheses \textbf{(H1)} CALM-Row beats equal-weight LS on heading error (the core A/B) and \textbf{(H3)} the H1 heading gain holds on published necks~\cite{ct2,asff,ct10}. As an \emph{exploratory} (non-confirmatory) comparison \textbf{(H2)}, where a separate Gaussian/KL uncertainty head~\cite{klloss,gaussianyolo} is runnable we report whether the free DFL variance is competitive on calibration (ECE) at lower parameter count and latency. All other analyses are exploratory.
+
+Confirmatory comparisons use $\geq$5 seeds; exhaustive ablations use 3 seeds (stated per table). Because $n$ is small for normality, significance uses the \emph{Wilcoxon signed-rank} test (paired per frame and per seed), not a $t$-test, with \emph{Holm--Bonferroni} correction across the confirmatory family; adjusted $p$-values are reported. We report effect sizes (Cliff's $\delta$) with 95\,\% bootstrap confidence intervals, not merely $p<0.05$. Variance is decomposed into across-seed (optimisation) and cross-dataset (CRDLD$\rightarrow$CRBD generalisation) components; the unit of generalisation is the dataset, not the seed. Any claim whose $\Delta$ is smaller than its standard deviation is downgraded in wording.
+
+\noindent\textbf{Pre-registered pass/fail.} H1 passes iff B beats A on heading error with Holm-adjusted Wilcoxon $p<0.05$ \emph{and} Cliff's $\delta \geq 0.33$ (significant \emph{and} non-trivial). B0 vs.\ A is reported regardless: if weighting alone already wins it is a cheap, clean result; if only B wins, the training is doing the work. The far-field analysis (the far rows of Table~\ref{tab:res-stats}) repeats H1 on the held-out far rows only, where the effect is expected to be larger.
+
+\noindent Paired significance for H1 is reported in Table~\ref{tab:res-stats}.
+
+\subsection{System-level positioning}
+\label{sec:setup-systemB}
+
+Separately from the controlled A/B grid, we position CALM-Row against published crop-row methods of \emph{different} architectures on the same test split, the same mask-derived GT line, the same centimetre metric, and the same edge device: the de~Silva segmentation-plus-geometric-scan pipeline~\cite{cth1}, RowDetr's polynomial regression~\cite{rowdetr}, and the row-anchor / attention family~\cite{alnet} (where each is runnable). We state explicitly that this comparison is \emph{not} controlled --- the systems differ in architecture and output paradigm --- so the takeaway is the navigation-accuracy / edge-efficiency frontier, not a like-for-like win.
+
+\subsection{Synthetic mechanism check}
+\label{sec:setup-synth}
+
+The synthetic, mechanism-level sanity check of the estimator (illustrative only, not a dataset result) is reported once in Section~\ref{sec:res-synth}. The real far-field evidence comes from the held-out far rows of Section~\ref{sec:setup-stats} measured against the mask-derived GT line.
+
+\subsection{Edge deployment}
+\label{sec:setup-edge}
+
+We report \emph{two} edge platforms in one latency table to avoid the common Rockchip-versus-Jetson confusion: TensorRT (FP16 and INT8) on an NVIDIA Jetson board, and RKNN INT8 on a Rockchip NPU board (e.g.\ RK3588), which matches the deployment target. For each we report latency mean\,$\pm$\,std and P95, throughput, power (W) and energy per frame, thermal/throttling state, batch size, and input resolution (Table~\ref{tab:setup-edge}). We verify that CALM-Row adds \emph{zero} NPU operations --- it is post-NMS CPU arithmetic over the existing DFL logits --- so the exported detector graph is a vanilla YOLO, and we re-derive both the accuracy/efficiency and the navigation-error/efficiency Pareto fronts under deployment precision. Structured pruning~\cite{cth14} is available as an optional efficiency lever and, if applied, is reported on the same axes.
+
+\begin{table}[!ht]
+\centering
+\caption{Edge deployment on the two named platforms. CALM-Row adds zero NPU ops; the exported graph is a vanilla YOLO. Results to be completed.}
+\label{tab:setup-edge}
+\resizebox{\columnwidth}{!}{\begin{tabular}{llccccc}
+\hline
+\textbf{Platform} & \textbf{Precision} & \textbf{Latency mean$\pm$std (ms)} & \textbf{P95 (ms)} & \textbf{FPS} & \textbf{Power (W)} & \textbf{Energy/frame (mJ)} \\
+\hline
+Jetson (TensorRT) & FP16 & -- & -- & -- & -- & -- \\
+Jetson (TensorRT) & INT8 & -- & -- & -- & -- & -- \\
+Rockchip (RKNN) & INT8 & -- & -- & -- & -- & -- \\
+\hline
+\end{tabular}}
+\end{table}

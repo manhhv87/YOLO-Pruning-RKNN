@@ -1,0 +1,213 @@
+% !TeX root = ../main.tex
+
+%--------------------------------------------------------%
+% DOCUMENT CLASS
+%--------------------------------------------------------%
+% Change "letterpaper" to "a4" if you use a4 paper size
+\documentclass[letterpaper,12pt]{article}
+
+%--------------------------------------------------------%
+% VIETNAMESE
+%--------------------------------------------------------%
+
+% \usepackage[T2A,T5]{fontenc}
+% \usepackage[utf8]{inputenc}
+% \usepackage[english,vietnamese]{babel}
+
+\DeclareUnicodeCharacter{223C}{+}
+
+%--------------------------------------------------------%
+% TITLE SECTION
+%--------------------------------------------------------%
+
+%Abstract
+\usepackage{abstract} % Allows abstract customization
+% Set the "Abstract" text to bold
+\renewcommand{\abstractnamefont}{\normalfont\bfseries}
+\renewenvironment{abstract}{\par\noindent\textbf{\abstractname:}\ \ignorespaces}
+% Set the abstract itself to small italic text
+\renewcommand{\abstracttextfont}{\normalfont\small\itshape}
+
+%Title
+\usepackage{titlesec} % Allows customization of titles
+\titlelabel{\thetitle.\quad}
+
+%Authors
+\usepackage{authblk} % For multiple authors
+% \usepackage{cite} % Incompatible with biblatex
+%Date
+\usepackage{datetime} % allows for including today's date
+% These two lines creates a new date format ``Month day(th), year''
+\newdateformat{usvardate}{
+    \monthname[\THEMONTH] \ordinal{DAY}, \THEYEAR}
+
+%--------------------------------------------------------%
+% HEADERS & FOOTERS
+%--------------------------------------------------------%
+
+%Footnotes
+\usepackage[bottom]{footmisc} % Makes footnotes stick to bottom of the page
+
+%Endnotes
+% Uncomment this line if using endnotes "\endnote{}"
+% \usepackage{endnotes}
+
+%Headers from page 2 on
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyheadoffset{0cm}
+\setlength{\headheight}{15pt}
+\usepackage{comment}
+
+%--------------------------------------------------------%
+% DRAFT WATERMARK
+%--------------------------------------------------------%
+
+% NOTE: Comment out these two lines to remove watermark
+% \usepackage[firstpage]{draftwatermark} % adds draft watermark
+% \SetWatermarkLightness{0.85}
+
+%--------------------------------------------------------%
+% MACROS
+%--------------------------------------------------------%
+% Define keywords macro command
+\providecommand{\keywords}[1]{\textbf{\textit{Keywords---}} #1}
+
+%% LianTze 7 Dec 2016:
+%% Updated how the wordcount is implemented
+\newcommand\wordcount{%
+    \immediate\write18{texcount -utf8 -merge -sum -incbib -dir -sub=none -brief \jobname.tex | cut -d : -f 1 > 'count.txt'}%
+    \input{count.txt}\ignorespaces words%
+}
+
+%--------------------------------------------------------%
+% MATH SUPPORT
+%--------------------------------------------------------%
+
+% The amssymb package provides various useful mathematical symbols
+\usepackage{amssymb}
+% The amsthm package provides extended theorem environments
+\usepackage{amsthm}
+% The newtxmath package provides additional math symbol support
+% in Times New Roman symbols, etc.
+\usepackage{newtxmath}
+\usepackage{mathtools}
+\usepackage{blkarray, bigstrut}
+
+%--------------------------------------------------------%
+% FONTS
+%--------------------------------------------------------%
+
+\usepackage{microtype} % Slightly tweak font spacing for aesthetics
+\usepackage[utf8]{inputenc}
+\usepackage{newtxtext} % Makes default font Adobe Times New Roman
+
+%--------------------------------------------------------%
+% LINES
+%--------------------------------------------------------%
+
+% Spacing
+\usepackage{setspace} % See \doublespacing command at the top of content.tex
+% Numbering
+\usepackage{lineno,xcolor} 	% See \linenumbers at the top of content.tex
+% Lists
+\usepackage{enumitem}
+\setlist{nosep}
+\setlist[itemize]{leftmargin=*}
+
+%--------------------------------------------------------%
+% MARGINS
+%--------------------------------------------------------%
+
+%NOTE: All spaces in this template are in inches, because it is
+% formatted for letterpaper (8.5 x 11 inch) paper. If you use a4
+% paper, choose different sizes in millimeters or centimeters.
+\usepackage[top=1.5in, bottom=1.5in, left=1in, right=1in]{geometry}
+
+%--------------------------------------------------------%
+% COMMENTS
+%--------------------------------------------------------%
+
+\usepackage[colorinlistoftodos]{todonotes} % allows margin comments
+% See examples in content.tex, and here for manual: 
+% http://www.ctan.org/pkg/todonotes
+\usepackage{soul} % allows for highlighting
+
+%--------------------------------------------------------%
+% ACRONYMS
+%--------------------------------------------------------%
+
+\usepackage[nohyperlinks,nolist]{acronym} % Managing acronyms
+\usepackage{pifont} % For \ding symbols
+
+%--------------------------------------------------------%
+% GRAPHICS
+%--------------------------------------------------------%
+
+\usepackage{graphicx,caption} % More advanced figure inclusion
+\graphicspath{{figures/}} % Set the default folder for images
+\usepackage{float} % For specifying table/figure locations, i.e. [ht!]
+\usepackage{subcaption}
+
+% The printlen command allows the user to print the exact text width or height.
+% This is useful, when trying to create graphics (outside of LaTeX, of course)
+% with the optimal dimensions. See here for usage: http://www.ctan.org/pkg/printlen
+\usepackage{printlen}
+
+\usepackage[section]{placeins} % Used to ensure that figures do not go into the next section
+
+% TikZ for the CALM-Row pipeline diagram
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+
+%--------------------------------------------------------%
+% TABLES
+%--------------------------------------------------------%
+
+\usepackage{adjustbox} 	%adjust table
+\usepackage{ragged2e}	%su dung cho \justifying
+\usepackage{bm} %in dam trong bang dung cho cong thuc
+
+\usepackage{longtable} % For long tables that span multiple pages
+\newcommand{\sym}[1]{\rlap{#1}}% For symbols like *** in tables
+\usepackage{tabularx} % Allows advanced table features
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+\usepackage{relsize} % Allows precise adjustment of font size,
+%useful for fitting tables to page width
+\usepackage{multirow}
+
+%--------------------------------------------------------%
+% REFERENCES
+%--------------------------------------------------------%
+% adding biography
+\usepackage{wrapfig}
+\usepackage{graphicx}  % For including images
+\usepackage{subcaption}  % For subfigures
+\usepackage{adjustbox}
+
+\usepackage{hyperref} % For hyperlinks in the PDF
+
+% NOTE: This document uses bibtex for references
+% because both style files for Sociology Journals are
+% only available in .bst format. You can change to
+% biblatex if you prefer below.
+
+% Many thanks to Sociology Professor, 
+% ChangHwan Kim at the University of Kansas. 
+% for providing these .bst files here: 
+% http://people.ku.edu/~chkim
+
+% BIBTEX
+% Comment out this line if using biblatex
+%\usepackage{chicago} % AJS and ASR styles rely on chicago
+
+% BIBLATEX
+% NOTE: Uncomment out these three lines to use biblatex
+% Be sure to put the biblio.bib file in biblatex format'
+\usepackage{csquotes}
+\usepackage[style=numeric-comp,backend=biber,sorting=none]{biblatex}
+
+\bibliography{refs}
+

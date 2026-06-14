@@ -1,0 +1,151 @@
+%!TEX root = ../main.tex
+
+\section{Results}
+\label{sec:results}
+
+This section reports the empirical evaluation of CALM-Row. \emph{No dataset-level numbers are filled in yet}: every quantitative cell is a placeholder (``\texttt{--}'' in tables, ``[TODO]'' in prose) to be completed once the pre-registered runs of the A/B protocol (Section~\ref{sec:setup-ab}; see also the experiment plan) have finished. The table structures, comparison arms, metrics, and statistical tests below are fixed in advance so that the analysis is confirmatory rather than exploratory. The only concrete number stated anywhere in this paper is a synthetic, mechanism-level sanity check that is \emph{not} a dataset result and is labelled as illustrative (Section~\ref{sec:res-synth}).
+
+We restate the canonical evaluation design so the tables are self-contained. Four guidance-line readout arms are compared. Arms \textbf{A} (equal-weight least squares through box centroids, the Diao-style recipe~\cite{diao_yolox}), \textbf{A$'$} (RANSAC least squares), and \textbf{B0} (precision-weighted GLS using the \emph{raw} variance of the existing DFL box-edge distribution~\cite{gfl}) share a single stock detector checkpoint and differ only in the CPU-side readout, so their comparison is paired per frame and free of training noise. Arm \textbf{B} (full CALM-Row) is trained with the distance-aware calibration loss $L_{\mathrm{DDC}}$ and the line-stability loss $L_{\mathrm{LSL}}$ and uses the calibrated precision-weighted GLS readout with weights $w_i = 1/\sigma_{c_x,i}^2$. The decomposition is deliberate: \textbf{B0 vs.\ A} isolates the gain from \emph{weighting alone} (free, no extra training), while \textbf{B vs.\ B0} isolates the additional gain from \emph{training the detector to be calibrated and line-aware}. The primary metric is heading error (deg), which is controller-independent; line-fit RMSE (px and, where the px$\rightarrow$cm homography of Section~\ref{sec:setup-homography} applies, cm) and closed-loop cross-track error (cm) are secondary; calibration (ECE), detection (mAP@50, mAP@50--95), and edge latency/FPS support the deployment argument.
+
+\subsection{Main A/B comparison per detector (T1)}
+\label{sec:res-main}
+
+Table~\ref{tab:res-main} is the headline result. For each stock detector (YOLOv8n, YOLOv10n) and each arm we report navigation accuracy, calibration, detection, and edge throughput, as mean\,$\pm$\,std over five seeds on the CRDLD test split (in-domain), with cross-dataset transfer to CRBD reported alongside. The final row, $\Delta$(B$-$A) with its 95\,\% bootstrap confidence interval, summarizes the end-to-end effect of CALM-Row over the equal-weight baseline. The table is designed to show whether CALM-Row reduces heading and line-fit error without degrading mAP, and whether the FPS column confirms zero added on-device cost: the exported detector graph is a vanilla YOLO and CALM-Row is post-NMS CPU math, so the detector FPS for A, A$'$, B0, and B should coincide up to measurement noise.
+
+{\renewcommand{\arraystretch}{1.3}
+\begin{table}[!ht]
+  \centering
+  \caption{T1 --- Main A/B comparison on CRDLD test, mean\,$\pm$\,std over 5 seeds. Heading error and line-fit RMSE are primary; cross-track is a static geometric proxy at the look-ahead row (Section~\ref{sec:setup-metrics}); FPS is detector-only INT8 throughput on the named edge device. ECE is undefined for the unweighted readouts A/A$'$ (no per-box variance is consumed). \emph{Results to be completed.}}
+  \label{tab:res-main}
+  \resizebox{\columnwidth}{!}{\begin{tabular}{llccccccc}
+    \hline
+    \textbf{Detector} & \textbf{Arm} & \textbf{Heading ($^\circ$)$\downarrow$} & \textbf{RMSE (px)$\downarrow$} & \textbf{RMSE (cm)$\downarrow$} & \textbf{Cross-track (cm)$\downarrow$} & \textbf{ECE$\downarrow$} & \textbf{mAP@50} & \textbf{FPS} \\
+    \hline
+    \multirow{5}{*}{YOLOv8n}
+      & A\ \ equal-LS            & -- & -- & -- & -- & n/a & -- & -- \\
+      & A$'$ RANSAC              & -- & -- & -- & -- & n/a & -- & -- \\
+      & B0\ weighted (raw var)   & -- & -- & -- & -- & --  & -- & -- \\
+      & \textbf{B\ \ CALM-Row}   & -- & -- & -- & -- & --  & -- & -- \\
+      & $\Delta$ (B$-$A) [95\,\% CI] & -- & -- & -- & -- & --  & -- & -- \\
+    \hline
+    \multirow{5}{*}{YOLOv10n}
+      & A\ \ equal-LS            & -- & -- & -- & -- & n/a & -- & -- \\
+      & A$'$ RANSAC              & -- & -- & -- & -- & n/a & -- & -- \\
+      & B0\ weighted (raw var)   & -- & -- & -- & -- & --  & -- & -- \\
+      & \textbf{B\ \ CALM-Row}   & -- & -- & -- & -- & --  & -- & -- \\
+      & $\Delta$ (B$-$A) [95\,\% CI] & -- & -- & -- & -- & --  & -- & -- \\
+    \hline
+  \end{tabular}}
+  \medskip
+\end{table}}
+
+\noindent We additionally report mAP@50--95 with its across-seed variance alongside Table~\ref{tab:res-main} (omitted from the main table for width). Because CALM-Row adds no learnable detector parameters and its losses act only on the existing DFL distribution, the expectation is that detection accuracy is unchanged within noise while navigation accuracy improves; this expectation will be confirmed or refuted by the completed runs.
+
+\subsection{Paired significance tests (T2)}
+\label{sec:res-stats}
+
+Because A, A$'$, and B0 are evaluated on the identical checkpoint and B is paired per frame against them, the comparisons are tested with the Wilcoxon signed-rank test on per-frame heading error (with 5 seeds, normality cannot be assumed for a $t$-test). Table~\ref{tab:res-stats} reports the median paired difference, the Holm--Bonferroni-adjusted $p$-value across the confirmatory family, and the Cliff's $\delta$ effect size. The pre-registered primary hypothesis H1 (CALM-Row beats equal-weight LS on heading error) passes only if the adjusted $p<0.05$ \emph{and} $|\delta|\ge 0.33$, i.e.\ the effect must be both significant and non-trivial. The two decomposition rows (B0 vs.\ A; B vs.\ B0) are reported regardless of outcome so that the source of any gain --- free weighting versus calibrated training --- is stated plainly.
+
+{\renewcommand{\arraystretch}{1.3}
+\begin{table}[!ht]
+  \centering
+  \caption{T2 --- Paired significance on heading error (primary metric), per detector, CRDLD test. Wilcoxon signed-rank, Holm-adjusted across the confirmatory family; Cliff's $\delta$ as effect size. H1 passes iff adjusted $p<0.05$ and $|\delta|\ge 0.33$. \emph{Results to be completed.}}
+  \label{tab:res-stats}
+  \resizebox{\columnwidth}{!}{\begin{tabular}{llccc}
+    \hline
+    \textbf{Detector} & \textbf{Comparison} & \textbf{median $\Delta$ ($^\circ$)} & \textbf{Wilcoxon $p$ (Holm-adj)} & \textbf{Cliff's $\delta$} \\
+    \hline
+    \multirow{3}{*}{YOLOv8n}
+      & B vs.\ A\ \ (full effect)        & -- & -- & -- \\
+      & B0 vs.\ A\ (weighting only)      & -- & -- & -- \\
+      & B vs.\ B0\ (training adds)       & -- & -- & -- \\
+    \hline
+    \multirow{3}{*}{YOLOv10n}
+      & B vs.\ A\ \ (full effect)        & -- & -- & -- \\
+      & B0 vs.\ A\ (weighting only)      & -- & -- & -- \\
+      & B vs.\ B0\ (training adds)       & -- & -- & -- \\
+    \hline
+  \end{tabular}}
+  \medskip
+\end{table}}
+
+\noindent A far-field-focused replicate of Table~\ref{tab:res-stats}, restricted to the genuinely-far held-out rows (top-of-frame, smallest boxes; the de-circularized far-field test of Section~\ref{sec:setup-stats}), is reported separately. The pre-registered expectation is that the CALM-Row advantage is \emph{larger} in this stratum, because the far boxes are where the DFL distribution is flattest (largest $\sigma_e^2$, hence largest centroid variance $\sigma_{c_x}^2$), where the precision weights $w_i$ down-weight most aggressively, and where heading is most sensitive. This is the mechanism the method is designed to exploit, measured here on real, un-manipulated frames with mask-derived ground-truth lines rather than on injected noise.
+
+\subsection{Auxiliary-loss ablation (T3)}
+\label{sec:res-ablation}
+
+Table~\ref{tab:res-ablation} attributes the trained gain (B over B0) to the two auxiliary losses by switching one off at a time: \textbf{B$-$cal} ($L_{\mathrm{DDC}}$ off, $L_{\mathrm{LSL}}$ on) and \textbf{B$-$line} ($L_{\mathrm{LSL}}$ off, $L_{\mathrm{DDC}}$ on), each compared against full B and against the readout-only B0. The pre-registered expectation is that $L_{\mathrm{DDC}}$ chiefly drives calibration (ECE), $L_{\mathrm{LSL}}$ chiefly drives heading/line-fit accuracy by letting gradients flow through the precision weights $w_i$ into the DFL logits, and that both are needed for the full effect. Ablations use three seeds (stated), fewer than the five used for the confirmatory tables, and are therefore reported as indicative.
+
+{\renewcommand{\arraystretch}{1.3}
+\begin{table}[!ht]
+  \centering
+  \caption{T3 --- Auxiliary-loss ablation (YOLOv8n, CRDLD test, 3 seeds). $L_{\mathrm{DDC}}$ = distance-aware calibration; $L_{\mathrm{LSL}}$ = line-stability. \emph{Results to be completed.}}
+  \label{tab:res-ablation}
+  \resizebox{\columnwidth}{!}{\begin{tabular}{lccccc}
+    \hline
+    \textbf{Variant} & \textbf{$L_{\mathrm{DDC}}$} & \textbf{$L_{\mathrm{LSL}}$} & \textbf{Heading ($^\circ$)$\downarrow$} & \textbf{RMSE (px)$\downarrow$} & \textbf{ECE$\downarrow$} \\
+    \hline
+    B0 (readout only)        & \ding{55}    & \ding{55}    & -- & -- & -- \\
+    B$-$cal                  & \ding{55}    & $\checkmark$ & -- & -- & -- \\
+    B$-$line                 & $\checkmark$ & \ding{55}    & -- & -- & -- \\
+    \textbf{B (full CALM-Row)} & $\checkmark$ & $\checkmark$ & -- & -- & -- \\
+    \hline
+  \end{tabular}}
+  \medskip
+\end{table}}
+
+\subsection{Neck-agnosticity (T4)}
+\label{sec:res-neck}
+
+Because CALM-Row is post-head and reads only the existing DFL distribution, it should be indifferent to the detector's feature-fusion neck. Table~\ref{tab:res-neck} repeats the A-vs-B heading comparison across published necks --- stock PAN~\cite{ct2}, ASFF~\cite{asff}, and BiFPN~\cite{ct10} --- to test whether the gain is neck-specific (pre-registered hypothesis H3). Each row reports the equal-weight (A) and CALM-Row (B) heading error and their difference; the pre-registered expectation is a negative, roughly consistent $\Delta$ across all necks. These necks are used only as published baselines to probe agnosticity; this paper makes no neck-architecture novelty claim.
+
+{\renewcommand{\arraystretch}{1.3}
+\begin{table}[!ht]
+  \centering
+  \caption{T4 --- Neck-agnosticity (YOLOv8n backbone, CRDLD test). A-vs-B heading error on published necks; H3 expects a consistent negative $\Delta$. \emph{Results to be completed.}}
+  \label{tab:res-neck}
+  \resizebox{\columnwidth}{!}{\begin{tabular}{lccc}
+    \hline
+    \textbf{Neck} & \textbf{A heading ($^\circ$)} & \textbf{B heading ($^\circ$)} & \textbf{$\Delta$ (B$-$A)$\downarrow$} \\
+    \hline
+    Stock PAN~\cite{ct2}   & -- & -- & -- \\
+    ASFF~\cite{asff}       & -- & -- & -- \\
+    BiFPN~\cite{ct10}      & -- & -- & -- \\
+    \hline
+  \end{tabular}}
+  \medskip
+\end{table}}
+
+\subsection{Edge latency and quantization (T5)}
+\label{sec:res-edge}
+
+Table~\ref{tab:res-edge} reports deployment efficiency on the two named edge stacks: TensorRT (FP16 and INT8) on the Jetson device and RKNN INT8 on the Rockchip board. We report mean\,$\pm$\,std and P95 latency, throughput, power, and energy per frame, together with the CALM-Row post-NMS CPU overhead measured separately. The central deployment claim is verifiable here: since CALM-Row introduces zero new NPU operators, the exported INT8 graph for arms A, A$'$, B0, and B is identical, so the NPU latency columns should coincide across arms and the only CALM-Row cost is the small CPU line-fit. We also report ECE before and after INT8 quantization (re-fitting the optional inference-time calibrator on a small validation set post-INT8) to support the claim that calibration survives quantization.
+
+{\renewcommand{\arraystretch}{1.3}
+\begin{table}[!ht]
+  \centering
+  \caption{T5 --- Edge latency, throughput, and power. TensorRT on Jetson; RKNN INT8 on Rockchip. CALM-Row overhead is post-NMS CPU math (no NPU ops). Report at the stated input resolution, batch size 1, after warm-up. \emph{Results to be completed.}}
+  \label{tab:res-edge}
+  \resizebox{\columnwidth}{!}{\begin{tabular}{llccccc}
+    \hline
+    \textbf{Device / runtime} & \textbf{Precision} & \textbf{Latency mean$\pm$std (ms)} & \textbf{P95 (ms)} & \textbf{FPS} & \textbf{Power (W)} & \textbf{Energy/frame (mJ)} \\
+    \hline
+    Jetson / TensorRT  & FP16        & -- & -- & -- & -- & -- \\
+    Jetson / TensorRT  & INT8        & -- & -- & -- & -- & -- \\
+    Rockchip / RKNN    & INT8        & -- & -- & -- & -- & -- \\
+    \hline
+    \multicolumn{2}{l}{CALM-Row post-NMS CPU overhead} & -- & -- & -- & -- & -- \\
+    \hline
+  \end{tabular}}
+  \medskip
+\end{table}}
+
+\subsection{Synthetic mechanism illustration (not a dataset result)}
+\label{sec:res-synth}
+
+To make the precision-weighting mechanism concrete \emph{independently} of any dataset, the reference implementation includes a small synthetic check (a controlled \texttt{numpy}/\texttt{torch} demonstration, not an experiment on real imagery). Box-edge logits are generated so that near boxes have sharp DFL distributions (low variance $\sigma_e^2$) and far boxes have flat distributions (high variance); the far centroids are then corrupted with injected lateral noise. On this fixed synthetic configuration, fitting the guidance line $x = a\,y + b$ with equal weights yields an \emph{illustrative} heading error of $1.16^\circ$, whereas the precision-weighted GLS fit with $w_i = 1/\sigma_{c_x,i}^2$ yields $0.65^\circ$ on the same points. These numbers are reported purely as an \textbf{illustration of the mechanism} and are \emph{not} a dataset result: they show that down-weighting high-variance far boxes recovers a more accurate heading when the variance genuinely tracks reliability. The corresponding real, de-circularized evidence is the far-field analysis accompanying Table~\ref{tab:res-stats}, measured on un-manipulated CRDLD frames with mask-derived ground-truth lines.
+
+\subsection{Summary of planned findings}
+\label{sec:res-summary}
+
+Taken together, the tables above are designed to answer four questions, each tied to a core evaluation requirement. (i)~\emph{Does the application improve?} Tables~\ref{tab:res-main}--\ref{tab:res-stats} measure navigation directly in heading (deg) and cross-track (cm), not detection mAP. (ii)~\emph{Is the comparison against real prior art?} Arms A/A$'$ reproduce published line-fitting recipes~\cite{diao_yolox}, and the system-level positioning (reported separately) places CALM-Row against crop-row pipelines~\cite{cth1,rowdetr,alnet} on the same split, GT line, and device. (iii)~\emph{Is the analysis rigorous?} Multiple seeds, per-frame paired Wilcoxon tests with Holm correction, effect sizes with bootstrap CIs, and a separated across-seed/across-field variance budget are all pre-registered. (iv)~\emph{Is the uncertainty real rather than a relabelled ``depth''?} Calibration is measured (ECE, reliability) against \emph{realised} localization error and tested for survival under INT8, using only the existing DFL distribution~\cite{gfl} rather than a separate uncertainty head~\cite{klloss,gaussianyolo}. All cells will be populated once the runs in the experiment plan complete.
