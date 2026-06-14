@@ -483,14 +483,37 @@ def main():
     args = parse_args()
     model = build_model(args)
 
+    _custom_attrs = {
+        "bbox_loss_type": args.bbox_loss_type,
+        "alpha_iou": args.alpha_iou,
+        "calm_row": args.calm_row,
+        "calm_calib_gain": args.calm_calib_gain,
+        "calm_line_gain": args.calm_line_gain,
+        "calm_y_far": args.calm_y_far,
+        "calm_lam_theta": args.calm_lam_theta,
+    }
     if not args.resume:
-        setattr(model.model, "bbox_loss_type", args.bbox_loss_type)
-        setattr(model.model, "alpha_iou", args.alpha_iou)
-        setattr(model.model, "calm_row", args.calm_row)
-        setattr(model.model, "calm_calib_gain", args.calm_calib_gain)
-        setattr(model.model, "calm_line_gain", args.calm_line_gain)
-        setattr(model.model, "calm_y_far", args.calm_y_far)
-        setattr(model.model, "calm_lam_theta", args.calm_lam_theta)
+        for _k, _v in _custom_attrs.items():
+            setattr(model.model, _k, _v)
+
+        # CRITICAL: model.train() REBUILDS the model from YAML and copies only the
+        # state_dict (intersect_dicts) -- Python attributes set above are LOST on the
+        # model the loss actually sees, so the CALM-Row branch silently never runs
+        # (calm_enabled=False). Symptom: a CALM checkpoint is bit-identical to baseline
+        # (B == B0, Wilcoxon p=1.0). Re-apply the attrs to the TRAINER's model via a
+        # pretrain callback; it fires (on_pretrain_routine_start) before the criterion is
+        # built lazily on the first batch, so getattr(model, "calm_row") sees True.
+        def _apply_custom_attrs(trainer, _attrs=_custom_attrs):
+            for k, v in _attrs.items():
+                setattr(trainer.model, k, v)
+            if _attrs.get("calm_row"):
+                from ultralytics.utils import LOGGER
+                LOGGER.info(
+                    f"[CALM-Row] enabled on trainer.model "
+                    f"(calib_gain={_attrs['calm_calib_gain']}, line_gain={_attrs['calm_line_gain']})"
+                )
+
+        model.add_callback("on_pretrain_routine_start", _apply_custom_attrs)
 
     print("[Debug] cfg:", getattr(model, "cfg", None))
     print("[Debug] ckpt_path:", getattr(model, "ckpt_path", None))

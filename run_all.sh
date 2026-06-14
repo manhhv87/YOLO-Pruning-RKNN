@@ -73,8 +73,11 @@ for S in $SEEDS; do
   BASE="$RUNDIR/base_v8n_s$S/weights/best.pt"
   CALM="$RUNDIR/calm_v8n_s$S/weights/best.pt"
 
-  # arms A/A'/B0/qual/oracle share the BASE checkpoint; B uses the CALM checkpoint
-  for R in equalLS ransac calm qual oracle; do
+  # arms share the BASE checkpoint; B uses the CALM checkpoint.
+  #   equalLS = non-robust equal (weak baseline A) | ransac = robust equal (STRONG baseline)
+  #   irls    = robust equal IRLS (ablation: isolates robustness from weighting)
+  #   calm    = precision + Huber-IRLS (the proposal, B0) | qual = conf-weighted | oracle = upper bound
+  for R in equalLS ransac irls calm qual oracle; do
     python eval_guidance.py --weights "$BASE" --device "$DEVICE" --conf "$CONF" \
       --images datasets/CRDLD_yolo/images/test --gt-json "$GTTEST" \
       --readout "$R" --out "$OUT/${R}_s$S.csv" --calib-out "$OUT/calib_${R}_s$S.csv"
@@ -90,14 +93,20 @@ for S in $SEEDS; do
       --readout calm --out "$OUT/B_crbd_s$S.csv" || echo "[warn] CRBD eval failed (seed $S)"
   fi
 
-  echo "----- stats seed $S -----"
-  echo "[H1] B (CALM) vs A (equal-weight LS), heading error:"
-  python stats_ab.py "$OUT/equalLS_s$S.csv" "$OUT/B_s$S.csv"   --metric heading_err_deg --family-size 3 || true
-  echo "[B0 vs A] weighting-only gain:"
-  python stats_ab.py "$OUT/equalLS_s$S.csv" "$OUT/calm_s$S.csv" --metric heading_err_deg --family-size 3 || true
-  echo "[B vs B0] training-adds gain:"
-  python stats_ab.py "$OUT/calm_s$S.csv" "$OUT/B_s$S.csv"       --metric heading_err_deg --family-size 3 || true
+  echo "----- stats seed $S (confirmatory family m=4) -----"
+  echo "[H1] calm vs equalLS (proposal vs weak baseline):"
+  python stats_ab.py "$OUT/equalLS_s$S.csv" "$OUT/calm_s$S.csv" --metric heading_err_deg --family-size 4 || true
+  echo "[H2] calm vs RANSAC (proposal vs STRONG baseline -- the decisive test):"
+  python stats_ab.py "$OUT/ransac_s$S.csv"  "$OUT/calm_s$S.csv" --metric heading_err_deg --family-size 4 || true
+  echo "[Ablation] calm vs irls (does PRECISION add beyond robustness?):"
+  python stats_ab.py "$OUT/irls_s$S.csv"    "$OUT/calm_s$S.csv" --metric heading_err_deg --family-size 4 || true
+  echo "[Training] B vs B0 (does calm-training help? must be != 0 now that the no-op is fixed):"
+  python stats_ab.py "$OUT/calm_s$S.csv"    "$OUT/B_s$S.csv"    --metric heading_err_deg --family-size 4 || true
 done
+
+# ---- 2b. calibration gate: is the DFL variance even informative? (decides fix vs pivot) ----
+echo "===== calibration gate (Spearman rho of predicted sigma vs realised error) ====="
+python calib_gate.py "$OUT"/calib_calm_s*.csv || echo "[warn] calib gate failed"
 
 # ---- 3. paper assets: qualitative overlays + tables + figures + compile ----
 FS=$(set -- $SEEDS; echo "$1")

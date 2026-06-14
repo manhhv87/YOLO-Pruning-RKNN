@@ -46,7 +46,9 @@ try:
     from ultralytics import YOLO
     from ultralytics.utils.tal import make_anchors, dist2bbox
     from ultralytics.utils import ops
-    from ultralytics.utils.calm_row import dfl_mean_var, centroid_cov_from_edges, gls_line_fit, line_heading
+    from ultralytics.utils.calm_row import (
+        dfl_mean_var, centroid_cov_from_edges, gls_line_fit, line_heading, precision_weights,
+    )
 except Exception as e:  # keep importable for py_compile in a torch-less env
     torch = None
     _IMPORT_ERR = e
@@ -183,11 +185,18 @@ def fit_ransac(cx, cy, iters=100, thr=8.0):
     return float(a), float(b)
 
 
-def select_central(cx, cy, imgsz, corridor=0.14):
+def select_central(cx, cy, imgsz, corridor=0.10):
     """Bool mask of detections on the CENTRAL navigation row. The detector fires on
-    ALL rows; the guidance line is the central one (nearest image-centre at the
-    bottom). Seed at the bottom-centre detection and greedily keep detections whose
-    x stays within a corridor while walking up; diverging rows are dropped."""
+    ALL rows; the guidance line is the central one (nearest image-centre at the bottom).
+
+    The previous version walked bottom->top keeping boxes within `corridor` of the LAST
+    accepted x and updated the reference to every accepted box -- so a single adjacent-row
+    box within the corridor made the reference DRIFT onto the wrong row, leaking outliers
+    into the fit (this, plus a non-robust solver, is why `calm`/`equalLS` lost to RANSAC).
+
+    Now: seed at the bottom-centre detection, estimate a local slope from the bottom-most
+    boxes near the seed, then keep boxes within the corridor of the PREDICTED central-row
+    line a_seed*y + b_seed (no drift). Outliers never move the reference."""
     xn = cx.detach().cpu().numpy(); yn = cy.detach().cpu().numpy()
     n = len(xn)
     if n < 3:
@@ -197,15 +206,29 @@ def select_central(cx, cy, imgsz, corridor=0.14):
     if len(cand) == 0:
         cand = np.arange(n)
     seed = int(cand[int(np.argmin(np.abs(xn[cand] - cxc)))])
-    keep = {seed}; cur = xn[seed]
-    for i in np.argsort(-yn):                 # bottom -> top
+
+    # local slope seed: the bottom-most boxes whose x is near the seed (same row)
+    near = [seed]
+    for i in np.argsort(-yn):                      # bottom -> top
         i = int(i)
-        if i == seed:
-            continue
-        if abs(xn[i] - cur) <= maxj:
-            keep.add(i); cur = xn[i]
+        if i != seed and abs(xn[i] - xn[seed]) <= maxj:
+            near.append(i)
+        if len(near) >= 4:
+            break
+    a_s, b_s = 0.0, float(xn[seed])
+    if len(near) >= 2:
+        ys_, xs_ = yn[near], xn[near]
+        if ys_.max() - ys_.min() > 1e-6:
+            a_s, b_s = (float(v) for v in np.polyfit(ys_, xs_, 1))
+
+    # keep boxes within the corridor of the predicted central-row line (no drift)
+    pred = a_s * yn + b_s
+    keep = np.where(np.abs(xn - pred) <= maxj)[0]
     m = torch.zeros(n, dtype=torch.bool, device=cx.device)
-    m[list(keep)] = True
+    if keep.size >= 2:
+        m[keep.tolist()] = True
+    else:
+        m[seed] = True
     return m
 
 
@@ -219,22 +242,30 @@ def guidance_line(det, readout, gt_line=None):
     cxs, cys = cx[m], cy[m]
     if cxs.numel() < 2:
         return None
+
+    # predicted per-box centroid sigma for the CENTRAL boxes (aligned with cxs/cys);
+    # used by the 'calm' weight and returned for the calibration gate.
+    _, var_c, _ = dfl_mean_var(det["edge_logits"][m], det["reg_max"])
+    sig_cx2, _ = centroid_cov_from_edges(var_c, det["strides"][m])
+    sig_cx = (sig_cx2 + 1e-6).clamp_min(0).sqrt()
+
     sig_theta = None
-    if readout == "equalLS":
+    if readout == "equalLS":         # arm A: non-robust, equal weights
         a, b = fit_equal_ls(cxs, cys)
-    elif readout == "ransac":
+    elif readout == "ransac":        # strong baseline: robust, equal weights, consensus
         out = fit_ransac(cxs, cys)
         if out is None:
             return None
         a, b = out
-    elif readout == "calm":          # precision-weighted by DFL variance (B0 / B)
-        _, var, _ = dfl_mean_var(det["edge_logits"][m], det["reg_max"])
-        sig_cx2, _ = centroid_cov_from_edges(var, det["strides"][m])
-        at, bt, cov = gls_line_fit(cxs, cys, 1.0 / (sig_cx2 + 1e-6))
+    elif readout == "irls":          # ABLATION: robust (Huber-IRLS) but EQUAL weights
+        at, bt, _ = gls_line_fit(cxs, cys, torch.ones_like(cxs), with_cov=False, irls_iters=5)
+        a, b = float(at), float(bt)
+    elif readout == "calm":          # THE PROPOSAL: tempered precision + Huber-IRLS
+        at, bt, cov = gls_line_fit(cxs, cys, precision_weights(sig_cx2), irls_iters=5)
         a, b = float(at), float(bt)
         _, st = line_heading(at, cov); sig_theta = float(st) if st is not None else None
     elif readout == "qual":          # competing signal: detector confidence^2
-        at, bt, _ = gls_line_fit(cxs, cys, det["scores"][m] ** 2 + 1e-6, with_cov=False)
+        at, bt, _ = gls_line_fit(cxs, cys, det["scores"][m] ** 2 + 1e-6, with_cov=False, irls_iters=5)
         a, b = float(at), float(bt)
     elif readout == "oracle":        # upper bound: weight by TRUE residual to GT
         if gt_line is None:
@@ -245,7 +276,7 @@ def guidance_line(det, readout, gt_line=None):
         a, b = float(at), float(bt)
     else:
         raise ValueError(f"unknown readout {readout}")
-    return {"a": a, "b": b, "sig_theta": sig_theta, "cx": cxs, "cy": cys}
+    return {"a": a, "b": b, "sig_theta": sig_theta, "cx": cxs, "cy": cys, "sig_cx": sig_cx}
 
 
 # --------------------------------------------------------------------------- #
@@ -366,8 +397,10 @@ def main():
                     help="precomputed central-line GT {img:{a,b,...}} in ORIGINAL px "
                          "(prepare_crdld.py / crbd_gt.py); preferred over --mask-dir")
     ap.add_argument("--homography", default=None, help=".npy 3x3 image->ground(cm)")
-    ap.add_argument("--readout", choices=["equalLS", "ransac", "calm", "qual", "oracle"], required=True,
-                    help="line-fit arm: equalLS/ransac (A/A'), calm (B/B0), qual (confidence-weighted), oracle (upper bound)")
+    ap.add_argument("--readout", choices=["equalLS", "ransac", "irls", "calm", "qual", "oracle"], required=True,
+                    help="line-fit arm: equalLS (A, non-robust equal), ransac (robust equal baseline), "
+                         "irls (ABLATION: robust equal -> isolates robustness from weighting), "
+                         "calm (B/B0: precision + Huber-IRLS), qual (confidence-weighted), oracle (upper bound)")
     ap.add_argument("--imgsz", type=int, default=640)
     ap.add_argument("--conf", type=float, default=0.25)
     ap.add_argument("--iou", type=float, default=0.5)
@@ -452,14 +485,16 @@ def main():
             rec["crosstrack_proxy_cm"] = crosstrack_proxy(gl["a"], gl["b"], a_g, b_g, y_look, H)
         rows.append(rec)
 
-        # calibration pairs: predicted sigma_cx vs realised |cx - GT line|
+        # calibration pairs: predicted sigma_cx vs realised |cx - GT line|, ALIGNED to the
+        # SAME central-row boxes used in the fit (gl["sig_cx"] and gl["cx"] share order).
+        # (Previously sigma was computed over ALL boxes but paired by zip() with the
+        #  central-row realised errors -> mismatched boxes -> meaningless calibration.)
         if args.calib_out:
-            _, var, _ = dfl_mean_var(det["edge_logits"], det["reg_max"])
-            sig_cx2, _ = centroid_cov_from_edges(var, det["strides"])
-            cx = gl["cx"].cpu().numpy(); cyn = gl["cy"].cpu().numpy()
-            realised = np.abs(cx - (a_g * cyn + b_g))
-            for s2, e in zip(sig_cx2.cpu().numpy(), realised):
-                calib_pairs.append({"image": ip.name, "sigma_cx": math.sqrt(max(s2, 0)), "realised_err": float(e)})
+            sig = gl["sig_cx"].cpu().numpy()
+            cxn = gl["cx"].cpu().numpy(); cyn = gl["cy"].cpu().numpy()
+            realised = np.abs(cxn - (a_g * cyn + b_g))
+            for s, e in zip(sig, realised):
+                calib_pairs.append({"image": ip.name, "sigma_cx": float(s), "realised_err": float(e)})
 
     # write per-frame CSV
     ok = [r for r in rows if r.get("status") == "ok"]

@@ -348,6 +348,11 @@ class v8DetectionLoss:
         self.calm_line_gain = float(getattr(model, "calm_line_gain", 1.0))
         self.calm_lam_theta = float(getattr(model, "calm_lam_theta", 0.5))
         self.calm_y_far = float(getattr(model, "calm_y_far", 0.0))
+        # Fail-loud: surface whether CALM-Row actually reached the criterion. If you run
+        # train.py --calm_row but see enabled=False here, the attr did not survive the
+        # trainer's model rebuild (see the callback fix in train.py).
+        from ultralytics.utils import LOGGER
+        LOGGER.info(f"[CALM-Row] criterion init: calm_enabled={self.calm_enabled}")
 
     def preprocess(
         self, targets: torch.Tensor, batch_size: int, scale_tensor: torch.Tensor
