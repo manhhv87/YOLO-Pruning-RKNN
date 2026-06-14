@@ -100,7 +100,7 @@ def extract_central_line(mask, max_jump_frac=0.06, min_pts=20):
     return pts, (a, b)
 
 
-def boxes_all_rows(mask, H, W, n_bands=12, base=0.030, grow=0.060):
+def boxes_all_rows(mask, H, W, n_bands=8, base=0.050, grow=0.090):
     """Place a box on EVERY crop row at each of n_bands image rows (single class 0).
     Box size grows with image-row y (perspective). Returns (cls,cx,cy,w,h) normalized.
     Bands start at 0.12H to skip the extreme top where rows merge at the vanishing point."""
@@ -122,7 +122,7 @@ def main():
     ap.add_argument("--splits", nargs="+", default=["train", "validation", "test"])
     ap.add_argument("--out-images", default="datasets/CRDLD_yolo/images")
     ap.add_argument("--out-labels", default="datasets/CRDLD_yolo/labels")
-    ap.add_argument("--n-boxes", type=int, default=12, help="number of y-bands (boxes per row)")
+    ap.add_argument("--n-boxes", type=int, default=8, help="number of y-bands (boxes per row)")
     ap.add_argument("--overlay-dir", default=None, help="optional: write debug overlays")
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
