@@ -28,6 +28,7 @@ CONF="${CONF:-0.25}"    # eval-time conf for the guidance harness. NOTE (verifie
                         # centroids into the central corridor and worsens heading. Keep moderate.
                         # After the full retrain, sweep CONF in {0.15 0.25 0.35} and keep the value
                         # with the lowest median heading-error (not just the highest frames-with-line).
+DEPLOY="${DEPLOY:-irls}"  # deployed guidance readout the conformal trust-gate wraps (robust IRLS)
 RUNDIR="${RUNDIR:-runs/detect}"
 OUT="${OUT:-results}"
 mkdir -p "$OUT"
@@ -62,7 +63,7 @@ python crbd_gt.py --root datasets/CRBD --out datasets/CRDLD_yolo/labels/gtlines_
 GTTEST="$ROOT/datasets/CRDLD_yolo/labels/gtlines_test.json"
 GTCRBD="$ROOT/datasets/CRDLD_yolo/labels/gtlines_crbd.json"
 
-# ---- 2. train + A/B eval per seed ----
+# ---- 2. train base detector + readout eval (E1 floor) + per-frame trust scores, per seed ----
 for S in $SEEDS; do
   echo "================= SEED $S ================="
   # --skip_sanity: the fork's sanity_check is a YOLOv10-E2E probe; on yolov8n it harmlessly
@@ -70,59 +71,51 @@ for S in $SEEDS; do
   # ignored), but skipping it keeps the log clean.
   python train.py --model "$MODEL" --data "$DATA" --epochs "$EPOCHS" --imgsz "$IMGSZ" \
     --device "$DEVICE" --skip_sanity --name "base_v8n_s$S" --seed "$S"
-  python train.py --model "$MODEL" --data "$DATA" --epochs "$EPOCHS" --imgsz "$IMGSZ" \
-    --device "$DEVICE" --skip_sanity --calm_row --calm_calib_gain 0.5 --calm_line_gain 1.0 --name "calm_v8n_s$S" --seed "$S"
-
   BASE="$RUNDIR/base_v8n_s$S/weights/best.pt"
-  CALM="$RUNDIR/calm_v8n_s$S/weights/best.pt"
 
-  # arms share the BASE checkpoint; B uses the CALM checkpoint.
-  #   equalLS = non-robust equal (weak baseline A) | ransac = robust equal (STRONG baseline)
-  #   irls    = robust equal IRLS (ablation: isolates robustness from weighting)
-  #   calm    = precision + Huber-IRLS (the proposal, B0) | qual = conf-weighted | oracle = upper bound
+  # ONE stock detector per seed (calm training is DISCARDED -- it hurt: B>>B0). Every readout
+  # shares this base detector; each per-frame CSV also carries the label-free trust scores
+  # (s_loo, s_resid, ...) that the conformal gate consumes.
+  #   equalLS = non-robust equal | ransac = robust consensus | irls = robust equal IRLS (DEPLOYED)
+  #   calm = tempered-precision IRLS | qual = conf-weighted | oracle = upper bound
   for R in equalLS ransac irls calm qual oracle; do
     python eval_guidance.py --weights "$BASE" --device "$DEVICE" --conf "$CONF" \
       --images datasets/CRDLD_yolo/images/test --gt-json "$GTTEST" \
-      --readout "$R" --out "$OUT/${R}_s$S.csv" --calib-out "$OUT/calib_${R}_s$S.csv"
+      --readout "$R" --out "$OUT/${R}_s$S.csv"
   done
-  python eval_guidance.py --weights "$CALM" --device "$DEVICE" --conf "$CONF" \
-    --images datasets/CRDLD_yolo/images/test --gt-json "$GTTEST" \
-    --readout calm --out "$OUT/B_s$S.csv" --calib-out "$OUT/calib_B_s$S.csv"
 
-  # cross-dataset transfer (CRDLD-trained CALM -> CRBD, no retrain)
+  # cross-dataset transfer (CRDLD-trained base -> CRBD, no retrain), deployed readout
   if [ -f "$GTCRBD" ]; then
-    python eval_guidance.py --weights "$CALM" --device "$DEVICE" --conf "$CONF" \
+    python eval_guidance.py --weights "$BASE" --device "$DEVICE" --conf "$CONF" \
       --images datasets/CRBD/Images --gt-json "$GTCRBD" \
-      --readout calm --out "$OUT/B_crbd_s$S.csv" || echo "[warn] CRBD eval failed (seed $S)"
+      --readout "$DEPLOY" --out "$OUT/${DEPLOY}_crbd_s$S.csv" || echo "[warn] CRBD eval failed (seed $S)"
   fi
 
-  echo "----- stats seed $S (confirmatory family m=4) -----"
-  echo "[H1] calm vs equalLS (proposal vs weak baseline):"
-  python stats_ab.py "$OUT/equalLS_s$S.csv" "$OUT/calm_s$S.csv" --metric heading_err_deg --family-size 4 || true
-  echo "[H2] calm vs RANSAC (proposal vs STRONG baseline -- the decisive test):"
-  python stats_ab.py "$OUT/ransac_s$S.csv"  "$OUT/calm_s$S.csv" --metric heading_err_deg --family-size 4 || true
-  echo "[Ablation] calm vs irls (does PRECISION add beyond robustness?):"
-  python stats_ab.py "$OUT/irls_s$S.csv"    "$OUT/calm_s$S.csv" --metric heading_err_deg --family-size 4 || true
-  echo "[Training] B vs B0 (does calm-training help? must be != 0 now that the no-op is fixed):"
-  python stats_ab.py "$OUT/calm_s$S.csv"    "$OUT/B_s$S.csv"    --metric heading_err_deg --family-size 4 || true
+  echo "----- E1 point-accuracy floor, seed $S (pairwise vs deployed '$DEPLOY') -----"
+  python stats_ab.py "$OUT/equalLS_s$S.csv" "$OUT/${DEPLOY}_s$S.csv" --metric heading_err_deg --family-size 2 || true
+  python stats_ab.py "$OUT/ransac_s$S.csv"  "$OUT/${DEPLOY}_s$S.csv" --metric heading_err_deg --family-size 2 || true
 done
 
-# ---- 2b. calibration gate: is the DFL variance even informative? (decides fix vs pivot) ----
-echo "===== calibration gate (Spearman rho of predicted sigma vs realised error) ====="
-python calib_gate.py "$OUT"/calib_calm_s*.csv || echo "[warn] calib gate failed"
+# ---- 2b. conformal trust-gate experiments (the NEW contribution) ----
+echo "===== E0 go/no-go: is the trust score informative? (Spearman rho) ====="
+python score_gate.py "$OUT/${DEPLOY}_s"*.csv || echo "[warn] score gate failed"
+echo "===== E2/E3/E4: conformal coverage / sharpness / selective-risk ====="
+python eval_conformal.py "$OUT/${DEPLOY}_s"*.csv --alpha 0.1 0.05 || echo "[warn] conformal eval failed"
 
 # ---- 3. paper assets: qualitative overlays + tables + figures + compile ----
 FS=$(set -- $SEEDS; echo "$1")
-CALM0="$RUNDIR/calm_v8n_s$FS/weights/best.pt"
-if [ -f "$CALM0" ]; then
-  echo "[assets] qualitative overlays (first seed)..."
-  python eval_guidance.py --weights "$CALM0" --device "$DEVICE" --conf "$CONF" \
+BASE0="$RUNDIR/base_v8n_s$FS/weights/best.pt"
+if [ -f "$BASE0" ]; then
+  echo "[assets] qualitative overlays (first seed, deployed readout)..."
+  python eval_guidance.py --weights "$BASE0" --device "$DEVICE" --conf "$CONF" \
     --images datasets/CRDLD_yolo/images/test --gt-json "$GTTEST" \
-    --readout calm --out "$OUT/_overlay_tmp.csv" \
+    --readout "$DEPLOY" --out "$OUT/_overlay_tmp.csv" \
     --overlay-dir paper/figures/qualitative --overlay-n 6 --limit 60 || echo "[warn] overlay step failed"
 fi
 echo "[assets] aggregating -> paper/tables + paper/figures ..."
-python make_paper_assets.py --results "$OUT" --paper paper || echo "[warn] asset generation failed"
+# NOTE: make_paper_assets.py still emits the OLD A/B tables; it needs updating to consume the
+# conformal E2/E3/E4 outputs (next task). It may warn on the new CSV layout -- that is expected.
+python make_paper_assets.py --results "$OUT" --paper paper || echo "[warn] asset generation failed (expected until make_paper_assets is updated for conformal)"
 if command -v latexmk >/dev/null 2>&1; then
   echo "[assets] compiling paper/main.pdf ..."
   ( cd paper && latexmk -pdf -interaction=nonstopmode -f main.tex >/tmp/calmrow_latex.log 2>&1 ) \
