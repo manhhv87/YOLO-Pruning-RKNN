@@ -65,10 +65,13 @@ GTCRBD="$ROOT/datasets/CRDLD_yolo/labels/gtlines_crbd.json"
 # ---- 2. train + A/B eval per seed ----
 for S in $SEEDS; do
   echo "================= SEED $S ================="
+  # --skip_sanity: the fork's sanity_check is a YOLOv10-E2E probe; on yolov8n it harmlessly
+  # prints "CHECK FAILED" ('C2f' has no .cv0). It never blocks training (return value is
+  # ignored), but skipping it keeps the log clean.
   python train.py --model "$MODEL" --data "$DATA" --epochs "$EPOCHS" --imgsz "$IMGSZ" \
-    --device "$DEVICE" --name "base_v8n_s$S" --seed "$S"
+    --device "$DEVICE" --skip_sanity --name "base_v8n_s$S" --seed "$S"
   python train.py --model "$MODEL" --data "$DATA" --epochs "$EPOCHS" --imgsz "$IMGSZ" \
-    --device "$DEVICE" --calm_row --calm_calib_gain 0.5 --calm_line_gain 1.0 --name "calm_v8n_s$S" --seed "$S"
+    --device "$DEVICE" --skip_sanity --calm_row --calm_calib_gain 0.5 --calm_line_gain 1.0 --name "calm_v8n_s$S" --seed "$S"
 
   BASE="$RUNDIR/base_v8n_s$S/weights/best.pt"
   CALM="$RUNDIR/calm_v8n_s$S/weights/best.pt"
