@@ -1,151 +1,222 @@
 %!TEX root = ../main.tex
 % =====================================================================
-% Related work, re-centred on CALM-Row.
-% Story: (1) crop-row / vision-navigation paradigms all fit guidance lines
-% with equal/heuristic weights and report ad-hoc or detection metrics;
-% (2) detection-uncertainty work models box spread but never reads the
-% DFL distribution out as a calibrated covariance for a geometric estimator;
-% (3) multi-scale necks are orthogonal -- explicitly NOT our contribution.
-% The whitespace CALM-Row fills is made explicit at the end of each block.
+% Related work for "Know-When-to-Trust Crop-Row Guidance".
+% Honest framing: the contribution is a TRUST LAYER (conformal heading
+% intervals + risk-controlled steering policy) on a STOCK detector with a
+% robust Huber-IRLS line fit. We organise prior art into five threads and
+% end each with the explicit gap this paper fills:
+%   (a) vision crop-row guidance (detect-then-fit, equal/heuristic weights);
+%   (b) lane / row-anchor detection (the row-line paradigm we borrow);
+%   (c) conformal + selective prediction, INCLUDING conformal-on-detector
+%       prior art we CONTRAST so we never claim "first conformal";
+%   (d) detection box-uncertainty (DFL/GFL) -- the NEGATIVE control here;
+%   (e) edge / INT8 deployment.
+% No "first/novel" hype. The DFL-variance precision-weighting thesis is the
+% dead negative control, never a contribution.
 % =====================================================================
 
 \section{Related work}
+\label{sec:related}
 
-\noindent We organise prior art around the three threads that bound our
-contribution: vision-based crop-row navigation (the application and its
-evaluation conventions), uncertainty modelling in object detection (the signal
-we exploit), and multi-scale feature fusion (an architectural axis we treat as
-orthogonal). After each thread we state explicitly what it leaves unaddressed,
-so that the gap CALM-Row fills is unambiguous.
+\noindent We organise prior art around five threads that bound our
+contribution. The first two cover the application and the line-detection
+paradigm we reuse: vision-based crop-row guidance and the lane/row-anchor
+formulation it descends from. The third is the statistical machinery our
+trust layer instantiates---conformal and selective prediction---including the
+recent conformal-on-detector work we explicitly contrast against, so that we
+make no claim of being first to apply conformal prediction to a detector. The
+fourth is detection box-uncertainty (DFL/GFL), which we examine and report as a
+\emph{non-informative} signal for heading error here. The fifth is edge and
+integer-quantised deployment, the setting in which the guidance must run. After
+each thread we state explicitly what it leaves open, so that the gap this paper
+fills is unambiguous.
 
-\subsection{Vision-based navigation in row-crop agriculture}
+\subsection{Vision-based crop-row guidance}
 \label{subsec:rw_nav}
-\noindent Crop-row guidance from a forward-facing camera has converged on a
-small number of output paradigms, which we group by how the guidance line is
-produced.
+\noindent Guiding a robot or tractor down a crop row from a forward-facing
+camera is a long-standing task; early vision-guided tractor systems date back
+decades~\cite{cth6}, and classical pipelines recover row geometry without
+learned segmentation, e.g.\ intensity-based crop-row determination by image
+analysis~\cite{sogaard} and global energy minimisation over candidate row
+models~\cite{crbd}. Modern systems converge on a small number of output
+paradigms grouped by how the guidance line is produced.
 
-\paragraph{Detection plus centroid plus line fit.}
+\paragraph{Detect-then-fit.}
 The de-facto recipe localises row segments or plant clusters with an object
-detector and fits a single guidance (centre) line through the box centroids.
-Representative is the YOLOX-based maize-row system of Diao et
-al.~\cite{diao_yolox}, which detects row patches, takes their centroids, and
-fits a centreline by least squares, reporting angular error. This is the family
-our stock YOLOv8n/YOLOv10n detector belongs to. Earlier and adjacent crop-row
-pipelines similarly localise vegetation and then fit a line or band through
-extracted points~\cite{cth1}. The defining limitation for our purposes is that
-the line fit treats every centroid as equally trustworthy: each point
-contributes with unit (or hand-tuned heuristic) weight, even though the
-far-field boxes that dominate the look-ahead heading are precisely the smallest
-and least reliable detections.
+detector and fits a single guidance line through the box centroids. The
+YOLOX-based maize-row system of Gong et al.~\cite{diao_yolox} is
+representative: it detects row patches, takes their centroids, and fits a
+centreline by least squares, reporting angular error. This detect-then-fit
+recipe with equal or heuristic point weights is the lineage of our equal-weight
+least-squares baseline (E1), and it is the family our stock detector belongs
+to. Real-time computer-vision crop-row detection on robots follows the same
+template~\cite{cth3}.
 
 \paragraph{Segmentation plus geometric scan.}
 A second paradigm segments the crop/soil mask and recovers the row geometry by a
-triangle or scan-line search over the mask. The de Silva et al.\ line of
-work~\cite{cth1,cth2} validates this approach across many field conditions and,
-importantly for this paper, reports results in navigation units (cross-track and
-heading error) on the CRDLD benchmark~\cite{cth1}; we adopt its
-mask-derived centreline as our detector-independent ground-truth line. We stress
-that this evaluation line is computed from masks, not from detections, precisely
-to avoid circularity in the weighted-versus-unweighted comparison. The geometric
-scan itself is a hard, non-differentiable search and carries no per-point
-reliability estimate.
+scan-line or triangle search over the mask. The de Silva et al.\ line of
+work~\cite{cth1,cth2} validates this across many field conditions and,
+importantly, reports results in navigation units (cross-track and heading
+error) on the CRDLD benchmark~\cite{cth1}; we adopt its mask-derived centreline
+as the detector-independent ground-truth line for in-domain evaluation. The
+geometric scan itself is a hard, non-differentiable search and carries no
+per-frame reliability estimate.
 
-\paragraph{Row-anchor and lane-style regression.}
-A third paradigm ports the row-anchor formulation from lane
-detection---UFLD~\cite{ufld} and LaneATT~\cite{laneatt}---to agricultural rows,
-as in ALNet~\cite{alnet} and row--column attention~\cite{rowcolattn}. These
-methods classify or regress a horizontal position per image row and connect the
-selected anchors into a curve. They are accurate but architecture-specific, and
-the per-anchor confidence (when present) is a classification score, not a
-calibrated geometric covariance on the recovered line.
-
-\paragraph{Polynomial / curve regression.}
-A fourth paradigm regresses the row directly as a parametric curve; RowDetr's
-per-row polynomial regression with INT8 edge deployment is
-representative~\cite{rowdetr}. The curve parameters are produced end-to-end, but
-again with no per-segment uncertainty propagated into the curve estimate.
+\paragraph{End-to-end row regression.}
+A third paradigm regresses the row directly. CCRDNet extracts the central crop
+row for universal in-row navigation~\cite{cth11}; E2CropDet offers an efficient
+end-to-end solution~\cite{cth12}; RowDetr regresses the row as a per-row
+polynomial with INT8 edge deployment~\cite{rowdetr}; and row--column attention
+recasts the pipeline as an end-to-end attention model~\cite{rowcolattn}. These
+methods produce the curve parameters directly, but with no per-frame uncertainty
+on the recovered line.
 
 \paragraph{What this thread leaves open.}
-Two observations recur across all four paradigms and motivate our work. First,
-the literature evaluates in \emph{navigation units}---cross-track error (cm),
-heading error (deg), and intervention rate---rather than detection mAP, because
-a detector that scores well on mAP can still yield a poor guidance line, and
-vice versa. A method that aims to improve navigation must therefore be measured
-there. Second, and more specific to our contribution: \emph{regardless of
-paradigm, the guidance line is fit from points or curves with equal or heuristic
-weights} --- intensity-weighted crop-row regression is itself two decades
-old~\cite{sogaard}, but those weights are a pixel-intensity heuristic. None of
-these systems carry a per-detection, calibrated reliability
-estimate into the geometric line estimator, even though far-field predictions
-are systematically the least reliable. This is the gap CALM-Row addresses.
+Two observations recur and motivate our work. First, the literature increasingly
+evaluates in \emph{navigation units}---heading error in degrees and cross-track
+error---rather than detection mAP, because a detector that scores well on mAP
+can still yield a poor guidance line~\cite{cth1,cth2,diao_yolox}; a method that
+aims to improve navigation must be measured there. Second, and central to us:
+across all paradigms the guidance line is emitted as a \emph{point} estimate.
+The line is fit with equal or heuristic weights, and the system reports a single
+heading---at best gated by a hand-tuned detection-confidence threshold---with no
+\emph{coverage guarantee} and no principled signal for \emph{when not to trust
+it}. Vision-only field navigation without RTK-GPS needs exactly that: a guidance
+line \emph{and} a calibrated decision of when to abstain. This is the gap our
+trust layer (C2) fills, on top of a robust point readout (C1) that uses Huber-IRLS rather than equal-weight least squares.
 
-\subsection{Uncertainty in object detection}
+\subsection{Lane and row-anchor detection}
+\label{subsec:rw_lane}
+\noindent The row-line formulation used in agriculture descends from lane
+detection. Ultra-Fast structure-aware lane detection casts the problem as
+row-anchor classification---selecting a horizontal location per image
+row~\cite{ufld}---and LaneATT performs anchor-based real-time lane
+detection~\cite{laneatt}. These ideas have been ported to agricultural rows,
+e.g.\ the anchor-line network ALNet~\cite{alnet} and row--column
+attention~\cite{rowcolattn}. Closest to our point-readout stage, Van Gansbeke et
+al.\ fit a lane as a differentiable least-squares line over points emitted by a
+detector~\cite{vangansbeke}---the detect-then-fit-a-line precedent we build on.
+
+\paragraph{What this thread leaves open.}
+These methods are accurate but the per-anchor or per-point confidence, where
+present, is a classification score, not a calibrated statement about the error
+of the recovered line. The differentiable least-squares fit of~\cite{vangansbeke}
+weights points but provides no finite-sample interval on the resulting heading.
+None of these methods emit a heading prediction \emph{interval} with a target
+coverage, nor a reject option tied to that interval---which is what downstream
+steering on low-cost hardware requires.
+
+\subsection{Conformal prediction, selective prediction, and conformal on detectors}
+\label{subsec:rw_conformal}
+\noindent Our trust layer is an instantiation of conformal prediction. Conformal
+methods produce prediction sets with finite-sample, distribution-free coverage
+under exchangeability~\cite{vovk2005}; split (inductive) conformal prediction
+makes this practical for regression by calibrating a nonconformity score on a
+held-out set and reading off a quantile to form intervals~\cite{lei2018}, as
+summarised in recent tutorials~\cite{angelopoulos2023}. Conformalized quantile
+regression yields \emph{locally adaptive} interval widths by scaling the
+conformal quantile with a per-input scale~\cite{romano2019cqr}; our score-scaled
+half-width $h=\hat{q}\,s$ (Section~\ref{sec:related} notation; the
+nonconformity score $s$ is a leave-one-out heading dispersion) is in this
+locally adaptive family. The accompanying abstain/slow/proceed policy is a
+selective-prediction mechanism: prediction with a reject
+option~\cite{geifman2017selective}, made distribution-free by conformal risk
+control~\cite{angelopoulos2022rcps}, which is the formal basis of our
+risk-controlled gate (E4, E6).
+
+\paragraph{Conformal applied to object detectors (prior art we contrast).}
+Conformal prediction has recently been applied directly to object-detection
+outputs, producing coverage-controlled boxes or detection
+uncertainty~\cite{confdet1,confdet2}. We therefore do \emph{not} claim primacy
+in pairing conformal prediction with a detector. The distinction we draw is in
+\emph{what} is made conformal and \emph{for what task}: prior
+conformal-on-detector work calibrates the detector's own outputs (e.g.\
+box coordinates or class/objectness) for the detection task, whereas we calibrate
+a \emph{navigation-native, geometric} quantity---the heading of a robustly fit
+guidance line---using a label-free, failure-mode-matched score (leave-one-out
+heading dispersion) that targets wrong-row contamination, the dominant guidance
+failure. We position our method as a \emph{domain instantiation} of these ideas
+for crop-row steering, not as a new conformal method.
+
+\paragraph{What this thread leaves open.}
+The coverage guarantee of split conformal is finite-sample-valid only under
+exchangeability \emph{within one distribution}~\cite{vovk2005,lei2018}. Crop-row
+guidance must run across fields, crops, and acquisition conditions, where
+exchangeability is violated; we therefore treat cross-dataset (CRDLD$\leftrightarrow$CRBD)
+and field-video transfer as a coverage-\emph{degradation} study (E2), not as a
+guarantee. Bringing a label-free conformal heading interval and a
+risk-controlled steering policy to a stock edge detector---and quantifying how
+its coverage degrades off-distribution and after integer quantisation---is the
+contribution this thread sets up.
+
+\subsection{Box-distribution uncertainty in detectors (the negative control)}
 \label{subsec:rw_unc}
-\noindent A parallel line of work models the uncertainty of bounding-box
-regression. KL-Loss~\cite{klloss} predicts a per-coordinate variance under a
-Gaussian assumption and uses it to weight box coordinates during
-variance-voting NMS. Gaussian-YOLO~\cite{gaussianyolo} attaches a predicted
-localisation uncertainty to each YOLO box and uses it to down-weight uncertain
-detections at inference. Most relevant to us, Generalized Focal Loss and its
-Distribution Focal Loss (DFL) head~\cite{gfl} replace the single-value box
-regression with a learned discrete distribution over a set of bins for each box
-edge; this is the regression head used by modern stock YOLO
-detectors~\cite{ct4,ct5,yolov10}, including the YOLOv8n/YOLOv10n we build on. For
-each anchor and edge $e\in\{l,t,r,b\}$ this head produces a softmax distribution
-$p_e(k)$ over bins $k=0,\dots,R-1$, whose mean $\mu_e=\sum_k k\,p_e(k)$ is the
-predicted edge offset and whose variance
-$\sigma_e^2=\sum_k (k-\mu_e)^2 p_e(k)$ already encodes the network's spread
-(sharp distributions for confident edges, flat distributions for ambiguous ones).
+\noindent Modern stock YOLO detectors~\cite{ct4,yolov10} regress each box edge
+with a Distribution Focal Loss (DFL) head from Generalized Focal
+Loss~\cite{gfl}: instead of a single value, each edge $e$ predicts a softmax
+distribution $p_e(k)$ over bins, whose mean is the edge offset and whose
+variance $\sigma^2_{\mathrm{DFL}}=\sum_k (k-\mu_e)^2\,p_e(k)$ encodes the
+network's spread. GFLv2 reads the \emph{shape} of this distribution into a
+scalar localisation-quality score used \emph{inside} the detector for ranking
+and NMS~\cite{gflv2}. A parallel line attaches explicit localisation
+uncertainty: KL-Loss predicts per-coordinate variance for variance-voting
+NMS~\cite{klloss}, Gaussian-YOLOv3 attaches a localisation-uncertainty output to
+each box~\cite{gaussianyolo}, and Bayesian deep learning separates aleatoric and
+epistemic uncertainty more generally~\cite{kendallgal}.
+
+\paragraph{What this thread leaves open---and why it fails here.}
+It is tempting to read $\sigma^2_{\mathrm{DFL}}$, already produced for free by
+the stock head, as a per-detection reliability and to precision-weight the line
+fit by its inverse. We tested exactly this hypothesis and report it as a
+negative control (E0): the DFL box-distribution variance is \emph{not}
+informative of realised heading error in our setting (Spearman
+$\rho=-0.13$). The dominant guidance failure is not a slightly blurry box but a
+detection on the \emph{wrong} row, which the per-box DFL spread does not flag.
+Consequently we do \emph{not} use $\sigma^2_{\mathrm{DFL}}$ (nor a KL-Loss or
+Gaussian-YOLO branch~\cite{klloss,gaussianyolo}) as the weight or the trust
+signal. Robustness, not variance weighting, is what works for the point fit
+(Huber-IRLS; C1, E1), and a failure-mode-matched leave-one-out dispersion, not
+$\sigma^2_{\mathrm{DFL}}$, is what carries the trust signal (C2, E0/E3). This
+negative result is what motivates the rest of the paper.
+
+\subsection{Edge and integer-quantised deployment}
+\label{subsec:rw_edge}
+\noindent Vision-only guidance for low-cost robots must run on embedded
+accelerators. The efficiency lineage includes compact backbones
+(MobileNet/MobileNetV2~\cite{ct16,ct19}, EfficientNet~\cite{ct20}), knowledge
+distillation~\cite{ct18}, and structural pruning (pruning filters for efficient
+convnets~\cite{ct17}, DepGraph~\cite{cth14}). Deployment on the target hardware
+relies on integer-arithmetic inference: post-training INT8 quantisation in the
+sense of Jacob et al.~\cite{jacob2018int8}, NVIDIA TensorRT for Jetson-class
+FP16/INT8 inference~\cite{tensorrt}, and the Rockchip RKNN toolkit for INT8 NPU
+deployment~\cite{rknntoolkit}.
 
 \paragraph{What this thread leaves open.}
-In every case above the predicted spread is consumed \emph{within the detector}:
-KL-Loss and Gaussian-YOLO use variance to reweight or suppress boxes for better
-detection metrics. Closest to us, Generalized Focal Loss~V2~\cite{gflv2} explicitly
-reads the \emph{shape} of the DFL distribution (its top-$k$ values and mean), but
-maps it to a scalar localisation-\emph{quality} score used \emph{inside} the detector
-for classification/NMS ranking; the distribution is otherwise collapsed to its
-expectation $\mu_e$ to produce the box coordinate. What remains open is to read the
-distribution's \emph{second moment} as a \emph{metric} per-detection covariance (in
-pixels), calibrate it against realised error, and propagate it as the precision
-matrix of a \emph{downstream differentiable geometric estimator outside the
-detector} --- a role a unitless ranking score cannot serve. CALM-Row does exactly this: it converts the
-existing per-edge DFL variance into a per-box centroid covariance by linear
-error propagation, calibrates it against realised localisation error, and uses
-its inverse as the precision weight in a differentiable generalized-least-squares
-guidance-line fit. Because the signal is already produced by the stock head, no
-new operator runs on the feature maps or the NPU---in contrast to
-KL-Loss/Gaussian-YOLO, which add a dedicated uncertainty branch. Where such a
-dedicated head is runnable, we report it as an exploratory comparison. Our
-differentiable weighted fit is structurally related to end-to-end differentiable
-least-squares lane fitting~\cite{vangansbeke}; the difference is the \emph{source}
-of the weights --- a learned, uncalibrated attention map from an extra head there,
-versus a calibrated metric covariance read for free from the existing DFL head here.
+This literature optimises detector latency, footprint, and detection accuracy
+under quantisation, but does not ask what happens to a \emph{statistical coverage
+guarantee} when the detector is quantised to INT8. Because our trust layer is
+CPU-side and post-NMS, it adds no operator to the feature maps or NPU---we state
+this plainly, not as a selling point: the heading readout and conformal interval
+run after detection on the CPU. The open question we answer (E5) is empirical:
+does the realised coverage of the heading interval survive INT8 quantisation on
+Jetson Nano (TensorRT) and on an RKNN NPU, and at what latency and throughput?
 
-\subsection{Multi-scale feature fusion (orthogonal)}
-\label{subsec:rw_neck}
-\noindent For completeness we note the large body of work on the detector neck. We treat the detector neck as orthogonal to our contribution and make this explicit.
-Feature Pyramid Networks~\cite{ct1} and the bottom-up PANet
-extension~\cite{ct2} established top-down/bottom-up multi-scale fusion;
-EfficientDet's BiFPN~\cite{ct10} learns scalar per-edge importance weights; and
-\emph{Adaptively Spatial Feature Fusion} (ASFF)~\cite{asff} learns
-spatially-varying per-pixel weights over pyramid levels. These methods improve
-the \emph{features} a detector computes. CALM-Row, by contrast, is a post-head,
-CPU-side module over post-NMS boxes and does not modify the neck, the backbone,
-or the exported graph. It is therefore compatible with any of these necks, and
-we verify in our experiments that its benefit is not neck-specific by repeating
-the controlled comparison on a stock PAN neck~\cite{ct2} and on an ASFF
-neck~\cite{asff}. The choice of neck is consequently \emph{not} a claim of this
-paper.
-
-\subsection{Positioning of CALM-Row}
+\subsection{Positioning}
 \label{subsec:rw_position}
-\noindent In summary, CALM-Row sits at the intersection of the three threads
-above and is defined by what it does \emph{not} do: it adds no neck or
-architectural component (Section~\ref{subsec:rw_neck}), it adds no new detector
-branch or NPU operator (Section~\ref{subsec:rw_unc}), and it does not introduce
-a new line-detection architecture (Section~\ref{subsec:rw_nav}). Its single
-contribution is to close the loop between the uncertainty the DFL
-head~\cite{gfl} already produces and the equal-weight line fit that crop-row
-navigation systems~\cite{diao_yolox,cth1,rowdetr,alnet} currently use: a
-calibrated, uncertainty-weighted, navigation-native guidance-line estimator
-trained and evaluated on the navigation task itself.
+\noindent In summary, this paper is an \emph{applied} contribution, not a methods
+breakthrough and not a new detector. On top of a stock detector~\cite{ct4} with a
+robust Huber-IRLS line fit (C1)---which in our experiments matches a RANSAC baseline and improves on
+equal-weight least squares, and on which the native DFL
+variance~\cite{gfl} is shown to be non-informative (E0)---we add a label-free,
+failure-mode-matched conformal heading interval and a risk-controlled steering
+policy (C2), positioned as a domain instantiation of conformal and selective
+prediction~\cite{vovk2005,lei2018,romano2019cqr,geifman2017selective,angelopoulos2022rcps}
+and contrasted against, rather than claiming primacy over, prior
+conformal-on-detector work~\cite{confdet1,confdet2}. We evaluate it in navigation
+units, across datasets (CRDLD$\leftrightarrow$CRBD~\cite{cth1,crbd}) and on real
+maize field video, and on edge hardware with INT8
+quantisation~\cite{tensorrt,rknntoolkit,jacob2018int8} (C3). Coverage claims are
+finite-sample-valid only under exchangeability within one distribution; off-distribution
+behaviour is reported as a degradation study, and the policy replay (E6) is
+open-loop over a kinematic bicycle model~\cite{rajamani2012}, not a closed-loop
+field run.

@@ -3,154 +3,173 @@
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{Why calibrated far-field uncertainty should reduce heading error}
-\noindent The guidance line in a detect-then-fit pipeline is anchored by the same
-detections that are least reliable. Under a forward-facing field camera, rows near the
-top of the image span few pixels, are partially occluded by foreground canopy, and project
-many ground metres into a single image row; the detector's box edges there are
-correspondingly diffuse. In our parameterisation $x = a\,y + b$, the heading
-$\theta = \operatorname{atan}(a)$ is the controller-relevant readout, and the slope $a$ is
-governed disproportionately by the spread of the centroids in $y$. A handful of far-field
-centroids that are displaced by tens of pixels can therefore swing $\theta$ by several
-degrees even when every near-field box is perfectly placed --- which is precisely the regime
-an equal-weight least-squares fit cannot defend against, because it treats a noisy far box
-and a sharp near box as equally informative.
+\noindent We organise the discussion around the three contributions, then state the
+boundaries of the evidence explicitly. The throughline is a deliberately narrow claim: on a
+\emph{stock} edge detector, the right thing to add for vision-only crop-row navigation is not a
+new architecture but a trust layer --- a robust guidance readout, a calibrated heading
+interval, and a steering policy that knows when not to act on the line.
 
-CALM-Row addresses this at the only point where the information is still available: the
-distributional DFL head~\cite{gfl} already emits, per box edge $e\in\{l,t,r,b\}$, a
-softmax distribution $p_e(k)$ over $R=\mathit{reg\_max}$ bins, whose variance
-$\sigma_e^2 = \sum_k (k-\mu_e)^2\,p_e(k)$ widens exactly when the edge is uncertain. By
-linear error propagation through the centroid, the per-box horizontal variance is
-$\sigma_{c_x}^2 = (s^2/4)(\sigma_l^2+\sigma_r^2)$, and the precision weight
-$w_i = 1/\sigma_{c_x,i}^2$ down-weights diffuse far boxes inside the GLS normal equations.
-Because the weighting acts multiplicatively on each residual, its leverage is largest
-exactly where $\sigma_{c_x}^2$ is largest --- the far field --- and negligible where the
-detector is confident. This is the mechanistic reason we expect the largest A/B gap to
-appear on the held-out far rows rather than on the full-frame average, and it is why the
-pre-registered far-field analysis (Section~\ref{sec:results}) is the discriminating test
-rather than the headline mean. An illustrative synthetic check (Section~\ref{sec:res-synth}) only confirms that the mechanism behaves as derived; the empirical claim rests entirely on the real, un-manipulated far-field test.
+\subsection{What the trust gate buys for navigation safety}
+\label{sec:disc-trust}
+\noindent A point heading, however accurate on average, is the wrong interface to a steering
+controller in a safety-critical setting: it cannot distinguish a frame in which the rows are
+clearly resolved from one in which the detector has latched onto the wrong row, a headland, or
+a gap, and the controller integrates whichever heading it is handed. The contribution of the
+trust layer (C2) is to make that distinction \emph{operational}. The leave-one-out heading
+dispersion $s$ is constructed to fire on exactly the failure that hurts navigation --- a single
+contaminating centroid (a wrong-row or spurious detection) that swings the slope $a$ and hence
+$\theta=\arctan(a)$ --- because removing that centroid and refitting moves the heading far more
+than removing any in-row centroid does. Passing $s$ through a split-conformal layer turns this
+raw, label-free signal into a heading interval $[\theta-h,\theta+h]$ with
+$h=\hat{q}\,s$, whose width is locally adaptive: it is narrow when the refits agree and wide when
+they do not, and the multiplier $\hat{q}$ is fixed once on a calibration set so the nominal
+miscoverage $\alpha$ has a finite-sample meaning rather than being a hand-tuned knob
+\cite{vovk2005,lei2018,angelopoulos2023,romano2019cqr}.
 
-Crucially, the weights are not free parameters to be tuned but a \emph{calibrated}
-quantity. The distance-aware calibration loss (DDC) is a Gaussian negative-log-likelihood
-that ties $\sigma_{c_x}^2$ to the realised squared centroid error on matched anchors, so a
-predicted variance of a given magnitude must, on validation data, correspond to localisation
-errors of the matching magnitude. This is what lets us report reliability (ECE, coverage of
-realised heading error at $68/95\%$) rather than assert that the network has learned
-``depth''; the uncertainty is a measured, checkable property (reported as ECE and coverage).
+The downstream payoff is the risk-controlled \emph{proceed / slow / abstain} policy
+(E4, Section~\ref{sec:res-e4-selrisk}; E6, Section~\ref{sec:res-e6-replay}). Thresholding the
+interval half-width $h$ against $\tau_p$ and $\tau_s$ converts a coverage guarantee into a
+control decision: keep steering when the heading is sharply bracketed, reduce speed when it is
+uncertain, and stop rather than commit to a line the system itself flags as untrustworthy.
+The relevant safety quantity is not mean heading error but the rate of \emph{large-error
+accepted} frames --- the cases where the robot acts confidently on a wrong heading --- and the
+selective-risk curves (E4) are designed to show that, at a matched abort rate, a width gate
+suppresses these large-error accepted frames more than a fixed-confidence gate does. This is the practical sense in
+which "knowing when not to trust" is worth more for navigation than a marginal reduction in
+average heading error: the residual large errors, not the typical ones, are what cause crop
+damage and interventions, and they are precisely what the abstain branch removes. We frame
+this as a domain instantiation of selective and risk-controlled prediction
+\cite{geifman2017selective,angelopoulos2022rcps}, and of conformal prediction on a detector
+\cite{confdet1,confdet2}, rather than as a new method.
 
-\subsection{Decomposing the gain: weighting alone (B0) versus training (B)}
-\noindent A reviewer's natural question is whether any improvement comes from the
-\emph{idea} of uncertainty weighting or from the \emph{extra training}. Our design answers
-this by construction. Arm~B0 reads out a precision-weighted GLS line from the raw DFL
-variance of a \emph{stock} detector trained with standard losses --- it shares one
-checkpoint with the equal-weight baseline~A and the RANSAC baseline~A$'$, so the three are
-compared paired per frame with zero training-induced variance between them. Arm~B is a
-separate checkpoint trained with the DDC and LSL auxiliary losses. The contrast
-B0 versus A isolates the value of the \emph{free} variance the head already produces; the
-contrast B versus B0 isolates what the calibration-and-line-aware training \emph{adds} on
-top. We report both regardless of which dominates: if B0 already beats A, the result is a
-near-zero-cost readout change requiring no retraining; if the gain only materialises in B,
-the training is doing the work and we say so plainly. Either outcome is an honest, useful
-finding, and the decomposition forecloses the ``the gain is just more compute'' critique.
+\subsection{The negative DFL-variance finding, and why robustness plus conformal is the right call}
+\label{sec:disc-negative}
+\noindent A natural and tempting design --- the one an earlier version of this work pursued ---
+is to weight the line fit by the detector's own localisation uncertainty. Modern YOLO heads
+regress each box edge as a Distribution Focal Loss (DFL) distribution \cite{gfl}, and the
+variance of that distribution, $\sigma^2_{\mathrm{DFL}}$, is a free per-edge sharpness signal
+that GFLv2 already repurposes as a quality score \cite{gflv2}. It is reasonable to expect that
+down-weighting high-variance far boxes inside a generalised-least-squares fit would reduce
+heading error, since the far field is where the rows blur and where heading is most sensitive.
 
-The expected qualitative pattern follows from the two losses. Raw DFL variance is correlated
-with localisation error but is not guaranteed to be \emph{calibrated} in magnitude, so B0
-should capture the gross near/far ordering but may mis-scale the weights; DDC re-scales the
-variance to match realised error, and LSL --- whose gradients flow through $w_i$ into the
-DFL logits, with the far look-ahead row explicitly included in its RMSE term --- additionally
-teaches the network to be \emph{decisive about which far boxes to distrust}, pushing
-unreliable far edges toward flatter distributions. We therefore expect
-B0 $\le$ B on the far-field heading metric, but we treat the size of the
-B$-$B0 increment as an empirical question to be filled from the results
-(Section~\ref{sec:results}) rather than asserted.
+Our trust-informativeness experiment (E0, Section~\ref{sec:res-e0-trustinfo}) reports that this
+expectation does not hold here: the rank correlation between $\sigma^2_{\mathrm{DFL}}$ and the
+realised heading error is slightly negative (Spearman $\rho=-0.13$), i.e.\ the DFL box-edge
+variance is non-informative for the navigation-level quantity we care about. We therefore
+report it only as a negative control, never as a component of the deployed system. The most
+plausible reason is a mismatch of failure modes: $\sigma^2_{\mathrm{DFL}}$ measures the
+sharpness of an \emph{individual, correctly matched} box edge, whereas heading error in this
+pipeline is dominated by \emph{which rows are detected at all} --- a single confidently
+localised box on the wrong row (small $\sigma^2_{\mathrm{DFL}}$, large heading impact) is the
+opposite of what edge-sharpness would flag. The same logic explains the two design choices we
+do deploy. First, the line is fit with robust Huber-IRLS rather than variance-weighted GLS:
+the contamination that drives heading error is an outlier-rejection problem, not a
+heteroscedastic-weighting problem, which is why Huber-IRLS matches a RANSAC baseline and far
+exceeds equal-weight least squares while variance weighting does not help
+(E1, Section~\ref{sec:res-e1-accuracy}). Second, the trust score is the LOO heading
+dispersion $s$, not $\sigma^2_{\mathrm{DFL}}$: $s$ is computed at the level of the heading and
+is sensitive to exactly the wrong-row contamination that the per-edge variance misses. The
+score ablation (E3, Section~\ref{sec:res-e3-sharpness}) makes this concrete by comparing
+interval width at matched coverage across candidate scores --- residual magnitude, squared
+confidence, $\sigma^2_{\mathrm{DFL}}$, and RANSAC consensus --- with $s$ expected to give the
+tightest intervals because it is the score whose failure mode matches the task. The honest
+reading is that the elegant uncertainty signal the detector hands us for free is the wrong
+signal for this problem, and that robustness in the fit plus a failure-mode-matched conformal
+score is what works.
 
-\subsection{What CALM-Row is, and is not}
-\noindent We are deliberate about the scope of the contribution. CALM-Row is \emph{not} an
-architectural novelty: it introduces no new neck, no new backbone block, and --- in its
-training losses --- no new learnable parameters, since those losses are computed entirely
-from the variance the DFL head~\cite{gfl} already produces. The detector is a stock
-YOLOv8n / YOLOv10n, and the exported INT8/RKNN or TensorRT graph is a vanilla YOLO; CALM-Row
-runs as post-NMS CPU arithmetic and adds zero NPU operators. This is a feature, not a
-hedge: it means any improvement is attributable to the estimator and the navigation-task
-training, not to an unaccounted increase in capacity, and it cleanly separates our claim
-from feature-fusion necks such as ASFF~\cite{asff}, which improve the features a detector computes rather than the line fit.
+\subsection{Deployment implications}
+\label{sec:disc-deploy}
+\noindent The trust layer is designed to cost nothing on the accelerator. The detector runs
+unmodified and the entire readout --- the Huber-IRLS fit, the LOO refits that produce $s$, and
+the conformal interval $h=\hat{q}\,s$ --- is post-NMS CPU arithmetic over the handful of
+detected centroids. There are no added NPU operators because the readout is CPU post-NMS; the
+exported INT8 graph, whether targeting a Rockchip NPU via RKNN \cite{rknntoolkit} or a Jetson
+Nano via TensorRT \cite{tensorrt}, is a vanilla YOLO. This is stated as a plain property, not a
+selling point: it means the latency and throughput reported in E5
+(Section~\ref{sec:res-e5-deploy}) are essentially those of the stock detector, and that the
+trust layer can be retrofitted onto any deployed detect-then-fit stack without re-export.
 
-Positioned honestly, CALM-Row is a \emph{navigation-native, calibrated-uncertainty
-estimator} that sits between a detector and a controller. Detection-uncertainty methods such
-as KL-Loss~\cite{klloss} and Gaussian-YOLO~\cite{gaussianyolo} model box uncertainty to
-improve \emph{detection}; we instead read a calibrated per-detection centroid covariance
-out of the existing DFL distribution and propagate it into the downstream geometric estimate
-that the application actually consumes. Relative to crop-row pipelines --- equal-weight
-least-squares centerlines on YOLOX maize rows~\cite{diao_yolox}, segmentation-plus-scan
-methods on the CRDLD benchmark~\cite{cth1,cth2}, polynomial regressors~\cite{rowdetr}, and
-row-anchor regressors ported from lane detection~\cite{alnet} --- the differentiator is not
-a new output paradigm but that the line is fit with \emph{principled, calibrated weights}
-and is trained and evaluated in navigation units (heading in degrees, cross-track in
-centimetres) rather than detection mAP. We make no claim that CALM-Row's detector is more
-accurate than these systems in mAP; the claim is confined to the guidance-line readout and
-its calibration, evaluated under a controlled A/B in which only the line-fit axis varies.
+The deployment concern that does require evidence is whether the conformal coverage survives
+post-training INT8 quantisation \cite{jacob2018int8}, since quantisation perturbs the box
+distribution and hence both the heading and the score $s$. Because the conformal multiplier
+$\hat{q}$ is recalibrated on a held-out set, the recommended and tested practice is to re-fit
+$\hat{q}$ on the quantised graph; E5 reports realised coverage before versus after INT8 to show
+that, with this re-fit, the target coverage $1-\alpha$ is recovered on the deployed model. We
+present this as a demonstration on our data, not as a guarantee that quantisation is innocuous
+in general.
 
 \subsection{Limitations}
 \label{sec:limitations}
-\noindent We state the boundaries of the evidence explicitly, since several of them bound
-how far the conclusions generalise.
+\noindent This is an applied contribution --- a trust layer on a stock detector --- not a
+methods breakthrough, and several boundaries bound how far the conclusions generalise.
 
-\paragraph{Generalisation and its limits.}
-Generalisation is assessed in two ways: in-domain on the held-out CRDLD test split, and as
-\emph{cross-dataset} transfer to CRBD~\cite{crbd} (a different camera, crop and resolution),
-evaluated without retraining. The CRDLD download used here carries no per-field metadata, so a
-within-dataset leave-one-field-out protocol is unavailable; the cross-dataset CRBD transfer
-takes its place and is, if anything, a stronger probe. The unit of generalisation is the
-dataset, not the seed.
+\paragraph{No real closed-loop run; the policy is evaluated by open-loop replay.}
+We have no field-robot deployment and no wheel odometry, so we cannot report a closed-loop
+intervention rate. The steering policy is therefore evaluated by an \emph{open-loop}
+kinematic-bicycle replay \cite{rajamani2012} (E6, Section~\ref{sec:res-e6-replay}): per-frame
+headings and policy decisions are played through the kinematic model to estimate how the
+abstain branch would have reduced large-heading-error accepted frames relative to a fixed
+threshold. This is an honest replay, not a closed-loop result; it omits controller dynamics,
+perception latency under feedback, and the temporal correlation of real driving. A
+closed-loop field validation with odometry is the clear next step and is left to future work.
 
-\paragraph{Flat-ground homography for metric units.}
-Centimetre-scale metrics require an image-to-ground homography, which we recover under a
-\emph{flat-ground} assumption (or anchor to known inter-row spacing where intrinsics are
-unavailable). On sloped or uneven terrain this assumption is violated, and a non-zero camera
-pitch inflates the metric error most at the far look-ahead distance --- the same region
-CALM-Row targets. We therefore report degrees (which are controller-independent and free of
-the homography) as the primary metric, give centimetre figures only where the calibration is
-defensible, and provide an explicit pitch-to-centimetre error budget so the metric claims
-are not over-read.
+\paragraph{Centimetre units only where the camera is calibrated.}
+Cross-track offset $e_{ct}$ is reported in centimetres only on the robot platform and on CRDLD,
+where an image-to-ground homography is available under a flat-ground assumption; on the field
+video we report pixels and degrees and do not invent a metric scale. Heading $\theta$ in
+degrees is the primary, controller-independent and homography-free navigation quantity for this
+reason. Where centimetres are given, the flat-ground assumption is itself a limitation: a
+non-zero camera pitch inflates the metric error most at the far look-ahead distance, exactly
+where navigation is most sensitive, so the centimetre figures should not be over-read.
 
-\paragraph{Cross-track is a static geometric proxy, not a closed-loop result.}
-We report cross-track as the lateral offset (px, and cm where the homography permits)
-between the predicted and ground-truth guidance lines at the look-ahead row. We deliberately
-do \emph{not} run a closed-loop pure-pursuit simulation and do \emph{not} report an
-intervention rate: both require sequential field video and a controller model and are left to
-future work. The controller-independent heading error is our primary navigation metric, and a
-real-robot validation likewise remains future work.
+\paragraph{The coverage guarantee is conditional on exchangeability within one distribution.}
+The split-conformal interval is finite-sample-valid only \emph{under exchangeability within a
+single distribution}. We calibrate and test in-domain on CRDLD, splitting the calibration and
+test sets \emph{by base image} so that augmented variants of one scene cannot leak across the
+split and inflate coverage (E2, Section~\ref{sec:res-e2-coverage}). Field video violates
+exchangeability twice over: frames within a clip are strongly temporally correlated, and the
+cross-dataset CRDLD~$\leftrightarrow$~CRBD transfer is an explicit distribution shift. We
+therefore treat CRBD and the field video as a \emph{coverage-degradation study}, not as a
+setting where the guarantee holds: E2 reports realised versus nominal coverage (with
+Clopper--Pearson / Wilson intervals) and quantifies how far coverage falls under shift, rather
+than claiming the target $1-\alpha$ is met off-distribution. Every coverage claim in the paper
+is qualified this way.
 
-\paragraph{Dependence on the DFL spread.}
-CALM-Row's weights are only as informative as the variance the DFL head carries. If
-$R=\mathit{reg\_max}$ is too small, or the head collapses toward near-deterministic
-distributions, the per-edge variance saturates and the weights lose discriminative power
-between near and far boxes; the method would then degenerate toward equal-weight
-least-squares. Stock Ultralytics uses $R=16$ for all model sizes, which we expect to carry
-sufficient spread, and we ablate $R\in\{8,16\}$ to test this dependence rather than assume
-it. The approach also presupposes a distributional regression head; it does not transfer
-unchanged to detectors with a single-point box regressor.
+\paragraph{Detector-bounded performance and score dependence.}
+The trust layer inherits the stock detector's failure modes: if the detector misses every row
+in a frame there is nothing for the readout to fit, and the policy can only abstain. The score
+$s$ presumes that a contaminating detection moves the heading under LOO refitting; a
+\emph{systematic} bias affecting all centroids equally (for example a consistently mislabelled
+row family) is not visible to a leave-one-out perturbation and would not be flagged. These are
+properties of the construction, stated so the abstain branch is not over-trusted.
 
-\paragraph{Calibration after INT8 quantisation.}
-The variance the head emits can shift under INT8 quantisation, so calibration established in
-floating point need not survive on the deployed graph. We therefore re-fit the optional
-post-hoc \texttt{CalibScale} affine on a small validation set after quantisation and report
-calibration before versus after INT8. We treat ``calibration survives quantisation'' as a
-hypothesis to be demonstrated, not assumed; if the post-INT8 reliability degrades, the
-deployment-time recommendation is to re-calibrate, and the weighting --- being monotone in
-the variance --- still preserves the near/far ordering even when the absolute scale drifts.
+\subsection{Threats to validity}
+\label{sec:disc-threats}
+\noindent \textbf{Construct validity.} The evaluation depends on a ground-truth guidance line,
+whose definition is a modelling choice. We use a mask/annotation-derived centreline that is
+\emph{independent of the detector}, avoiding the circularity of scoring a detector-fit line
+against a target built from the same detections, and we cross-check it against a hand-labelled
+subset, reporting inter-annotator agreement in degrees (and centimetres where calibrated). The
+resolution of any line-level benchmark is bounded by this annotation agreement: differences
+smaller than it should not be read as real.
 
-\paragraph{Ground-truth line extraction choices.}
-The evaluation depends on a ground-truth guidance line, and its definition is a modelling
-choice. For evaluation we use a \emph{mask-derived} centerline (a frozen row-wise robust
-regression, Section~\ref{sec:setup-gtline}) that is independent of the detector, deliberately
-avoiding the circularity of fitting the ground-truth line through ground-truth box centroids
-when the very claim under test is weighted-versus-unweighted fitting through box centroids.
-We cross-check the automatically extracted line against a human-annotated subset and report
-inter-annotator agreement in degrees and centimetres. Residual sensitivity to the
-extraction algorithm --- gap and occlusion handling, the choice of the navigation row, and
-the robust-regression estimator --- is a limitation of any line-level benchmark and bounds
-the resolution at which differences smaller than the annotation agreement can be trusted. For
-training, the line-stability loss instead uses a line fit through \emph{ground-truth box
-centroids}, which is detector-independent and hence non-circular with respect to the
-evaluation; the two definitions serve different purposes and are reported separately.
+\noindent \textbf{Internal validity.} The accuracy comparison (E1) is paired per frame across
+readouts on a shared detector checkpoint, so equal-weight LS, RANSAC, and the deployed
+Huber-IRLS differ only in the CPU-side fit, with no training-induced variance between them; we
+report $\geq 5$ seeds and test with the paired Wilcoxon signed-rank test under Holm correction
+with Cliff's $\delta$ effect sizes, so a claimed accuracy gain must be both significant and
+non-trivial. The conformal multiplier $\hat{q}$ is fixed on calibration data and never tuned on
+the test set.
+
+\noindent \textbf{External validity.} In-domain results are on CRDLD \cite{cth1}; generalisation
+is probed by cross-dataset transfer to CRBD \cite{crbd} (a different camera, crop, and
+resolution) and by the released maize field video, the latter two as the coverage-degradation
+study described above. We make no claim beyond row-crop scenes resembling these sources, and no
+mAP-superiority claim over crop-row detection systems with different output paradigms
+\cite{cth2,diao_yolox,rowdetr,alnet,rowcolattn,cth11,cth12}: the contribution is the trust
+readout on a stock detector, evaluated in navigation units, not a better detector.
+
+\noindent \textbf{Statistical-conclusion validity.} Coverage is reported with exact
+(Clopper--Pearson) or Wilson confidence intervals rather than point estimates, and any heading
+difference smaller than its across-seed standard deviation is downgraded in wording so that
+the conclusions track the resolution the data actually support.
