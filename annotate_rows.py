@@ -77,11 +77,19 @@ def main():
                          "1 = only landscape frames. Use --orient portrait/landscape to label one set.")
     ap.add_argument("--orient", choices=["all", "landscape", "portrait"], default="all",
                     help="restrict to one orientation (so you can label/evaluate each set separately)")
+    ap.add_argument("--split", choices=["all", "train", "val", "test"], default="all",
+                    help="restrict to a video-level split (run cornrobot_split.py first)")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
     fdir = Path(args.frames); man = fdir / "manifest.csv"
     if man.exists():
         rows = list(csv.DictReader(open(man, newline="")))
+        if args.split != "all":
+            if rows and "split" in rows[0]:
+                rows = [r for r in rows if r.get("split") == args.split]
+                print(f"[annotate] split={args.split}: {len(rows)} frames")
+            else:
+                print("[annotate] WARN: no 'split' column -- run cornrobot_split.py first; using all.")
         def is_land(r):
             return int(r.get("w", 1)) >= int(r.get("h", 1))
         want = args.orient
