@@ -32,6 +32,7 @@ try:
     import cv2, torch
     from ultralytics import YOLO
     from eval_guidance import detect_with_logits, guidance_line, loo_heading_dispersion  # one pipeline
+    import guidance_curve as gc
 except Exception as e:
     cv2 = None; _ERR = e
 
@@ -91,6 +92,9 @@ def main():
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--homography", default=None, help=".npy image->ground(cm)")
     ap.add_argument("--speed", type=float, default=0.4, help="base speed (0..1)")
+    ap.add_argument("--target-offset", type=float, default=0.0,
+                    help="desired lateral offset of the row from robot centre (px): 0 = straddle the row; "
+                         "+half-row-spacing if the robot drives in the furrow")
     ap.add_argument("--qhat", type=float, default=3.0, help="conformal multiplier (offline-calibrated)")
     ap.add_argument("--tau-p", type=float, default=1.5, help="proceed if half-width h<=tau_p (deg)")
     ap.add_argument("--tau-s", type=float, default=3.0, help="slow if tau_p<h<=tau_s; abstain if h>tau_s")
@@ -132,19 +136,21 @@ def main():
             conf_mean = 0.0; n_central = 0; gate = "abstain"; vL = vR = 0.0
             gl = guidance_line(det, args.readout) if det is not None else None
             if gl is not None:
-                a, b = gl["a"], gl["b"]
-                heading = math.degrees(math.atan(a)); last_heading = heading
+                # curved central row from the central-row points (letterbox px); heading = look-ahead tangent
+                cyn = gl["cy"].cpu().numpy(); cxn = gl["cx"].cpu().numpy()
+                coeffs = gc.fit_band(cyn, cxn, args.imgsz, degree=2)
+                heading = gc.heading_lookahead(coeffs, args.imgsz); last_heading = heading
                 n_central = int(gl["cx"].numel())
                 conf_mean = float(gl.get("conf_mean", 0.0))
                 s = float(gl.get("s_loo", float("nan")))
                 hw = args.qhat * s if math.isfinite(s) else float("inf")
-                # cross-track: row x at a look-ahead row (letterbox px) mapped back to original, vs centre
-                y_la = int(0.85 * args.imgsz)
-                x_la_lb = a * y_la + b
-                x_la = (x_la_lb - det["left"]) / det["r"]; y_la_o = (y_la - det["top"]) / det["r"]
-                ct_px = x_la - Wd / 2.0
+                # cross-track at the near row (letterbox -> original px), minus the desired offset
+                y_ct = gc.Y_CROSSTRACK * args.imgsz
+                x_ct_lb = gc.x_at(coeffs, y_ct)
+                x_ct = (x_ct_lb - det["left"]) / det["r"]; y_ct_o = (y_ct - det["top"]) / det["r"]
+                ct_px = (x_ct - Wd / 2.0) - args.target_offset
                 if H is not None:
-                    ct_cm = px_to_cm_lateral(x_la, y_la_o, H)
+                    ct_cm = px_to_cm_lateral(x_ct, y_ct_o, H)
                 ct_norm = max(-1.0, min(1.0, ct_px / (Wd / 2.0)))
                 # GATE
                 if args.arm == "nogate":

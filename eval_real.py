@@ -27,10 +27,18 @@ from ultralytics import YOLO
 
 from eval_guidance import detect_with_logits, guidance_line
 from temporal_guidance import TemporalGuidance
+import guidance_curve as gc
 
 
 def heading_deg(a):
     return math.degrees(math.atan(a))
+
+
+def gt_heading(gt, H):
+    """Steering heading of a label: look-ahead tangent of the curve, or atan(a) for a straight line."""
+    if "coeffs" in gt:
+        return gc.heading_lookahead(np.array(gt["coeffs"], float), gt.get("H", H))
+    return math.degrees(math.atan(gt["a"]))
 
 
 def per_frame_line(model, img, conf, device, readout="ransac"):
@@ -87,7 +95,7 @@ def main():
             if img is None:
                 continue
             a = per_frame_line(model, img, args.conf, dev)
-            err = abs(heading_deg(a) - heading_deg(gt["a"])) if a is not None else None
+            err = abs(heading_deg(a) - gt_heading(gt, img.shape[0])) if a is not None else None
             rows.append((nm, parse_name(nm)[0], veg(nm), err))
         ok = [r for r in rows if r[3] is not None]
         E = np.array([r[3] for r in ok]); V = np.array([r[2] for r in ok])
@@ -126,10 +134,10 @@ def main():
                     continue
                 a = per_frame_line(model, img, args.conf, dev)
                 present = a is not None
-                o = tg.update(a if present else 0.0, 0.0, present=present)
+                o = tg.update_heading(heading_deg(a) if present else None, present=present)
                 if j == fi:
                     a_pf = a; a_tf = o["heading"]
-            gthd = heading_deg(gt["a"])
+            gthd = gt_heading(gt, gt.get("H", 1080))
             if a_pf is not None:
                 pf_e.append(abs(heading_deg(a_pf) - gthd))
             if a_tf is not None:

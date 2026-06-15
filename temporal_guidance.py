@@ -30,6 +30,20 @@ class TemporalGuidance:
         self.hist = deque(maxlen=win)        # accepted headings (deg)
         self.a = None; self.b = None; self.heading = None; self.n = 0
 
+    def update_heading(self, heading, present=True, trust=1.0):
+        """Fuse a precomputed steering heading (deg, e.g. the look-ahead tangent of a curved fit).
+        Same physical-plausibility gate as update(); returns {heading, gated}."""
+        self.n += 1
+        ref = float(np.median(self.hist)) if self.hist else None
+        accept = present and heading is not None and math.isfinite(heading) and trust >= self.min_trust
+        if accept and ref is not None and len(self.hist) >= self.warmup and abs(heading - ref) > self.max_jump:
+            accept = False
+        gated = not accept
+        if accept:
+            self.hist.append(heading)
+            self.heading = heading if self.heading is None else (1 - self.ema) * self.heading + self.ema * heading
+        return {"heading": self.heading, "gated": gated, "raw_heading": heading, "n": self.n}
+
     def update(self, a, b, present=True, trust=1.0):
         self.n += 1
         h = math.degrees(math.atan(a)) if (present and a is not None and math.isfinite(a)) else None
