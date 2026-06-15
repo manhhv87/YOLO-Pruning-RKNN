@@ -4,12 +4,12 @@ score_gate.py -- is the geometry-consistency TRUST score informative? (pre-regis
 
 The redesigned paper's research core is a "know-when-to-trust" gate: a per-frame nonconformity
 score that should be LARGE exactly when the guidance heading is wrong. The label-free score we
-ship is `nonconf_loo` (leave-one-out heading dispersion, eval_guidance.loo_heading_dispersion).
-For the gate to give tighter conformal intervals than a trivial score, nonconf_loo must correlate
+ship is `s_loo` (leave-one-out heading dispersion, eval_guidance.loo_heading_dispersion).
+For the gate to give tighter conformal intervals than a trivial score, s_loo must correlate
 POSITIVELY with the realised heading error.
 
 This reads a per-frame results CSV written by eval_guidance.py (which now contains both
-`nonconf_loo` and `heading_err_deg`) and reports Spearman rho over the ok frames:
+`s_loo` and `heading_err_deg`) and reports Spearman rho over the ok frames:
 
   rho > 0 (clearly)  -> the trust score tracks real error -> the conformal sharpness story is
                         plausible; proceed (extend to the temporal score on the field video).
@@ -22,7 +22,7 @@ committing to anything. Mirrors calib_gate.py (which gated the dead DFL-variance
 
 Usage:
   python score_gate.py results/calm_s0.csv
-  python score_gate.py results/irls_s*.csv --score nonconf_loo --metric heading_err_deg
+  python score_gate.py results/irls_s*.csv --score s_loo --metric heading_err_deg
 """
 from __future__ import annotations
 import argparse, csv, glob, math
@@ -51,7 +51,7 @@ except Exception:                                    # standalone fallback
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("globs", nargs="+", help="per-frame results CSV(s) from eval_guidance.py")
-    ap.add_argument("--score", default="nonconf_loo")
+    ap.add_argument("--score", default="s_loo")
     ap.add_argument("--metric", default="heading_err_deg")
     args = ap.parse_args()
 

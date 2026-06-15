@@ -296,8 +296,22 @@ def guidance_line(det, readout, gt_line=None):
         a, b = float(at), float(bt)
     else:
         raise ValueError(f"unknown readout {readout}")
-    s_loo = loo_heading_dispersion(cxs, cys)   # label-free geometry-consistency nonconformity score
-    return {"a": a, "b": b, "sig_theta": sig_theta, "cx": cxs, "cy": cys, "sig_cx": sig_cx, "s_loo": s_loo}
+    # ---- per-frame, label-free trust scores for the conformal-gate ablation (larger = less trustworthy) ----
+    resid = (cxs - (a * cys + b)).detach().cpu().numpy()
+    rscale = float(1.4826 * np.median(np.abs(resid)) + 1e-6)
+    inlier = float((np.abs(resid) <= 1.345 * rscale).mean()) if resid.size else 0.0
+    conf_c = det["scores"][m].detach().cpu().numpy()
+    conf_mean = float(conf_c.mean()) if conf_c.size else 0.0
+    scores = {
+        "s_loo": loo_heading_dispersion(cxs, cys),          # leave-one-out heading dispersion (deg) -- THE proposed score
+        "s_resid": rscale,                                   # robust residual scale of the fit (px)
+        "s_inv_inlier": 1.0 - inlier,                        # 1 - inlier fraction
+        "s_conf": 1.0 - conf_mean,                           # 1 - mean central-box confidence
+        "s_dfl": float(sig_cx.mean().item()),                # mean DFL centroid sigma (the dead signal, ablation)
+        "s_ninv": 1.0 / math.sqrt(max(int(cxs.numel()), 1)), # 1/sqrt(#central points)
+        "conf_mean": conf_mean,                              # for the fixed-confidence baseline gate (E4)
+    }
+    return {"a": a, "b": b, "sig_theta": sig_theta, "cx": cxs, "cy": cys, "sig_cx": sig_cx, **scores}
 
 
 # --------------------------------------------------------------------------- #
@@ -368,11 +382,14 @@ def crosstrack_proxy(a_p, b_p, a_g, b_g, y_lookahead, H=None):
     return float(np.hypot(*(gp - gg)))
 
 
-def simulate_cross_track(*args, **kwargs):
-    """TODO: full pure-pursuit / kinematic-bicycle closed-loop sim (EXPERIMENT_PLAN
-    Sec. 4.2): fixed controller (look-ahead L_d), perception latency from measured
-    edge FPS, same controller for every arm. Returns cross-track RMSE/max (cm)."""
-    raise NotImplementedError("Implement the frozen pure-pursuit sim per EXPERIMENT_PLAN Sec. 4.2")
+def simulate_cross_track(heading_pred_deg, heading_gt_deg, accept_mask=None, **kw):
+    """Open-loop kinematic policy replay over an ORDERED frame sequence (E6). Delegates to
+    conformal.bicycle_replay. With no odometry GT this is honestly a policy replay through a
+    kinematic-bicycle step, NOT a closed-loop field result -- report it as such. The abstain
+    policy holds the last trusted heading instead of acting on an untrusted estimate.
+    Returns {integrated_lateral, big_cmd_frames, n, abort_rate}."""
+    from conformal import bicycle_replay
+    return bicycle_replay(heading_pred_deg, heading_gt_deg, accept_mask=accept_mask, **kw)
 
 
 # --------------------------------------------------------------------------- #
@@ -500,7 +517,11 @@ def main():
             "line_rmse_px": line_rmse_px(gl["a"], gl["b"], a_g, b_g, y_look, y_hi),
             "crosstrack_proxy_px": crosstrack_proxy(gl["a"], gl["b"], a_g, b_g, y_look),
             "sig_theta": gl["sig_theta"] if gl["sig_theta"] is not None else "",
-            "nonconf_loo": gl.get("s_loo", ""),   # label-free geometry-consistency trust score
+            # label-free trust scores (for the conformal gate + E3 ablation) and confidence (E4)
+            "s_loo": gl.get("s_loo", ""),
+            "s_resid": gl.get("s_resid", ""), "s_inv_inlier": gl.get("s_inv_inlier", ""),
+            "s_conf": gl.get("s_conf", ""), "s_dfl": gl.get("s_dfl", ""), "s_ninv": gl.get("s_ninv", ""),
+            "conf_mean": gl.get("conf_mean", ""),
         }
         if H is not None:
             rec["line_rmse_cm"] = line_rmse_cm(gl["a"], gl["b"], a_g, b_g, y_look, y_hi, H)
