@@ -50,6 +50,15 @@ paper/sections/*.aux
 # ---- large EndNote reference-PDF library (citations live in refs.bib) ----
 paper/ref/
 
+# ---- large local docs / field media (NOT part of the codebase) ----
+*.MOV
+*.mov
+*.mp4
+*.avi
+_vidframes/
+/main.pdf
+/*.docx
+
 # ---- OS ----
 .DS_Store
 Thumbs.db

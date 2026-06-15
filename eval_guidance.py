@@ -232,6 +232,26 @@ def select_central(cx, cy, imgsz, corridor=0.10):
     return m
 
 
+def loo_heading_dispersion(cxs, cys, irls_iters=5):
+    """Leave-one-out heading dispersion (a LABEL-FREE geometry-consistency nonconformity
+    score). Refit the central guidance line leaving out each central box in turn; the std
+    of the resulting heading (deg) measures how much the heading depends on any single
+    detection. High dispersion = a wrong-row outlier or too-few/ill-conditioned points =
+    the heading should not be trusted. This targets the measured failure mode (wrong-row
+    contamination), unlike the dead DFL-variance signal. Robust equal-weight IRLS base."""
+    n = cxs.numel()
+    if n < 3:
+        return float("nan")
+    idx = torch.arange(n)
+    headings = []
+    for i in range(n):
+        keep = idx != i
+        a, _, _ = gls_line_fit(cxs[keep], cys[keep], torch.ones(int(keep.sum()), device=cxs.device),
+                               with_cov=False, irls_iters=irls_iters)
+        headings.append(math.degrees(math.atan(float(a))))
+    return float(np.std(headings))
+
+
 def guidance_line(det, readout, gt_line=None):
     boxes = det["boxes"]; imgsz = det.get("imgsz", 640)
     cx = 0.5 * (boxes[:, 0] + boxes[:, 2])
@@ -276,7 +296,8 @@ def guidance_line(det, readout, gt_line=None):
         a, b = float(at), float(bt)
     else:
         raise ValueError(f"unknown readout {readout}")
-    return {"a": a, "b": b, "sig_theta": sig_theta, "cx": cxs, "cy": cys, "sig_cx": sig_cx}
+    s_loo = loo_heading_dispersion(cxs, cys)   # label-free geometry-consistency nonconformity score
+    return {"a": a, "b": b, "sig_theta": sig_theta, "cx": cxs, "cy": cys, "sig_cx": sig_cx, "s_loo": s_loo}
 
 
 # --------------------------------------------------------------------------- #
@@ -479,6 +500,7 @@ def main():
             "line_rmse_px": line_rmse_px(gl["a"], gl["b"], a_g, b_g, y_look, y_hi),
             "crosstrack_proxy_px": crosstrack_proxy(gl["a"], gl["b"], a_g, b_g, y_look),
             "sig_theta": gl["sig_theta"] if gl["sig_theta"] is not None else "",
+            "nonconf_loo": gl.get("s_loo", ""),   # label-free geometry-consistency trust score
         }
         if H is not None:
             rec["line_rmse_cm"] = line_rmse_cm(gl["a"], gl["b"], a_g, b_g, y_look, y_hi, H)
