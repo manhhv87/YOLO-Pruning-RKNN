@@ -72,19 +72,28 @@ def main():
     ap.add_argument("--frames", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--landscape-only", type=int, default=1,
-                    help="1 = skip portrait frames; the robot navigation POV is LANDSCAPE (Data_Video_2)")
+    ap.add_argument("--landscape-only", type=int, default=0,
+                    help="0 = label BOTH orientations (default; the curve model is orientation-agnostic). "
+                         "1 = only landscape frames. Use --orient portrait/landscape to label one set.")
+    ap.add_argument("--orient", choices=["all", "landscape", "portrait"], default="all",
+                    help="restrict to one orientation (so you can label/evaluate each set separately)")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
     fdir = Path(args.frames); man = fdir / "manifest.csv"
     if man.exists():
         rows = list(csv.DictReader(open(man, newline="")))
+        def is_land(r):
+            return int(r.get("w", 1)) >= int(r.get("h", 1))
+        want = args.orient
         if args.landscape_only:
+            want = "landscape"
+        if want != "all":
             n0 = len(rows)
-            rows = [r for r in rows if int(r.get("w", 1)) >= int(r.get("h", 1))]
-            if len(rows) < n0:
-                print(f"[annotate] landscape-only: {len(rows)}/{n0} frames (skipped {n0-len(rows)} portrait; "
-                      f"use --landscape-only 0 to include them)")
+            rows = [r for r in rows if (is_land(r) == (want == "landscape"))]
+            print(f"[annotate] orient={want}: {len(rows)}/{n0} frames")
+        else:
+            nl = sum(is_land(r) for r in rows)
+            print(f"[annotate] BOTH orientations: {nl} landscape + {len(rows)-nl} portrait = {len(rows)} frames")
         names = [r["frame"] for r in rows]
     else:
         names = [p.name for p in sorted(fdir.glob("*.jpg"))]

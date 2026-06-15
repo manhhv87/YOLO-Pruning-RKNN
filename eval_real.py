@@ -94,24 +94,27 @@ def main():
             img = cv2.imread(str(fdir / nm))
             if img is None:
                 continue
+            Hh, Wd = img.shape[:2]
             a = per_frame_line(model, img, args.conf, dev)
-            err = abs(heading_deg(a) - gt_heading(gt, img.shape[0])) if a is not None else None
-            rows.append((nm, parse_name(nm)[0], veg(nm), err))
-        ok = [r for r in rows if r[3] is not None]
-        E = np.array([r[3] for r in ok]); V = np.array([r[2] for r in ok])
+            err = abs(heading_deg(a) - gt_heading(gt, Hh)) if a is not None else None
+            rows.append({"nm": nm, "session": parse_name(nm)[0], "veg": veg(nm), "err": err,
+                         "orient": "landscape" if Wd >= Hh else "portrait"})
+        ok = [r for r in rows if r["err"] is not None]
+        E = np.array([r["err"] for r in ok]); V = np.array([r["veg"] for r in ok])
         print(f"# detect-then-fit on REAL labels: line on {len(ok)}/{len(rows)} frames")
         if len(ok):
             print(f"  heading err deg: median={np.median(E):.2f} mean={E.mean():.2f} p90={np.percentile(E,90):.2f}")
-            big = np.mean(E > 5) * 100
-            print(f"  large-error (>5 deg) rate: {big:.1f}%  <- the real-field failures detect-then-fit makes")
+            print(f"  large-error (>5 deg) rate: {np.mean(E>5)*100:.1f}%")
             q = np.quantile(V, [0.33, 0.66])
-            for lab, m in [("sparsest 1/3", V <= q[0]), ("densest 1/3", V >= q[1])]:
+            for lab, m in [("sparsest 1/3 veg", V <= q[0]), ("densest 1/3 veg", V >= q[1])]:
                 print(f"  {lab}: n={int(m.sum())} median={np.median(E[m]):.2f} big%={np.mean(E[m]>5)*100:.1f}")
-            sess = {}
-            for nm, s, v, e in ok:
-                sess.setdefault(s, []).append(e)
-            for s, es in sess.items():
-                print(f"  session {s}: n={len(es)} median={np.median(es):.2f} deg")
+            for key in ("orient", "session"):     # report PER ORIENTATION (fair) and per session
+                groups = {}
+                for r in ok:
+                    groups.setdefault(r[key], []).append(r["err"])
+                for g, es in sorted(groups.items()):
+                    es = np.array(es)
+                    print(f"  {key}={g}: n={len(es)} median={np.median(es):.2f} mean={es.mean():.2f} big%={np.mean(es>5)*100:.1f}")
         return
 
     # temporal: compare per-frame vs fused at each labelled frame
