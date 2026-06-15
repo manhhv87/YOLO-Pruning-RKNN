@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 """
-annotate_rows.py -- fast, FAIR human labelling of the central crop-row guidance CURVE.
+annotate_rows.py -- fast, FAIR human labelling of the central crop-row guidance CURVE (convention A).
 
-Fair = a human decides the ground truth. The tool PROPOSES a curve you ACCEPT or CORRECT with a few
-clicks ALONG the central corn row (convention A: on the plants). Rows bow in the far field, so the GT
-is a low-order polynomial x = P(y) (>=3 clicks -> quadratic; 2 -> line), fit on the reliable near-mid
-band. Saves labels.json {frame: {coeffs, deg, pts, W, H, heading_la}} for eval_real.py.
+You mark the central corn row (ON the plants); rows bow far away, so the GT is a low-order polynomial
+x = P(y) (>=3 clicks -> quadratic; 2 -> line). Saves labels.json {frame:{coeffs,deg,pts,W,H,heading_la}}.
 
-Controls (OpenCV window):
-  left-click : add a point ON the central row (place 3-4 from bottom upward; the curve follows them)
-  a : accept the proposed curve   c : clear   s/SPACE : save+next   n : skip   q : quit
+HOW TO SAVE (important): click points along the row, then press **SPACE (or s)** to SAVE that frame and
+go to the next. Nothing is written until you press SPACE/s (or q to quit). The console prints each save.
+
+Controls:  left-click = add a point ON the row  |  SPACE / s = SAVE + next  |  a = use the red proposal
+           c = clear my points  |  n = skip (no label)  |  q = save all + quit
 Usage:
-  python annotate_rows.py --frames datasets/CornRobot_frames --out datasets/CornRobot_frames/labels.json
-  python annotate_rows.py --frames datasets/CornRobot_frames --selftest
+  python annotate_rows.py --frames datasets/CornRobot_frames
+  python annotate_rows.py --frames datasets/CornRobot_frames --selftest      # headless check
 """
 from __future__ import annotations
 import argparse, csv, json
@@ -27,9 +27,10 @@ try:
 except Exception:
     guidance_line_periodic = None
 
+DISP_W = 1100   # frames are downscaled to this width for display; clicks are mapped back to image px
+
 
 def fit_pts(pts, H):
-    """clicked (x,y) points -> polynomial coeffs (quadratic if >=3 pts, else line)."""
     if len(pts) < 2:
         return None
     p = np.array(pts, float)
@@ -40,23 +41,29 @@ def propose(img):
     if guidance_line_periodic is None:
         return None
     gl = guidance_line_periodic(img)
-    return np.array([gl["a"], gl["b"]]) if gl else None     # straight proposal as coeffs [a,b]
+    return np.array([gl["a"], gl["b"]]) if gl else None
 
 
-def draw(img, coeffs, pts, idx, n, color):
-    vis = img.copy(); H, W = vis.shape[:2]
+def draw(img, coeffs, pts, idx, n, mine, scale):
+    H, W = img.shape[:2]
+    vis = cv2.resize(img, (int(W * scale), int(H * scale)))
+    color = (0, 230, 0) if mine else (0, 0, 255)
     if coeffs is not None:
-        for y in range(int(gc.Y_FIT_LO * H), H, 5):
-            x = int(gc.x_at(coeffs, y))
+        for y in range(int(gc.Y_FIT_LO * H), H, 4):
+            x = gc.x_at(coeffs, y)
             if 0 <= x < W:
-                cv2.circle(vis, (x, y), 3, color, -1)
-        yla = int(gc.Y_LOOKAHEAD * H); xla = int(gc.x_at(coeffs, yla)); sl = gc.slope_at(coeffs, yla)
-        cv2.line(vis, (int(xla - sl * 120), yla - 120), (int(xla + sl * 120), yla + 120), (255, 0, 255), 3)
+                cv2.circle(vis, (int(x * scale), int(y * scale)), 3, color, -1)
+        yla = gc.Y_LOOKAHEAD * H; xla = gc.x_at(coeffs, yla); sl = gc.slope_at(coeffs, yla)
+        cv2.line(vis, (int((xla - sl * 100) * scale), int((yla - 100) * scale)),
+                 (int((xla + sl * 100) * scale), int((yla + 100) * scale)), (255, 0, 255), 2)
     for p in pts:
-        cv2.circle(vis, (int(p[0]), int(p[1])), 6, (0, 255, 255), -1)
-    cv2.rectangle(vis, (0, 0), (W, 28), (0, 0, 0), -1)
-    cv2.putText(vis, f"[{idx+1}/{n}] click ON row (3-4 pts) | a=accept c=clear s/space=save n=skip q=quit",
-                (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.circle(vis, (int(p[0] * scale), int(p[1] * scale)), 6, (0, 255, 255), -1)
+    Wd = vis.shape[1]
+    cv2.rectangle(vis, (0, 0), (Wd, 56), (0, 0, 0), -1)
+    cv2.putText(vis, f"[{idx+1}/{n}]  points: {len(pts)}   line: {'YOURS' if mine else ('proposal' if coeffs is not None else 'NONE - click >=2 pts')}",
+                (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+    cv2.putText(vis, "SPACE/s = SAVE+next   a = use proposal   c = clear   n = skip   q = quit",
+                (8, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
     return vis
 
 
@@ -70,55 +77,71 @@ def main():
     fdir = Path(args.frames); man = fdir / "manifest.csv"
     names = ([r["frame"] for r in csv.DictReader(open(man, newline=""))] if man.exists()
              else [p.name for p in sorted(fdir.glob("*.jpg"))])
+    if not names:
+        raise SystemExit(f"no frames in {fdir} (run cornrobot_prep.py first)")
     if args.limit:
         names = names[:: max(1, len(names) // args.limit)][: args.limit]
 
     if args.selftest:
         ok = sum(propose(cv2.imread(str(fdir / nm))) is not None
                  for nm in names[:20] if (fdir / nm).exists())
-        print(f"[selftest] proposals on {ok}/{min(20,len(names))} frames; curve model OK; "
-              f"periodic={guidance_line_periodic is not None}")
+        print(f"[selftest] proposals on {ok}/{min(20,len(names))}; GUI build: {_has_gui()}")
         return
+
+    if not _has_gui():
+        raise SystemExit("This OpenCV build has NO GUI (you likely installed opencv-python-headless). "
+                         "Fix: pip uninstall opencv-python-headless && pip install opencv-python")
 
     out = Path(args.out or (fdir / "labels.json"))
     labels = json.load(open(out)) if out.exists() else {}
-    st = {"pts": []}
+    print(f"[annotate] {len(names)} frames | already labelled: {len(labels)} | saving to: {out.resolve()}")
+    print("[annotate] click points on the row, then press SPACE/s to SAVE each frame.")
+    st = {"pts": [], "scale": 1.0}
 
     def on_mouse(ev, x, y, flags, param):
         if ev == cv2.EVENT_LBUTTONDOWN:
-            st["pts"].append((x, y))
+            st["pts"].append((x / st["scale"], y / st["scale"]))   # map display -> image px
 
-    cv2.namedWindow("annotate"); cv2.setMouseCallback("annotate", on_mouse)
+    cv2.namedWindow("annotate", cv2.WINDOW_AUTOSIZE); cv2.setMouseCallback("annotate", on_mouse)
     i = 0
     while i < len(names):
         nm = names[i]; img = cv2.imread(str(fdir / nm))
         if img is None:
             i += 1; continue
-        H, W = img.shape[:2]; prop = propose(img); st["pts"] = []
+        H, W = img.shape[:2]; st["scale"] = min(1.0, DISP_W / W); st["pts"] = []
+        prop = propose(img)
         while True:
             user = fit_pts(st["pts"], H)
             coeffs = user if user is not None else prop
-            color = (0, 230, 0) if user is not None else (0, 0, 255)
-            cv2.imshow("annotate", draw(img, coeffs, st["pts"], i, len(names), color))
+            cv2.imshow("annotate", draw(img, coeffs, st["pts"], i, len(names), user is not None, st["scale"]))
             k = cv2.waitKey(20) & 0xFF
             if k == ord("c"):
                 st["pts"] = []
             elif k == ord("a"):
-                st["pts"] = []
+                st["pts"] = []                                # accept the red proposal
             elif k in (ord("s"), ord(" ")):
-                if coeffs is not None:
-                    labels[nm] = {"coeffs": [float(c) for c in coeffs], "deg": len(coeffs) - 1,
-                                  "pts": st["pts"], "W": W, "H": H,
-                                  "heading_la": gc.heading_lookahead(coeffs, H)}
-                    json.dump(labels, open(out, "w"))
+                if coeffs is None:
+                    print("  [!] nothing to save -- click >=2 points on the row first (or 'a' for the proposal)")
+                    continue
+                labels[nm] = {"coeffs": [float(c) for c in coeffs], "deg": len(coeffs) - 1,
+                              "pts": st["pts"], "W": W, "H": H, "heading_la": gc.heading_lookahead(coeffs, H)}
+                json.dump(labels, open(out, "w"))
+                print(f"  [saved {len(labels)}] {nm}  heading_la={labels[nm]['heading_la']:+.1f} deg")
                 i += 1; break
             elif k == ord("n"):
                 i += 1; break
             elif k == ord("q"):
                 json.dump(labels, open(out, "w")); cv2.destroyAllWindows()
-                print(f"[annotate] saved {len(labels)} labels -> {out}"); return
+                print(f"[annotate] saved {len(labels)} labels -> {out.resolve()}"); return
     json.dump(labels, open(out, "w")); cv2.destroyAllWindows()
-    print(f"[annotate] done: {len(labels)} labels -> {out}")
+    print(f"[annotate] done: {len(labels)} labels -> {out.resolve()}")
+
+
+def _has_gui():
+    try:
+        cv2.namedWindow("__t"); cv2.destroyWindow("__t"); return True
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":
