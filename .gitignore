@@ -2,7 +2,10 @@
 # datasets: push CRDLD + CRBD source (user requested); exclude only the
 # generated CALM-Row detection set (reproducible via prepare_crdld.py)
 datasets/CRDLD_yolo/
+datasets/CRDLD/
+datasets/CRBD/
 datasets/CornRobot*/
+datasets/Cabbage*/
 weights/
 runs/
 *.pt

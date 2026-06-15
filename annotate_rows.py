@@ -106,7 +106,7 @@ def main():
     else:
         names = [p.name for p in sorted(fdir.glob("*.jpg"))]
     if not names:
-        raise SystemExit(f"no frames in {fdir} (run cornrobot_prep.py first)")
+        raise SystemExit(f"no frames in {fdir} (run extract_frames.py first)")
     if args.limit:
         names = names[:: max(1, len(names) // args.limit)][: args.limit]
 
