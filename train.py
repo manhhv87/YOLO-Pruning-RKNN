@@ -249,21 +249,6 @@ def parse_args():
         help="Exponent for alpha-IoU (used only when bbox_loss_type='alpha_iou').",
     )
 
-    # CALM-Row navigation-native loss (optional, no new params; see ultralytics/utils/calm_row.py)
-    p.add_argument(
-        "--calm_row",
-        action="store_true",
-        help="Enable CALM-Row uncertainty-weighted guidance-line loss (DFL-variance based).",
-    )
-    p.add_argument("--calm_calib_gain", type=float, default=0.5,
-                   help="Gain for the CALM-Row DDC calibration (NLL) loss.")
-    p.add_argument("--calm_line_gain", type=float, default=1.0,
-                   help="Gain for the CALM-Row line-stability loss.")
-    p.add_argument("--calm_y_far", type=float, default=0.0,
-                   help="Look-ahead row (px) the line loss extrapolates to (0 = image top).")
-    p.add_argument("--calm_lam_theta", type=float, default=0.5,
-                   help="Weight of the heading term vs RMSE in the CALM-Row line-stability loss.")
-
     # Training args
     p.add_argument("--data", type=str, required=True, help="data.yaml path")
     p.add_argument("--epochs", type=int, default=200)
@@ -486,32 +471,19 @@ def main():
     _custom_attrs = {
         "bbox_loss_type": args.bbox_loss_type,
         "alpha_iou": args.alpha_iou,
-        "calm_row": args.calm_row,
-        "calm_calib_gain": args.calm_calib_gain,
-        "calm_line_gain": args.calm_line_gain,
-        "calm_y_far": args.calm_y_far,
-        "calm_lam_theta": args.calm_lam_theta,
     }
     if not args.resume:
         for _k, _v in _custom_attrs.items():
             setattr(model.model, _k, _v)
 
-        # CRITICAL: model.train() REBUILDS the model from YAML and copies only the
-        # state_dict (intersect_dicts) -- Python attributes set above are LOST on the
-        # model the loss actually sees, so the CALM-Row branch silently never runs
-        # (calm_enabled=False). Symptom: a CALM checkpoint is bit-identical to baseline
-        # (B == B0, Wilcoxon p=1.0). Re-apply the attrs to the TRAINER's model via a
-        # pretrain callback; it fires (on_pretrain_routine_start) before the criterion is
-        # built lazily on the first batch, so getattr(model, "calm_row") sees True.
+        # model.train() REBUILDS the model from YAML and copies only the state_dict
+        # (intersect_dicts) -- Python attributes set above are LOST on the model the loss
+        # actually sees. Re-apply the custom loss attrs to the TRAINER's model via a pretrain
+        # callback; it fires (on_pretrain_routine_start) before the criterion is built lazily
+        # on the first batch, so the loss reads the intended bbox_loss_type / alpha_iou.
         def _apply_custom_attrs(trainer, _attrs=_custom_attrs):
             for k, v in _attrs.items():
                 setattr(trainer.model, k, v)
-            if _attrs.get("calm_row"):
-                from ultralytics.utils import LOGGER
-                LOGGER.info(
-                    f"[CALM-Row] enabled on trainer.model "
-                    f"(calib_gain={_attrs['calm_calib_gain']}, line_gain={_attrs['calm_line_gain']})"
-                )
 
         model.add_callback("on_pretrain_routine_start", _apply_custom_attrs)
 

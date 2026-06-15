@@ -340,20 +340,6 @@ class v8DetectionLoss:
 
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
 
-        # --- CALM-Row (navigation-native, optional). Enable via model.calm_row=True
-        # (see top-level train.py --calm_row). Uses ONLY the existing DFL distribution
-        # -> no new parameters, RKNN/INT8 export graph unchanged. ---
-        self.calm_enabled = bool(getattr(model, "calm_row", False))
-        self.calm_calib_gain = float(getattr(model, "calm_calib_gain", 0.5))
-        self.calm_line_gain = float(getattr(model, "calm_line_gain", 1.0))
-        self.calm_lam_theta = float(getattr(model, "calm_lam_theta", 0.5))
-        self.calm_y_far = float(getattr(model, "calm_y_far", 0.0))
-        # Fail-loud: surface whether CALM-Row actually reached the criterion. If you run
-        # train.py --calm_row but see enabled=False here, the attr did not survive the
-        # trainer's model rebuild (see the callback fix in train.py).
-        from ultralytics.utils import LOGGER
-        LOGGER.info(f"[CALM-Row] criterion init: calm_enabled={self.calm_enabled}")
-
     def preprocess(
         self, targets: torch.Tensor, batch_size: int, scale_tensor: torch.Tensor
     ) -> torch.Tensor:
@@ -396,7 +382,7 @@ class v8DetectionLoss:
         self, preds: Any, batch: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        loss = torch.zeros(4 if self.calm_enabled else 3, device=self.device)  # box, cls, dfl[, calm]
+        loss = torch.zeros(3, device=self.device)  # box, cls, dfl
         feats = preds[1] if isinstance(preds, tuple) else preds
         pred_distri, pred_scores = torch.cat(
             [xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2
@@ -448,10 +434,7 @@ class v8DetectionLoss:
         )  # BCE
 
         # Bbox loss
-        calm_target_bboxes = None
         if fg_mask.sum():
-            if self.calm_enabled:
-                calm_target_bboxes = target_bboxes.clone()  # keep PIXELS before the /= below
             target_bboxes /= stride_tensor
             loss[0], loss[2] = self.bbox_loss(
                 pred_distri,
@@ -467,26 +450,7 @@ class v8DetectionLoss:
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain
 
-        # CALM-Row navigation-native loss (slot 3); computed from the existing DFL
-        # distribution only -> gradients flow into the detector, no new params.
-        if self.calm_enabled and calm_target_bboxes is not None:
-            from ultralytics.utils.calm_row import compute_calm_row_loss
-
-            lc, ll = compute_calm_row_loss(
-                pred_distri,
-                anchor_points,
-                stride_tensor,
-                calm_target_bboxes,
-                fg_mask,
-                gt_bboxes,
-                mask_gt,
-                self.reg_max,
-                lam_theta=self.calm_lam_theta,
-                y_far=self.calm_y_far,
-            )
-            loss[3] = self.calm_calib_gain * lc + self.calm_line_gain * ll
-
-        return loss * batch_size, loss.detach()  # loss(box, cls, dfl[, calm])
+        return loss * batch_size, loss.detach()  # loss(box, cls, dfl)
 
 
 class v8SegmentationLoss(v8DetectionLoss):

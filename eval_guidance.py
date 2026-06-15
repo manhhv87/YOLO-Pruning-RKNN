@@ -8,9 +8,10 @@ given a trained YOLO checkpoint, a test split, and a guidance-line READOUT
 it to a (mask-derived) ground-truth line, and emits per-frame navigation
 metrics + a CSV for paired statistics.
 
-The three readouts A / A' / B0 share ONE stock checkpoint (they differ only in
-the CPU-side line fit), so they can be compared paired per frame. Arm B (full
-CALM-Row) uses a checkpoint trained with `train.py --calm_row`.
+All readouts (equalLS / ransac / irls / calm / qual / oracle) share ONE stock
+detector checkpoint and differ only in the CPU-side line fit, so they can be
+compared paired per frame. Each per-frame CSV also carries the label-free trust
+scores consumed by the conformal gate (eval_conformal.py).
 
 Metrics
 -------
@@ -561,8 +562,7 @@ def main():
     else:
         print("No frames produced a valid (pred, GT) line pair — check --mask-dir / conf.")
     print(f"wrote {args.out}" + (f" and {args.calib_out}" if args.calib_out and calib_pairs else ""))
-    print("Run all three readouts (equalLS/ransac/calm) and pair per-frame for the A/B tables; "
-          "for arm B use a --calm_row checkpoint. Paired Wilcoxon + Holm + Cliff's delta per EXPERIMENT_PLAN Sec. 6.")
+    print("Next: score_gate.py (E0 trust-score) + eval_conformal.py (E2/E3/E4) on these per-frame CSVs.")
 
 
 if __name__ == "__main__":

@@ -183,13 +183,7 @@ class DetectionTrainer(BaseTrainer):
 
     def get_validator(self):
         """Return a DetectionValidator for YOLO model validation."""
-        # CALM-Row adds a 4th loss component when enabled on the model (model.calm_row=True).
-        _calm = bool(getattr(getattr(self, "model", None), "calm_row", False))
-        self.loss_names = (
-            ("box_loss", "cls_loss", "dfl_loss", "calm_loss")
-            if _calm
-            else ("box_loss", "cls_loss", "dfl_loss")
-        )
+        self.loss_names = ("box_loss", "cls_loss", "dfl_loss")
         return yolo.detect.DetectionValidator(
             self.test_loader,
             save_dir=self.save_dir,
