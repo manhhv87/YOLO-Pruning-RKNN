@@ -37,6 +37,7 @@ venv/
 paper/main.aux
 paper/main.bcf
 paper/main.bbl
+paper/*.bbl-SAVE-ERROR
 paper/main.blg
 paper/main.log
 paper/main.out
