@@ -46,7 +46,8 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     root = Path(args.root); fdir = Path(args.frames)
-    qv = root / "_removed_duplicates"; qf = fdir / "_removed_duplicates"
+    removed = root.parent / "CornRobot_removed"          # quarantine OUTSIDE the working dirs (tidy)
+    qv = removed / "videos"; qf = removed / "frames"
     test_dir = Path(str(fdir) + "_test")
 
     vids = [str(p) for p in root.rglob("*") if p.suffix.lower() in (".mp4", ".mov")
