@@ -66,13 +66,20 @@ def crosstrack_px(coeffs, H, W):
     return x_at(coeffs, Y_CROSSTRACK * H) - W / 2.0
 
 
-def fit_band(cy, cx, H, degree=2):
-    """Fit only points inside the reliable [Y_FIT_LO, Y_FIT_HI]*H band."""
+def fit_band(cy, cx, H, W=None, degree=2):
+    """Fit points inside the reliable [Y_FIT_LO, Y_FIT_HI]*H band. If W is given and the quadratic
+    leaves the image [0,W] within the band (over-bending on a few frames), fall back to a line."""
     cy = np.asarray(cy, float); cx = np.asarray(cx, float)
     m = (cy >= Y_FIT_LO * H) & (cy <= Y_FIT_HI * H)
     if m.sum() >= 2:
         cy, cx = cy[m], cx[m]
-    return fit_curve(cy, cx, degree=degree)
+    coeffs = fit_curve(cy, cx, degree=degree)
+    if W is not None and len(coeffs) >= 3:                 # over-bend guard -> degree 1
+        ys = np.linspace(Y_FIT_LO * H, Y_FIT_HI * H, 20)
+        xs = np.polyval(coeffs, ys)
+        if (xs < -0.05 * W).any() or (xs > 1.05 * W).any():
+            coeffs = fit_curve(cy, cx, degree=1)
+    return coeffs
 
 
 if __name__ == "__main__":

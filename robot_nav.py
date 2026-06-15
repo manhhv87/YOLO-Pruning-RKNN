@@ -138,7 +138,7 @@ def main():
             if gl is not None:
                 # curved central row from the central-row points (letterbox px); heading = look-ahead tangent
                 cyn = gl["cy"].cpu().numpy(); cxn = gl["cx"].cpu().numpy()
-                coeffs = gc.fit_band(cyn, cxn, args.imgsz, degree=2)
+                coeffs = gc.fit_band(cyn, cxn, args.imgsz, W=args.imgsz, degree=2)
                 heading = gc.heading_lookahead(coeffs, args.imgsz); last_heading = heading
                 n_central = int(gl["cx"].numel())
                 conf_mean = float(gl.get("conf_mean", 0.0))

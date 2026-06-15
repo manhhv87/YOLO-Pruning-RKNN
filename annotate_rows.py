@@ -30,11 +30,11 @@ except Exception:
 DISP_W = 1100   # frames are downscaled to this width for display; clicks are mapped back to image px
 
 
-def fit_pts(pts, H):
+def fit_pts(pts, H, W=None):
     if len(pts) < 2:
         return None
     p = np.array(pts, float)
-    return gc.fit_band(p[:, 1], p[:, 0], H, degree=2 if len(pts) >= 3 else 1)
+    return gc.fit_band(p[:, 1], p[:, 0], H, W=W, degree=2 if len(pts) >= 3 else 1)
 
 
 def propose(img):
@@ -72,11 +72,22 @@ def main():
     ap.add_argument("--frames", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--landscape-only", type=int, default=1,
+                    help="1 = skip portrait frames; the robot navigation POV is LANDSCAPE (Data_Video_2)")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
     fdir = Path(args.frames); man = fdir / "manifest.csv"
-    names = ([r["frame"] for r in csv.DictReader(open(man, newline=""))] if man.exists()
-             else [p.name for p in sorted(fdir.glob("*.jpg"))])
+    if man.exists():
+        rows = list(csv.DictReader(open(man, newline="")))
+        if args.landscape_only:
+            n0 = len(rows)
+            rows = [r for r in rows if int(r.get("w", 1)) >= int(r.get("h", 1))]
+            if len(rows) < n0:
+                print(f"[annotate] landscape-only: {len(rows)}/{n0} frames (skipped {n0-len(rows)} portrait; "
+                      f"use --landscape-only 0 to include them)")
+        names = [r["frame"] for r in rows]
+    else:
+        names = [p.name for p in sorted(fdir.glob("*.jpg"))]
     if not names:
         raise SystemExit(f"no frames in {fdir} (run cornrobot_prep.py first)")
     if args.limit:
@@ -111,7 +122,7 @@ def main():
         H, W = img.shape[:2]; st["scale"] = min(1.0, DISP_W / W); st["pts"] = []
         prop = propose(img)
         while True:
-            user = fit_pts(st["pts"], H)
+            user = fit_pts(st["pts"], H, W)
             coeffs = user if user is not None else prop
             cv2.imshow("annotate", draw(img, coeffs, st["pts"], i, len(names), user is not None, st["scale"]))
             k = cv2.waitKey(20) & 0xFF
