@@ -42,7 +42,7 @@ there).
 % =====================================================================
 
 The evaluation data are two forward-view video runs recorded by a forward-view
-camera on a cabbage field robot, sampled at $1$\,fps to give $2067$ still frames
+camera on a cabbage field robot, sampled at $1$\,fps and screened to $1482$ forward-view cabbage still frames
 at $640\times480$. The two runs cover different sections of the field at different
 times of day, so vegetation density and lighting differ between them.
 Table~\ref{tab:res-dataset} summarises the runs. The setting is one robot, one
@@ -59,10 +59,10 @@ supports no claim of coverage beyond this narrow operating envelope.
     \hline
     \textbf{Run} & \textbf{Duration} & \textbf{Frames} & \textbf{Rate (fps)} & \textbf{Resolution} & \textbf{Camera} \\
     \hline
-    Run~1 & $\sim$20\,min & 1218 & 1 & $640\times480$ & forward-view \\
-    Run~2 & $\sim$14\,min & 847  & 1 & $640\times480$ & forward-view \\
+    Run~1 & $\sim$20\,min & 812 & 1 & $640\times480$ & forward-view \\
+    Run~2 & $\sim$14\,min & 670  & 1 & $640\times480$ & forward-view \\
     \hline
-    \textbf{Total} & $\sim$34\,min & \textbf{2067} & 1 & $640\times480$ & forward-view \\
+    \textbf{Total} & $\sim$34\,min & \textbf{1482} & 1 & $640\times480$ & forward-view \\
     \hline
   \end{tabular}
 \end{table}}
@@ -73,8 +73,8 @@ supports no claim of coverage beyond this narrow operating envelope.
 % =====================================================================
 
 We first assess whether the perception front end emits a guidance line on every
-frame. Across all $2067$ frames the Excess-Green index column-peak
-tracker emitted a guidance line in $100\%$ of frames ($2067/2067$). To test
+frame. Across all $1482$ frames the Excess-Green index column-peak
+tracker emitted a guidance line in $100\%$ of frames ($1482/1482$). To test
 whether this figure conceals a silent failure mode in sparse or dense canopy, we
 split the frames into vegetation tertiles by per-frame Excess-Green coverage (low,
 mid, high). Table~\ref{tab:res-reliability} shows that the emit rate is $100\%$ in
@@ -106,11 +106,11 @@ Section~\ref{sec:res-accuracy}.
     \hline
     \textbf{Stratum} & \textbf{Frames} & \textbf{Row emitted} & \textbf{Rate} \\
     \hline
-    All frames               & 2067 & 2067 & 100\% \\
+    All frames               & 1482 & 1482 & 100\% \\
     \hline
-    Vegetation: low (T1)     & 683  & 683  & 100\% \\
-    Vegetation: mid (T2)     & 681  & 681  & 100\% \\
-    Vegetation: high (T3)    & 703  & 703  & 100\% \\
+    Vegetation: low (T1)     & 491  & 491  & 100\% \\
+    Vegetation: mid (T2)     & 487  & 487  & 100\% \\
+    Vegetation: high (T3)    & 504  & 504  & 100\% \\
     \hline
   \end{tabular}
 \end{table}}
@@ -130,8 +130,8 @@ Section~\ref{sec:res-accuracy}.
 
 Mapping the per-frame near-row pixel offset through the image-to-ground homography
 (Section~\ref{sec:method:platform}) describes the magnitude of the lateral offset
-in metric units. The central row sat a median of $1.7$\,cm from the image centre
-across all $2067$ frames (mean $3.8$\,cm, 90th percentile $9.7$\,cm), where the
+in metric units. The central row sat a median of $1.1$\,cm from the image centre
+across all $1482$ frames (mean $3.1$\,cm, 90th percentile $9.6$\,cm), where the
 centimetre figures are indicative only under the unverified camera-pose
 assumption of Section~\ref{sec:method:platform} and are reported alongside the
 pixel and percentage-of-half-width values. These figures characterise the
@@ -152,7 +152,7 @@ act on. Table~\ref{tab:res-temporal} reports how many per-frame heading jumps
 exceed $10^\circ$, $15^\circ$, and $20^\circ$ in the raw per-frame tracker output
 and after the temporal stage. The per-frame jump is the change in heading from the
 previous frame and is undefined for the first frame of each run, so the
-denominators are $1218$ and $847$ as logged.
+denominators are $812$ and $670$ as logged.
 
 These counts are descriptive, since the gate suppresses the jumps by design. The
 post-fusion counts drop to nearly zero because the max-jump gate rejects exactly
@@ -178,10 +178,10 @@ labelling]}.
     \hline
     \textbf{Run / stage} & \textbf{$>10^\circ$} & \textbf{$>15^\circ$} & \textbf{$>20^\circ$} \\
     \hline
-    Run~1 raw ($n=1218$)   & 169 & 114 & 74 \\
+    Run~1 raw ($n=812$)   & 102 & 58 & 35 \\
     Run~1 temporal stage   & 0   & 0   & 0  \\
     \hline
-    Run~2 raw ($n=847$)    & 269 & 191 & 138 \\
+    Run~2 raw ($n=670$)    & 194 & 130 & 89 \\
     Run~2 temporal stage   & 2   & 0   & 0  \\
     \hline
   \end{tabular}
@@ -240,7 +240,7 @@ central row.
 \end{table}}
 
 The two runs establish that the front end is reliable in the self-consistency
-sense, with a line emitted in $100\%$ of $2067$ frames including the
+sense, with a line emitted in $100\%$ of $1482$ frames including the
 low-vegetation tertile, and they give descriptive context on how often the raw
 per-frame heading would have jumped. Accuracy is not yet established. Every
 correctness quantity remains \emph{[TBD pending GT labelling]}: heading and
