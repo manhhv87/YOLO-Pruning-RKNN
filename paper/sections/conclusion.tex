@@ -56,7 +56,7 @@ RANSAC and equal-weight least squares~\cite{fischler1981} is reported, with the 
 temporal stage, and so is the comparison against the platform's trained YOLOv5 detector: the detector is the
 more accurate of the two, chiefly on the wrong-row frames (median cross-track $10$\,px there against
 $214$\,px), with the detector-free pipeline within about a degree of median heading at no labelling or GPU
-cost. The one quantity that remains pending is the inter-annotator agreement.
+cost. An inter-annotator agreement study, with a second annotator, is left to future work.
 Cross-track offset $e$ is reported in pixels, as a percentage of half the image width, and
 in centimetres via an image-to-ground homography built from the robot's measured camera
 height and tilt. The dataset and code will be made

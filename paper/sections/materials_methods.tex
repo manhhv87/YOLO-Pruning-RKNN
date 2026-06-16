@@ -14,8 +14,8 @@
 %
 % Measured: 100% row-emission (1482/1482), tertile emission, cross-track
 % magnitude (cm), heading and cross-track error vs a 150-frame human-labelled
-% subset, and the temporal ablation. Pending: inter-annotator agreement (one
-% annotator so far) and the fit-arm and trained-detector (YOLOv5) baselines.
+% subset, the temporal ablation, and the fit-arm / front-end / trained-detector
+% (YOLOv5) baselines. Single annotator; inter-annotator agreement = future work.
 % =====================================================================
 
 \section{Materials and methods}
@@ -35,12 +35,11 @@ selectivity rather than as a
 jump-count reduction that follows by construction from the gate threshold. Since the pipeline never trains on any frame, no data can leak from a
 training set into the evaluation, and every frame is a test frame.
 
-The accuracy results in this paper are measured against a human-labelled subset of $150$ frames; the
-quantities that still require a second annotator or a baseline implementation are written explicitly as
-``[TBD]'' and named where they occur. The measured quantities are the row-emission rates, the cross-track
-magnitude, the heading and cross-track error against the labelled subset, and the temporal ablation; the
-pending quantities are the inter-annotator agreement and the fit-arm and trained-detector baseline
-comparisons.
+The accuracy results in this paper are measured against a human-labelled subset of $150$ frames: the
+row-emission rates, the cross-track magnitude, the heading and cross-track error against the subset, the
+temporal ablation, and the fit-arm and trained-detector baseline comparisons. The labelling was performed by
+a single annotator, so an inter-annotator agreement floor on the smallest meaningful error is not established
+and is left to future work.
 
 
 
@@ -341,9 +340,9 @@ corridor. The marked points are fit in the same $x=P(y)$ parameterisation of Equ
 the GT heading is the look-ahead tangent of Equation~\eqref{eq:heading_la} evaluated at the same
 $y_{\mathrm{la}}$ as the system output, so that predicted and GT headings are directly comparable. A subset of
 $150$ frames was labelled by a single annotator, stratified across the two runs and the vegetation tertiles.
-Quantifying the reliability of the protocol requires a second annotator: the inter-annotator agreement,
-reported as the median absolute heading difference in degrees and cross-track in pixels, would set a floor on
-the smallest meaningful error and is [TBD] pending that second pass. Because the GT line is marked by hand on
+Quantifying the reliability of the protocol would require a second annotator: an inter-annotator agreement,
+the median absolute heading difference in degrees and cross-track in pixels, would set a floor on the
+smallest meaningful error, and that study is left to future work. Because the GT line is marked by hand on
 the image rather than derived from the tracker's anchors, it is independent of the Excess-Green front end and
 provides a fair external reference.
 
@@ -377,8 +376,8 @@ Section~\ref{sec:res-accuracy}; the trained-detector baseline is reported there 
 
 Per-frame errors are written to one CSV row per frame so that the deployed pipeline and its baselines and
 ablations are compared paired on identical frames. Because per-frame errors are not normally distributed and
-frames within a run are temporally correlated, the pending baseline comparisons will be assessed with paired
-non-parametric tests, specifically the Wilcoxon signed-rank test on paired per-frame differences, with
-Holm--Bonferroni correction across the comparison family, and effect sizes (Cliff's $\delta$) with bootstrap
-confidence intervals rather than $p$-values alone. Any comparison whose median difference is smaller than its
-dispersion is reported in correspondingly cautious wording.
+frames within a run are temporally correlated, comparisons are reported as error distributions (median, mean,
+and 90th percentile) and as paired per-frame differences rather than as $p$-values. Where a difference is
+small relative to its dispersion, as for the deployed Huber fit against equal-weight least squares, whose
+paired per-frame difference has a median of zero with a bootstrap interval covering zero, it is reported as
+indistinguishable rather than as a ranking.

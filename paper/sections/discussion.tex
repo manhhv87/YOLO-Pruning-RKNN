@@ -17,8 +17,8 @@ cabbage video, the combination yields a deployable vision-only guidance signal,
 and that the temporal stage, rather than the perception front end, is the primary
 source of robustness. The discussion is organised around that thesis: the conditions
 under which it holds, and the limits of the evidence behind it. Throughout, the
-quantities measured against the labelled subset are kept separate from those that
-still await a second annotator or a baseline implementation.
+quantities measured against the labelled subset are reported as such, with the
+single-annotator caveat noted in the limitations.
 
 \subsection{Large-error behaviour}
 \label{sec:disc-safety}
@@ -202,8 +202,8 @@ its arithmetic job, not that the surviving heading is right
 separately against the labelled subset, namely the heading and cross-track error
 against human GT and the error on the spike frames (Section~\ref{sec:res-accuracy}).
 The fit-arm and trained-detector baseline comparisons are reported there as well;
-what remains for a complete evaluation is the inter-annotator agreement, pending a
-second annotator. The present results stand as a leakage-free in-field validation:
+the single remaining gap is an inter-annotator agreement study, left to future
+work. The present results stand as a leakage-free in-field validation:
 a deployed median heading error of $5.0^{\circ}$, with the temporal stage improving accuracy on the
 hardest frames, and with the comparison against the platform's trained detector as
 the main remaining step.

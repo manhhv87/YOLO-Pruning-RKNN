@@ -2,9 +2,9 @@
 % =====================================================================
 % RESULTS -- detector-free, training-free cabbage-row guidance validation.
 % Measured: reliability (100% emission), cross-track magnitude (cm), heading and
-% cross-track error vs a 150-frame human-labelled subset, the temporal ablation.
-% Still pending: inter-annotator agreement (one annotator so far) and the
-% fit-arm and deployed-detector (YOLOv5) baseline comparisons.
+% cross-track error vs a 150-frame human-labelled subset, the temporal ablation,
+% the fit-arm baseline, the front-end/index baselines, and the trained-detector
+% (YOLOv5) baseline. Single annotator; inter-annotator agreement = future work.
 % =====================================================================
 
 \section{Results}
@@ -196,8 +196,8 @@ each labelled frame the annotator marks the central navigation row, and the
 ground-truth (GT) line and its look-ahead tangent are derived in the same
 $x=P(y)$ parameterisation as the estimator. Because the labelling was performed by
 a single annotator, an inter-annotator agreement floor on the smallest meaningful
-error is not yet available and is reported as pending in
-Table~\ref{tab:res-pending}.
+error is not available, and establishing one is left to future work; the errors
+below are therefore read against a single human reference.
 
 \paragraph{Accuracy against ground truth.}
 Table~\ref{tab:res-accuracy} reports the heading and cross-track error of the
@@ -325,28 +325,6 @@ comparable median cross-track with no labelled data and no GPU.
   \end{tabular}
 \end{table}}
 
-\paragraph{Remaining comparison.}
-The one comparison still outstanding is the inter-annotator agreement
-(Table~\ref{tab:res-pending}), which would set a floor on the smallest meaningful
-error and is pending a second annotator.
-
-{\renewcommand{\arraystretch}{1.3}
-\begin{table}[!ht]
-  \centering
-  \caption{The one comparison still pending. The accuracy, cross-track, temporal,
-    fit-arm, and deployed-detector results above are established; an
-    inter-annotator agreement floor requires a second annotator.}
-  \label{tab:res-pending}
-  \label{tab:res-baselines}
-  \begin{tabular}{ll}
-    \hline
-    \textbf{Comparison (versus human ground truth)} & \textbf{Status} \\
-    \hline
-    Inter-annotator agreement (heading $^\circ$; cross-track px)     & [TBD pending second annotator] \\
-    \hline
-  \end{tabular}
-\end{table}}
-
 % =====================================================================
 \subsection{Front-end, index, and temporal baselines}
 \label{sec:res-frontend}
@@ -412,6 +390,6 @@ error of $5.0^\circ$ and a median cross-track error of $1.1$\,cm, with the
 temporal stage measurably improving accuracy on the hardest frames and the trained
 detector more accurate still, chiefly on the wrong-row frames. The principal
 limitations of the present evaluation are the single annotator, for which an
-inter-annotator agreement floor is still pending (Table~\ref{tab:res-pending}),
-and the residual wrong-row tail of the vegetation-index front end that the
-detector comparison identifies as the main accuracy gap.
+inter-annotator agreement floor is left to future work, and the residual
+wrong-row tail of the vegetation-index front end that the detector comparison
+identifies as the main accuracy gap.
