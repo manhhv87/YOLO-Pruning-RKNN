@@ -133,12 +133,12 @@ closed loop.}
 \end{figure}
 
 \noindent Two real robot runs recorded on cabbage plots form the frame set: run~1 (approximately 20 minutes)
-and run~2 (approximately 14 minutes). Frames are sampled at 1\,frame per second (1\,fps) and screened to the frames showing the cabbage navigation row through the look-ahead region, removing stretches dominated by adjacent leafy-green beds or by occluding operators; a further per-frame quality screen discards blurred, poorly exposed, or weak-signal frames. This yields 1432 forward-view cabbage frames
-in total ($801$ from run~1 and $631$ from run~2), all at $640\times480$. The full set is treated as a pure
+and run~2 (approximately 14 minutes). Frames are sampled at 1\,frame per second (1\,fps) and screened to the frames showing the cabbage navigation row through the look-ahead region, removing stretches dominated by adjacent leafy-green beds or by occluding operators. This yields 1482 forward-view cabbage frames
+in total ($812$ from run~1 and $670$ from run~2), all at $640\times480$. The full set is treated as a pure
 test set. Because the pipeline is training-free there is no training/validation split and no possibility of
 memorisation. To probe robustness to crop growth stage and canopy density the frames are stratified into
-vegetation tertiles (low, mid, and high Excess-Green coverage), giving three roughly equal strata of $474$,
-$473$, and $485$ frames. The dataset will be released publicly as the first real forward-view cabbage robot
+vegetation tertiles (low, mid, and high Excess-Green coverage), giving three roughly equal strata of $491$,
+$487$, and $504$ frames. The dataset will be released publicly as the first real forward-view cabbage robot
 crop-row corpus, and a Data and Code Availability statement accompanies the manuscript.
 
 % =====================================================================

@@ -103,18 +103,19 @@ def flags_for(m, T):
     if m["brightness"] < 45 or m["under_exp"] > 0.55:       f.append("dark")
     if m["brightness"] > 215 or m["over_exp"] > 0.08:       f.append("bright")
     if m["contrast"] < 22:                                  f.append("low_contrast")
-    if m["veg_frac"] < 0.03:                                f.append("weak_veg")
+    if m["veg_frac"] < 0.015:                               f.append("weak_veg")
     if m["n_anchors"] < 4:                                  f.append("sparse_track")
     if not m["reach_la"]:                                   f.append("no_lookahead")
-    if not np.isnan(m["fit_resid"]) and m["fit_resid"] > 25:f.append("poor_fit")
+    if not np.isnan(m["fit_resid"]) and m["fit_resid"] > 45:f.append("poor_fit")
     if m["peak_ratio"] and m["peak_ratio"] < 1.03:          f.append("ambiguous_row")
     if m["over_bend"]:                                      f.append("over_bend")
     if not np.isnan(m["heading"]) and abs(m["heading"]) > 35: f.append("extreme_heading")
     return f
 
 
-CRITICAL = {"weak_veg", "sparse_track", "no_lookahead", "poor_fit", "over_bend",
-            "blurry", "dark", "bright"}
+# poor_fit is NOT critical: a moderate robust-fit residual is normal for discrete, staggered cabbage
+# plants with parallel rows, so it over-flags good frames. It is kept as an informational metric only.
+CRITICAL = {"weak_veg", "sparse_track", "no_lookahead", "over_bend", "blurry", "dark", "bright"}
 
 
 def quality(m, T):
