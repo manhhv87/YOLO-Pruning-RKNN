@@ -22,15 +22,15 @@ rather than a new method.
 The study contributes two results and one testable hypothesis within a deliberately narrow
 scope. The first
 result is a dataset: the first real forward-view cabbage-field robot guidance dataset,
-comprising 1482 forward-view cabbage frames at $640\times480$, screened from two field traverses
+comprising 1432 forward-view cabbage frames at $640\times480$, screened from two field traverses
 ($\sim$20 and $\sim$14 minutes), spanning a wide range of vegetation density at a
 forward-view camera pose representative of low-cost in-row navigation. The second result
 concerns leakage-free validation. Because the estimator has no trained component, the
 entire dataset serves as a pure test set with nothing for it to leak into, and the
 validation is structurally leakage-free in a way that detector-based pipelines, with their
 expensive and leak-prone agricultural train/test splits, are not. A guidance line is
-emitted on 100\% of frames (1482/1482), and this rate is uniform across vegetation density,
-with per-tertile (low/mid/high greenness) values of 491/491, 487/487, and 504/504, each
+emitted on 100\% of frames (1432/1432), and this rate is uniform across vegetation density,
+with per-tertile (low/mid/high greenness) values of 474/474, 473/473, and 485/485, each
 100\%. This figure is a \emph{self-consistency} statement rather than an accuracy
 guarantee: ``a row was found'' means a line was \emph{emitted}, not that it is the
 \emph{correct} line. The accuracy-bearing quantity that completes this result, heading and
