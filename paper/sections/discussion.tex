@@ -88,9 +88,9 @@ temporal stage that suppressed jumps by also suppressing \emph{correct} large
 corrections would smooth the trace while raising error against GT; the ablation
 shows the opposite, that fusion lowers error on exactly those frames. The fit-arm
 comparison against RANSAC and equal-least-squares fits is reported in
-Section~\ref{sec:res-accuracy} and shows the fit choice to be secondary; what
-remains is the comparison against the platform's detect-then-fit detector, which is
-\emph{[TBD pending the baseline run]}.
+Section~\ref{sec:res-accuracy} and shows the fit choice to be secondary, and the
+comparison against the platform's trained detect-then-fit detector is reported
+there too: it is the more accurate front end, chiefly on the wrong-row frames.
 
 \subsection{Safety conditions for the max-jump gate}
 \label{sec:disc-gate}
@@ -151,8 +151,10 @@ search to the ground safety corridor, and stabilising the cross-track signal
 through the temporal stage, which together lower the deployed cross-track error
 from a 90th percentile of $155$\,px to $46$\,px on the labelled subset
 (Section~\ref{sec:res-accuracy}). The residual tail is the content failure a
-vegetation index cannot resolve, and is where the platform's trained detector is
-expected to retain an advantage.
+vegetation index cannot resolve, and the deployed-detector baseline confirms it:
+on those frames the trained detector localises the central row to a median
+$10$\,px against the raw tracker's $214$\,px, and is the more accurate of the two
+on every one of them (Section~\ref{sec:res-accuracy}).
 
 \subsection{Limitations}
 \label{sec:limitations}
@@ -199,9 +201,9 @@ its arithmetic job, not that the surviving heading is right
 (Section~\ref{sec:disc-safety}). The correctness quantities are reported
 separately against the labelled subset, namely the heading and cross-track error
 against human GT and the error on the spike frames (Section~\ref{sec:res-accuracy}).
-What remains for a complete evaluation is the inter-annotator agreement and the
-fit-arm and trained-detector baseline comparisons, which are \emph{[TBD]}. The
-present results stand as a leakage-free in-field validation: a deployed median
-heading error of $5.0^{\circ}$, with the temporal stage improving accuracy on the
+The fit-arm and trained-detector baseline comparisons are reported there as well;
+what remains for a complete evaluation is the inter-annotator agreement, pending a
+second annotator. The present results stand as a leakage-free in-field validation:
+a deployed median heading error of $5.0^{\circ}$, with the temporal stage improving accuracy on the
 hardest frames, and with the comparison against the platform's trained detector as
 the main remaining step.
