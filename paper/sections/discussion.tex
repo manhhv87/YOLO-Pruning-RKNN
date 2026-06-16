@@ -65,8 +65,10 @@ different stock front end (a segmentation scan, a row-anchor estimator, or anoth
 vegetation index) would not change the underlying problem, because the single-frame
 estimate would still occasionally lock onto a weed patch, a canopy gap, or an
 adjacent row; such errors arise from scene content rather than from the estimator.
-This is a conjecture that the pending fit-arm and front-end baselines are needed to
-test, not a result of the present study. The temporal stage is what is expected to convert an
+The fit-arm comparison (Section~\ref{sec:res-accuracy}) is consistent with this,
+the three fits differing little, but swapping the front end itself is untested, so
+this remains a conjecture for the pending front-end baselines, not a result of the
+present study. The temporal stage is what is expected to convert an
 occasionally-wrong per-frame estimate into a heading a controller can integrate.
 The sliding-window median rejects isolated contaminated frames, the EMA limits
 how fast the steering target can move, and the max-jump gate enforces that the
@@ -82,10 +84,11 @@ gate fires selectively, with a mean raw heading error of $14.3^{\circ}$ on the
 gated frames against $5.5^{\circ}$ on the rest (Section~\ref{sec:res-accuracy}). A
 temporal stage that suppressed jumps by also suppressing \emph{correct} large
 corrections would smooth the trace while raising error against GT; the ablation
-shows the opposite, that fusion lowers error on exactly those frames. What remains
-is the comparison against detect-then-fit and RANSAC / equal-least-squares
-baselines under the same temporal stage, which is \emph{[TBD pending the baseline
-runs]}.
+shows the opposite, that fusion lowers error on exactly those frames. The fit-arm
+comparison against RANSAC and equal-least-squares fits is reported in
+Section~\ref{sec:res-accuracy} and shows the fit choice to be secondary; what
+remains is the comparison against the platform's detect-then-fit detector, which is
+\emph{[TBD pending the baseline run]}.
 
 \subsection{Safety conditions for the max-jump gate}
 \label{sec:disc-gate}

@@ -253,24 +253,53 @@ and stabilising the cross-track signal through the temporal stage, rather than
 reporting it per frame, reduced the deployed cross-track error from a 90th
 percentile of $155$\,px to $46$\,px.
 
-\paragraph{Remaining comparisons.}
-Two comparisons that interpret these numbers are not yet available and are listed
-in Table~\ref{tab:res-pending}. The accuracy of the deployed robust fit relative
-to its fit-arm alternatives, an equal-weight least-squares fit and a
-RANSAC~\cite{fischler1981} fit over the same Excess-Green peaks, is not reported
-here; nor is the comparison against the trained detector the platform itself
-deploys, which would quantify the cost of removing the learned model and directly
-test whether a vegetation index can stand in for a detector. The
-inter-annotator agreement that would set a floor on these errors is likewise
+\paragraph{Fit-arm comparison.}
+Replacing the deployed Huber IRLS fit with the two standard alternatives on the
+same anchors, each passed through the same fit wrapper so that only the loss
+differs, changes the result little (Table~\ref{tab:res-fitarm}). The Huber and
+equal-weight least-squares fits are tied on median heading error ($6.4^\circ$),
+with the Huber fit marginally better on the mean and tail ($9.1^\circ$ and
+$19.4^\circ$ against $9.3^\circ$ and $20.8^\circ$), while RANSAC is the weakest of
+the three ($7.2^\circ$, $10.5^\circ$, $25.3^\circ$) because its hard inlier
+threshold discards anchors the other fits use. The fit choice is therefore
+secondary on these corridor-restricted anchors, consistent with the temporal
+stage rather than the fit being the robustness lever, and the deployed Huber fit
+is a sound default.
+
+{\renewcommand{\arraystretch}{1.2}
+\begin{table}[!ht]
+  \centering
+  \caption{Fit-arm comparison on the labelled subset: per-frame error of the
+    deployed Huber IRLS fit and the two standard alternatives, on identical
+    anchors through the same fit wrapper, so that only the loss differs.}
+  \label{tab:res-fitarm}
+  \begin{tabular}{lccc@{\hskip 1.2em}ccc}
+    \hline
+    & \multicolumn{3}{c}{\textbf{Heading err ($^\circ$)}} & \multicolumn{3}{c}{\textbf{Cross-track err (px)}} \\
+    \textbf{Fit} & med & mean & p90 & med & mean & p90 \\
+    \hline
+    Huber IRLS (deployed) & 6.4 & 9.1  & 19.4 & 11 & 42 & 155 \\
+    Equal-weight LS       & 6.4 & 9.3  & 20.8 & 10 & 41 & 154 \\
+    RANSAC                & 7.2 & 10.5 & 25.3 & 12 & 42 & 143 \\
+    \hline
+  \end{tabular}
+\end{table}}
+
+\paragraph{Remaining comparison.}
+One comparison that would interpret these numbers is not yet available and is
+listed in Table~\ref{tab:res-pending}: the comparison against the trained detector
+the platform itself deploys, which would quantify the cost of removing the learned
+model and directly test whether a vegetation index can stand in for a detector.
+The inter-annotator agreement that would set a floor on these errors is likewise
 pending a second annotator.
 
 {\renewcommand{\arraystretch}{1.3}
 \begin{table}[!ht]
   \centering
-  \caption{Comparisons still pending. The accuracy, cross-track, and temporal
-    results of Table~\ref{tab:res-accuracy} are established; the entries below
-    require a second annotator or the baseline implementations and are reported as
-    pending.}
+  \caption{Comparisons still pending. The accuracy, cross-track, temporal, and
+    fit-arm results of Tables~\ref{tab:res-accuracy} and~\ref{tab:res-fitarm} are
+    established; the entries below require a second annotator or the trained-detector
+    baseline and are reported as pending.}
   \label{tab:res-pending}
   \label{tab:res-baselines}
   \begin{tabular}{ll}
@@ -278,7 +307,6 @@ pending a second annotator.
     \textbf{Comparison (versus human ground truth)} & \textbf{Status} \\
     \hline
     Inter-annotator agreement (heading $^\circ$; cross-track px)     & [TBD pending second annotator] \\
-    Fit arm: quadratic $x{=}P(y)$ vs.\ RANSAC vs.\ equal-weight LS   & [TBD pending baseline run] \\
     Deployed-detector baseline: Excess-Green vs.\ trained YOLOv5     & [TBD pending baseline run] \\
     \hline
   \end{tabular}
@@ -290,7 +318,7 @@ $150$-frame human-labelled subset the deployed pipeline attains a median heading
 error of $5.0^\circ$ and a median cross-track error of $1.1$\,cm, with the
 temporal stage measurably improving accuracy on the hardest frames. The principal
 limitations of the present evaluation are the single annotator, the residual
-wrong-row tail of the vegetation-index front end, and the absence of the fit-arm
-and trained-detector baselines, all of which Table~\ref{tab:res-pending} records
-as the remaining work needed to place the detector-free pipeline against the
-alternatives it is meant to replace.
+wrong-row tail of the vegetation-index front end, and the absence of the
+trained-detector baseline, which Table~\ref{tab:res-pending} records as the
+remaining work needed to place the detector-free pipeline against the trained
+detector it is meant to replace.

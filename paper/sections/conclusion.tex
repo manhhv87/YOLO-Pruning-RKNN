@@ -50,10 +50,10 @@ The scope is one robot, one crop (cabbage), one camera pose, and an open-loop ev
 the proposed pipeline at 1\,fps, and the claims extend no further. The measured outcomes are
 a $100\%$ guidance-line emission rate uniform across vegetation tertiles, a deployed median
 heading error of $5.0^{\circ}$ and cross-track error of $1.1$\,cm against the labelled
-subset, and a temporal stage that improves accuracy on the hardest frames. The quantities
-that remain pending are the inter-annotator agreement and the baseline comparisons against
-the fit-arm alternatives (RANSAC and equal-weight least squares~\cite{fischler1981}) and the
-platform's trained detector.
+subset, and a temporal stage that improves accuracy on the hardest frames. The fit-arm comparison against
+RANSAC and equal-weight least squares~\cite{fischler1981} is reported, with the fit choice secondary to the
+temporal stage; the quantities that remain pending are the inter-annotator agreement and the comparison
+against the platform's trained detector.
 Cross-track offset $e$ is reported in pixels, as a percentage of half the image width, and
 in centimetres via an image-to-ground homography built from the robot's measured camera
 height and tilt. The dataset and code will be made

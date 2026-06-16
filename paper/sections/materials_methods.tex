@@ -230,8 +230,9 @@ spurious anchors from gaps, weeds, or an adjacent row.
 Two standard alternatives serve as comparison fits over the same anchor set, evaluated against the deployed
 Huber IRLS fit: equal-weight least squares (the non-robust polynomial fit) and RANSAC consensus
 fitting~\cite{fischler1981}, a strong robust baseline. The accuracy of the deployed fit relative to these
-baselines against human ground truth is reported in Section~\ref{sec:res-accuracy}, and those comparison
-numbers are [TBD pending the baseline runs].
+baselines against human ground truth is reported in Section~\ref{sec:res-accuracy}: the Huber and
+equal-weight least-squares fits are tied on median heading error and both ahead of RANSAC, so the fit
+choice is secondary on the corridor-restricted anchors.
 
 % =====================================================================
 \subsection{Heading and cross-track geometry}
@@ -370,8 +371,8 @@ Consistent with Section~\ref{sec:method:fusion}, the robustness of the temporal 
 heading error versus human GT on the gate-suppressed frames, raw versus fused, and (ii) the selectivity of
 the gate, that is, whether the frames it holds carry larger raw errors than the frames it passes; both are
 reported in Section~\ref{sec:res-accuracy}. The raw-versus-fused jump count is excluded from the robustness
-results. The deployed-fit-versus-baseline comparison (equal-LS, RANSAC) and the trained-detector baseline are
-[TBD pending the baseline runs].
+results. The deployed-fit-versus-baseline comparison (equal-LS, RANSAC) is reported in
+Section~\ref{sec:res-accuracy}; the trained-detector baseline is [TBD pending the baseline run].
 
 Per-frame errors are written to one CSV row per frame so that the deployed pipeline and its baselines and
 ablations are compared paired on identical frames. Because per-frame errors are not normally distributed and
