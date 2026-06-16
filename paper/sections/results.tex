@@ -32,9 +32,9 @@ accurate. The robustness claim that actually matters, heading error against huma
 GT on the very frames the gate suppresses, paired with the false-reject rate, is
 \emph{[TBD pending GT labelling]} and is marked as such in every table.
 Cross-track is reported in pixels, as a percentage of the half-image width, and
-in centimetres through the shared-robot image-to-ground homography of
-Section~\ref{sec:method:platform} (under the camera-pose assumption stated
-there).
+in centimetres through the image-to-ground homography of
+Section~\ref{sec:method:platform}, built from the robot's measured camera
+height and tilt.
 
 % =====================================================================
 \subsection{Dataset}
@@ -130,10 +130,10 @@ Section~\ref{sec:res-accuracy}.
 
 Mapping the per-frame near-row pixel offset through the image-to-ground homography
 (Section~\ref{sec:method:platform}) describes the magnitude of the lateral offset
-in metric units. The central row sat a median of $1.1$\,cm from the image centre
-across all $1482$ frames (mean $3.1$\,cm, 90th percentile $9.6$\,cm), where the
-centimetre figures are indicative only under the unverified camera-pose
-assumption of Section~\ref{sec:method:platform} and are reported alongside the
+in metric units. The central row sat a median of $1.9$\,cm from the image centre
+across all $1482$ frames (mean $5.3$\,cm, 90th percentile $16.3$\,cm), where the
+centimetre conversion uses the homography built from the robot's measured camera
+pose (Section~\ref{sec:method:platform}) and is reported alongside the
 pixel and percentage-of-half-width values. These figures characterise the
 \emph{magnitude} of the lateral offset the controller would have observed, a
 geometric summary of the runs rather than an error against ground truth. Whether

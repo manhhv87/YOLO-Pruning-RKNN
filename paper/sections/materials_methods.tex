@@ -55,15 +55,16 @@ approximately $0.14$\,m\,s$^{-1}$. The platform pairs an embedded CPU-only compu
 webcam at $640\times480$, here a Logitech HD~C270 webcam and an embedded board of the NVIDIA Jetson Nano /
 Raspberry Pi~4 class. The detector-free pipeline of this paper runs on its CPU with no neural accelerator
 (Figure~\ref{fig:camera}). This
-robot shares its platform and camera mounting with a sibling robot whose camera was calibrated from a
-standard checkerboard procedure, and a four-point image-to-ground homography established on the shared
-platform (world origin on the robot centreline at the near row) recovered ground positions to a mean error
-of $1.55$\,mm. Because the two
-robots share the same camera arrangement, this homography is reused to express the near-row cross-track in
-centimetres (Section~\ref{sec:method:lookahead}). The assumption behind that reuse is direct: the camera
-height and tilt of the present cabbage runs were not re-measured, so the centimetre figures hold only if the
-shared, previously calibrated configuration was preserved. For this reason the cross-track is reported in
-pixels and as a fraction of the half-image width in addition to centimetres. The scope is fixed to one robot,
+robot shares its camera model with a sibling robot whose camera was calibrated from a standard checkerboard
+procedure; the intrinsics and lens distortion from that calibration are reused here, as they are a property
+of the camera and lens rather than of the mounting. The extrinsics, by contrast, are taken from this robot's
+own measured installation: the camera sits on the robot centreline $65$\,cm above the ground with its optical
+axis tilted $55^{\circ}$ from the vertical (equivalently $35^{\circ}$ below the horizontal). From these
+intrinsics and measured extrinsics an image-to-ground homography is constructed under a flat-ground
+assumption (world origin on the centreline beneath the camera) and used to express the near-row cross-track in
+centimetres (Section~\ref{sec:method:lookahead}). The residual assumptions are the planar ground and the
+reuse of the camera intrinsics, so the cross-track is also reported in pixels and as a fraction of the
+half-image width. The scope is fixed to one robot,
 one crop (cabbage), and one camera pose. The validation reported here is narrow by design, open-loop, and at a
 single low frame rate, with no claim of generalisation beyond this configuration. Closed-loop autonomous
 steering on this platform is future work and was not exercised.
@@ -255,10 +256,9 @@ e = P(y_{\mathrm{la}}) - x_c ,
 in pixels. The offset $e$ is additionally reported normalised by the half-image width $W/2$ (that is, as a
 fraction of the half-frame), so that it is dimensionless and comparable across mountings. Conversion to
 centimetres requires a metric ground anchor, namely an image-to-ground homography under a flat-ground
-assumption. This anchor comes from reusing the shared-platform homography under the
-configuration-preserved assumption stated in Section~\ref{sec:method:platform}; where that assumption cannot
-be supported the centimetre figure is [TBD], and in all cases $e$ is reported in pixels and in \% of
-half-image width with no invented centimetre value.
+assumption. This anchor is the homography of Section~\ref{sec:method:platform}, built from the robot's
+measured camera height and tilt; the centimetre cross-track magnitude follows directly, while $e$ is in
+all cases also reported in pixels and in \% of half-image width.
 
 % =====================================================================
 \subsection{Temporal filtering}
@@ -348,10 +348,10 @@ reference. The labelling effort is in progress, so the agreement figures are rep
 look-ahead tangent heading and the human-GT heading, $|\theta - \theta^{\mathrm{gt}}|$, which is
 controller-independent. The secondary metric is cross-track error in pixels (and in \% of half-image width),
 the lateral offset between the predicted and GT guidance lines at the look-ahead row $y_{\mathrm{la}}$
-(Equation~\eqref{eq:crosstrack}). Centimetre units are reported only under a calibrated image-to-ground
-homography. The reused shared-platform calibration of Section~\ref{sec:method:platform} serves this purpose under the
-configuration-preserved assumption; where that assumption does not hold,
-cm-scale errors are [TBD], and in all cases the errors are reported in degrees and pixels.
+(Equation~\eqref{eq:crosstrack}). Centimetre units are reported through the image-to-ground
+homography of Section~\ref{sec:method:platform}, built from the robot's measured camera pose; the
+cm-scale errors await the GT subset and are [TBD pending GT labelling], and in all cases the errors are
+reported in degrees and pixels.
 
 As a basic sanity check the fraction of frames for which the tracker emits a guidance line at all is reported
 as a self-consistency measure, both overall and broken down by vegetation tertile; the measured value is

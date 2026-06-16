@@ -53,18 +53,18 @@ heading and cross-track error against human ground truth, inter-annotator agreem
 on the visually difficult (large raw-jump) frames, the false-reject rate, and the baseline (RANSAC
 and equal-weight least squares~\cite{fischler1981}) and temporal-ablation comparisons.
 Cross-track offset $e$ is reported in pixels, as a percentage of half the image width, and
-in centimetres via an image-to-ground homography reused from the shared robot's camera
-calibration under a stated camera-pose assumption. The dataset and code will be made
+in centimetres via an image-to-ground homography built from the robot's measured camera
+height and tilt. The dataset and code will be made
 publicly available upon publication.
 
 \subsection{Future work}
 \label{sec:future-work}
-Three directions follow directly from the boundaries above. An on-robot camera calibration
-comes first. The centimetre cross-track reported here relies on an image-to-ground
-homography reused from the shared platform's calibration, so capturing the intrinsics and
-the image-to-ground mapping on the cabbage robot itself, with its own measured camera
-height and tilt, would remove the pose assumption and make the metric cross-track exact
-rather than indicative. A closed-loop field run is the second direction. The present study
+Three directions follow directly from the boundaries above. A full on-robot camera calibration
+comes first. The centimetre cross-track reported here uses an image-to-ground homography built
+from the robot's measured camera height and tilt, with intrinsics reused from the sibling
+camera and a flat-ground assumption, so a checkerboard calibration performed on the cabbage
+robot itself, capturing its own intrinsics and a ground-plane fit, would remove the residual
+planar-ground and reused-intrinsics assumptions. A closed-loop field run is the second direction. The present study
 is open-loop, so it cannot capture how perception latency, controller dynamics, and terrain
 interact with the guidance estimate and the max-jump gate's
 decisions~\cite{rajamani2012}. Replacing the recorded 1\,fps evaluation with an on-robot

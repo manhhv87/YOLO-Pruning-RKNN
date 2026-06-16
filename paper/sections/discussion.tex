@@ -149,18 +149,17 @@ parameters (window length, EMA factor, jump threshold) interact with controller
 and vehicle dynamics that an offline replay does not capture. A closed-loop field
 trial with odometry is the clear next step.
 
-The metric figures rest on a reused-calibration assumption. The heading $\theta$
+The metric figures rest on a measured camera pose and a flat-ground assumption. The heading $\theta$
 is reported in degrees, which is controller-relevant and scale-free, and the
 cross-track offset $e$ is reported in pixels, as a fraction of half the image
 width, and in centimetres. The centimetre conversion uses an image-to-ground
-homography reused from the shared robot's camera calibration rather than a
-calibration performed for these specific runs. The exact camera height and tilt
-during the cabbage runs were not re-measured, so the metric figures hold only
-under the assumption that the shared, previously-calibrated camera configuration
-was preserved. A flat-ground homography also inflates metric error most at the
-far look-ahead distance, precisely where guidance is most sensitive, so the
-centimetre figures are indicative. A calibration captured on the cabbage robot
-itself would remove the assumption and is the clean next step.
+homography built from the robot's own measured camera height ($65$\,cm) and tilt
+($55^{\circ}$ from the vertical), with the camera intrinsics reused from a
+checkerboard calibration of the same camera. A flat-ground homography still
+inflates metric error most at the far look-ahead distance, precisely where
+guidance is most sensitive, so the centimetre figures away from the near row
+carry that planar-ground caveat. A full on-robot checkerboard calibration,
+including the intrinsics, would further tighten the metric mapping and is a clean refinement.
 
 The scope is narrow: two runs, one crop, one camera pose. The evidence is two
 real cabbage runs ($\sim 20$ and $\sim 14$ minutes, $1482$ curated cabbage frames at $1$\,fps,

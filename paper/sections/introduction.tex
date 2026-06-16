@@ -33,8 +33,8 @@ guidance accuracy and temporal stability this stock composition achieves in fiel
 dataset, to be released publicly, recorded on a working field robot at a camera pose representative of
 low-cost in-row navigation; a leakage-free in-field evaluation of the detector-free, training-free
 pipeline, reported in the navigation units a controller consumes, namely heading in degrees and
-cross-track in pixels and in centimetres through a reused camera-to-ground calibration, with accuracy
-against human ground truth the subject of ongoing annotation; and a testable hypothesis, which the
+cross-track in pixels and in centimetres through a camera-to-ground homography built from the robot's
+measured camera pose, with accuracy against human ground truth the subject of ongoing annotation; and a testable hypothesis, which the
 evaluation is designed to assess, that the temporal stage rather than the perception front end is the
 primary source of robustness, examined by comparing heading error against ground truth on the hardest
 frames together with the gate's false-reject rate.
