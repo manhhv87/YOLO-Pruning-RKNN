@@ -9,8 +9,11 @@ between heads); rows bow far away, so the GT is a low-order polynomial x = P(y)
 HOW TO SAVE (important): click points along the row, then press **SPACE (or s)** to SAVE that frame and
 go to the next. Nothing is written until you press SPACE/s (or q to quit). The console prints each save.
 
-Controls:  left-click = add a point ON the row  |  SPACE / s = SAVE + next  |  a = use the red proposal
-           c = clear my points  |  n = skip (no label)  |  q = save all + quit
+Controls:  left-click = add a point ON the row  |  SPACE / s = SAVE + next  |  b = back (re-edit previous)
+           a = use the red proposal  |  c = clear my points  |  n = skip (no label)  |  q = save all + quit
+Re-editing a mistake: press b to step back to the previous frame; a labelled frame re-loads your saved
+points so you can adjust them and SPACE/s again to OVERWRITE. Labels persist to labels.json on every save,
+so you can also quit and re-run later -- already-labelled frames show "[SAVED]" and re-open for editing.
 Usage:
   python annotate_rows.py --frames datasets/CabbageNav/label_subset --out datasets/CabbageNav/frames/labels.json
   python annotate_rows.py --frames datasets/CabbageNav/label_subset --selftest   # headless check
@@ -45,7 +48,7 @@ def propose(img):
     return np.array([gl["a"], gl["b"]]) if gl else None
 
 
-def draw(img, coeffs, pts, idx, n, mine, scale):
+def draw(img, coeffs, pts, idx, n, mine, scale, saved=False):
     H, W = img.shape[:2]
     vis = cv2.resize(img, (int(W * scale), int(H * scale)))
     color = (0, 230, 0) if mine else (0, 0, 255)
@@ -61,9 +64,9 @@ def draw(img, coeffs, pts, idx, n, mine, scale):
         cv2.circle(vis, (int(p[0] * scale), int(p[1] * scale)), 6, (0, 255, 255), -1)
     Wd = vis.shape[1]
     cv2.rectangle(vis, (0, 0), (Wd, 56), (0, 0, 0), -1)
-    cv2.putText(vis, f"[{idx+1}/{n}]  points: {len(pts)}   line: {'YOURS' if mine else ('proposal' if coeffs is not None else 'NONE - click >=2 pts')}",
+    cv2.putText(vis, f"[{idx+1}/{n}]{'  [SAVED]' if saved else ''}  points: {len(pts)}   line: {'YOURS' if mine else ('proposal' if coeffs is not None else 'NONE - click >=2 pts')}",
                 (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-    cv2.putText(vis, "SPACE/s = SAVE+next   a = use proposal   c = clear   n = skip   q = quit",
+    cv2.putText(vis, "SPACE/s = SAVE+next   b = back   a = proposal   c = clear   n = skip   q = quit",
                 (8, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
     return vis
 
@@ -124,7 +127,7 @@ def main():
     out = Path(args.out or (fdir / "labels.json"))
     labels = json.load(open(out)) if out.exists() else {}
     print(f"[annotate] {len(names)} frames | already labelled: {len(labels)} | saving to: {out.resolve()}")
-    print("[annotate] click points on the row, then press SPACE/s to SAVE each frame.")
+    print("[annotate] click points on the row, then SPACE/s to SAVE; b = go back to re-edit a previous frame.")
     st = {"pts": [], "scale": 1.0}
 
     def on_mouse(ev, x, y, flags, param):
@@ -137,17 +140,21 @@ def main():
         nm = names[i]; img = cv2.imread(str(fdir / nm))
         if img is None:
             i += 1; continue
-        H, W = img.shape[:2]; st["scale"] = min(1.0, DISP_W / W); st["pts"] = []
+        H, W = img.shape[:2]; st["scale"] = min(1.0, DISP_W / W)
+        prev = labels.get(nm)                                # re-load a previous label so it can be edited
+        st["pts"] = [tuple(p) for p in prev["pts"]] if (prev and prev.get("pts")) else []
         prop = propose(img)
         while True:
             user = fit_pts(st["pts"], H, W)
             coeffs = user if user is not None else prop
-            cv2.imshow("annotate", draw(img, coeffs, st["pts"], i, len(names), user is not None, st["scale"]))
+            cv2.imshow("annotate", draw(img, coeffs, st["pts"], i, len(names), user is not None, st["scale"], nm in labels))
             k = cv2.waitKey(20) & 0xFF
             if k == ord("c"):
                 st["pts"] = []
             elif k == ord("a"):
                 st["pts"] = []                                # accept the red proposal
+            elif k == ord("b"):
+                i = max(0, i - 1); break                      # back: re-edit the previous frame
             elif k in (ord("s"), ord(" ")):
                 if coeffs is None:
                     print("  [!] nothing to save -- click >=2 points on the row first (or 'a' for the proposal)")
