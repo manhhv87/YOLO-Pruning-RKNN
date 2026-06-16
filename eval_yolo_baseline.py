@@ -6,8 +6,9 @@ The cabbage robot's own controller follows the row with a trained YOLOv5 cabbage
 loop (platform thesis). This script reconstructs that detector's guidance signal on the SAME frames the
 detector-free pipeline was evaluated on, so the two front ends can be compared head to head.
 
-Crucially, the ONLY thing that differs from the detector-free pipeline is the front end: the per-band
-central-row ANCHOR is taken from YOLOv5 cabbage-box centres instead of the Excess-Green column peak.
+Crucially, the ONLY thing that differs from the detector-free pipeline is the front end: the central-row
+boxes are the YOLOv5 cabbage detections inside the +/-220 mm ground safety corridor (the deployed
+controller's neighbour-row filter) instead of the Excess-Green column peaks within the same corridor.
 Everything downstream is shared and unchanged -- the robust quadratic fit x=P(y) (guidance_curve.fit_band),
 the look-ahead tangent heading, the near-row cross-track, and the metric calibration (calib). This keeps the
 comparison apples-to-apples: trained detector vs training-free vegetation index, same guidance geometry.
@@ -35,41 +36,29 @@ except Exception:
     calib = None
 
 
-def central_row_anchors(centers, H, W, n_bands=12):
-    """Pick one central-row anchor per horizontal band: the detection centre nearest a running reference
-    column, seeded at the image centre at the near (bottom) band and tracked upward. This is the detector
-    analog of the Excess-Green per-band central-peak tracker."""
-    if len(centers) == 0:
-        return np.empty((0, 2))
-    centers = np.asarray(centers, float)
-    y_lo, y_hi = gc.Y_FIT_LO * H, gc.Y_FIT_HI * H
-    edges = np.linspace(y_hi, y_lo, n_bands + 1)          # from near (bottom) up to far
-    ref_x = W / 2.0
-    anchors = []
-    for i in range(n_bands):
-        y_top, y_bot = min(edges[i], edges[i + 1]), max(edges[i], edges[i + 1])
-        m = (centers[:, 1] >= y_top) & (centers[:, 1] < y_bot)
-        band = centers[m]
-        if len(band) == 0:
-            continue
-        j = int(np.argmin(np.abs(band[:, 0] - ref_x)))    # nearest to the running central reference
-        anchors.append(band[j])
-        ref_x = band[j, 0]
-    return np.asarray(anchors)
-
-
 def guidance_from_centers(centers, H, W):
-    """YOLOv5 box centres -> central-row anchors -> the SAME robust fit / look-ahead as the ExG pipeline."""
-    a = central_row_anchors(centers, H, W)
-    if len(a) < 2:
+    """Keep the cabbage detections inside the +/-Wsafe/2 ground safety corridor about the robot centreline --
+    the exact rule the deployed controller uses to discard neighbour-row plants -- then robustly fit x=P(y)
+    to the central-row boxes through the SAME fit/look-ahead/calibration as the ExG pipeline. The corridor is
+    essential: without it, a nearest-running-column tracker wanders onto side rows whenever many cabbages are
+    detected, which inflates the error precisely on the densely-detected frames."""
+    if len(centers) == 0:
         return None
-    coeffs = gc.fit_band(a[:, 1], a[:, 0], H, W=W, degree=2 if len(a) >= 3 else 1)
+    cen = np.asarray(centers, float)
+    if calib is not None:                                   # corridor filter (deployed controller's rule)
+        kept = [(cx, cy) for cx, cy in cen
+                for cb in [calib.corridor_px(cy, W)]
+                if cb is None or cb[0] <= cx <= cb[1]]
+        if len(kept) >= 2:
+            cen = np.asarray(kept, float)
+    if len(cen) < 2:
+        return None
+    coeffs = gc.fit_band(cen[:, 1], cen[:, 0], H, W=W, degree=2 if len(cen) >= 3 else 1)
     if coeffs is None:
         return None
-    deg = gc.heading_lookahead(coeffs, H)
-    ct_px = gc.crosstrack_px(coeffs, H, W)
     ct_cm = calib.crosstrack_cm(coeffs, H, W) if calib is not None else ""
-    return {"coeffs": coeffs, "deg": deg, "ct_px": ct_px, "ct_cm": ct_cm, "n_anchor": len(a)}
+    return {"coeffs": coeffs, "deg": gc.heading_lookahead(coeffs, H),
+            "ct_px": gc.crosstrack_px(coeffs, H, W), "ct_cm": ct_cm, "n_anchor": len(cen)}
 
 
 def _load_model(weights):
@@ -115,11 +104,12 @@ def main():
         cen = []
         for y in range(460, 200, -30):
             cen.append((W / 2 + 0.0008 * (y - 460) ** 2, y))        # central row
-            cen.append((W / 2 - 160, y)); cen.append((W / 2 + 170, y))  # neighbour rows
+            cen.append((W / 2 - 300, y)); cen.append((W / 2 + 310, y))  # neighbour rows (outside the corridor)
         g = guidance_from_centers(cen, H, W)
-        print("[selftest] anchors picked + fit:", None if g is None else
+        print("[selftest] corridor-filtered fit:", None if g is None else
               {"deg": round(g["deg"], 2), "ct_px": round(g["ct_px"], 1), "n": g["n_anchor"]})
-        print("[selftest] central row tracked (ct_px should be small, near 0):", g is not None and abs(g["ct_px"]) < 40)
+        print("[selftest] side rows dropped, central kept (ct_px should be small, near 0):",
+              g is not None and abs(g["ct_px"]) < 40)
         return
 
     fdir = Path(args.frames)
