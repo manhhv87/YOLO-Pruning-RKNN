@@ -26,9 +26,9 @@ comprising 1482 forward-view cabbage frames at $640\times480$, screened from two
 ($\sim$20 and $\sim$14 minutes), spanning a wide range of vegetation density at a
 forward-view camera pose representative of low-cost in-row navigation. The second result
 concerns leakage-free validation. Because the estimator has no trained component, the
-entire dataset serves as a pure test set with nothing for it to leak into, and the
-validation is structurally leakage-free in a way that detector-based pipelines, with their
-expensive and leak-prone agricultural train/test splits, are not. A guidance line is
+entire dataset serves as a pure test set with nothing for it to leak into, so the evaluation is
+structurally leakage-free; detector-based pipelines, by contrast, depend on agricultural train/test
+splits that are expensive to label and prone to leakage. A guidance line is
 emitted on 100\% of frames (1482/1482), and this rate is uniform across vegetation density,
 with per-tertile (low/mid/high greenness) values of 491/491, 487/487, and 504/504, each
 100\%. This figure is a \emph{self-consistency} statement rather than an accuracy
@@ -36,9 +36,8 @@ guarantee: ``a row was found'' means a line was \emph{emitted}, not that it is t
 \emph{correct} line. The accuracy-bearing quantity that completes this result, heading and
 cross-track error against a human-labelled ground truth, is measured on a $150$-frame subset:
 the deployed pipeline attains a median heading error of $5.0^{\circ}$ and a median
-cross-track error of $1.1$\,cm. The empirical finding concerns the origin of robustness: the
-temporal stage, rather than the perception front end, is the dominant contributor to heading
-stability. A ``raw vs.\ fused'' jump count cannot settle the question, because the max-jump
+cross-track error of $1.1$\,cm. The empirical finding concerns the origin of robustness: for this front end, the
+temporal stage contributes more to heading stability than the perception choice. A ``raw vs.\ fused'' jump count cannot settle the question, because the max-jump
 gate rejects large frame-to-frame heading changes as a matter of design, which makes such
 counts an arithmetic consequence of the gate; they appear only as explicitly-labelled
 descriptive context. Against ground truth on the gate-suppressed frames the temporal stage
@@ -77,5 +76,5 @@ intervention rate. Multi-crop generalisation completes the list. The estimator i
 detector-free and training-free, so the identical code runs unchanged across crops and
 growth stages, yet validation so far covers only cabbage. Extending the dataset to
 additional row crops and conditions would test whether the temporal stage remains the
-primary source of robustness under genuine distribution shift, and would turn the single-crop validation into a
-systematic characterisation of when this stock pipeline can, and cannot, be relied upon.
+main source of robustness under genuine distribution shift, and would show across which crops and
+conditions this stock pipeline holds up.

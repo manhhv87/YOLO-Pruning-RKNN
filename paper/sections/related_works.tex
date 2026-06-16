@@ -28,7 +28,7 @@ frequency in this literature, that crop-row methods ought to be measured in
 \emph{navigation units} rather than detection mAP. Temporal filtering and
 path-tracking form the fourth, the back-end machinery that converts noisy
 per-frame geometry into a usable heading. Against this background sits a
-detector-free, temporally-robust pipeline validated on in-field cabbage video.
+detector-free, temporally-robust pipeline evaluated on in-field cabbage video.
 
 \subsection{Vision-based crop-row guidance: classical versus learned}
 \label{subsec:rw_guidance}
@@ -122,7 +122,7 @@ pose (Section~\ref{sec:method:platform}).
 Per-frame row geometry from any single-frame extractor is noisy, so practical
 guidance systems stabilise it over time. The canonical tool is the Kalman
 filter, which fuses a motion model with noisy measurements for recursive state
-estimation~\cite{kalman1960} and underpins much lane- and row-tracking work.
+estimation~\cite{kalman1960} and is widely used in lane- and row-tracking work.
 Once a stabilised heading and offset are available, classical path-tracking
 controllers convert them into steering. Pure pursuit follows a look-ahead point
 on the path~\cite{coulter1992}, the Stanley controller couples heading and

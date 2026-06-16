@@ -9,7 +9,7 @@
     labelling and tends to degrade when the canopy or growth stage drifts away from the training
     distribution. We ask whether a detector-free and training-free pipeline built from classical
     components can meet the same interface, and we evaluate one in the field on a cabbage robot. A
-    forward-view camera feeds an Excess-Green central-row tracker, and a robust quadratic fit models
+    forward-view camera feeds an Excess-Green central-row tracker, and a quadratic fit models
     the row as a curve. The heading is taken as the look-ahead tangent and the cross-track as the lateral
     offset of that curve, and a temporal stage of a median filter, an exponential moving average, and a
     physical jump gate stabilises both signals. Because no component is trained, the field runs form a
@@ -17,10 +17,11 @@
     vegetation density. Against a human-labelled subset of $150$ frames the deployed pipeline attains a
     median heading error of $5.0^{\circ}$ and a median cross-track error of $1.1$\,cm, reported in
     navigation units with cross-track also expressed in centimetres through a camera-to-ground homography
-    built from the robot's measured camera pose; the temporal stage measurably lowers the heading error on
+    built from the robot's measured camera pose, with a residual heavy tail on the frames where the
+    vegetation index locks onto a neighbouring row; the temporal stage measurably lowers the heading error on
     the frames it acts upon. The contributions are a public forward-view cabbage-robot guidance dataset, a
-    leakage-free in-field evaluation of a deliberately simple pipeline, and evidence that the temporal stage
-    rather than the perception front end is the dominant contributor to heading stability. The study is
+    leakage-free in-field evaluation of a deliberately simple pipeline, and evidence that, for the front end
+    tested, the temporal stage contributes more to heading stability than the perception choice. The study is
     bounded to one robot, one crop, one camera pose, and open-loop evaluation, and a comparison against the
     platform's trained detector is left as the next step.
 \end{abstract}

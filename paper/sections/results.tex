@@ -187,9 +187,11 @@ Section~\ref{sec:res-accuracy}.
 
 The quantities on which the deployment claim rests are the accuracy against a
 human labelling of the central row and the comparisons that interpret it. A subset
-of $150$ frames was hand-labelled by one annotator, stratified across the two runs
-and the vegetation tertiles and sampled to include the frames with the largest
-raw heading excursions, so that the ablation can be tested where it matters. For
+of $150$ frames was hand-labelled by one annotator as a representative sample,
+stratified across the two runs and the vegetation tertiles with even temporal
+spacing. Because the raw front end produces large heading excursions on a sizeable
+fraction of frames, this representative subset already contains $61$ such frames,
+enough to test the temporal ablation without enriching the sample for difficulty. For
 each labelled frame the annotator marks the central navigation row, and the
 ground-truth (GT) line and its look-ahead tangent are derived in the same
 $x=P(y)$ parameterisation as the estimator. Because the labelling was performed by
@@ -203,13 +205,14 @@ estimator against the labelled subset, for the raw per-frame output and for the
 deployed output after the temporal stage. The deployed heading error has a median
 of $5.0^\circ$ (mean $6.5^\circ$, 90th percentile $14.5^\circ$), and three
 quarters of the labelled frames fall within $10^\circ$. The deployed cross-track
-error has a median of $9.9$\,px, which is $1.1$\,cm through the calibrated
+error has a median of $10$\,px, which is $1.1$\,cm through the calibrated
 homography. The error distribution has a heavy tail: a minority of frames in which
 the Excess-Green front end locks onto a neighbouring row rather than the central
-one raise the cross-track mean to $18.8$\,px and the 90th percentile to $46$\,px
+one raise the cross-track mean to $19$\,px and the 90th percentile to $46$\,px
 ($5.0$\,cm). These are the cases in which a vegetation index, which has no notion
-of which plants belong to the crop, is least reliable, and they are the most
-likely to benefit from a learned detector (Table~\ref{tab:res-pending}).
+of which plants belong to the crop, is least reliable; we expect them to be where a
+learned detector would help most, which the pending detector baseline of
+Table~\ref{tab:res-pending} will test.
 
 {\renewcommand{\arraystretch}{1.3}
 \begin{table}[!ht]
@@ -256,8 +259,8 @@ in Table~\ref{tab:res-pending}. The accuracy of the deployed robust fit relative
 to its fit-arm alternatives, an equal-weight least-squares fit and a
 RANSAC~\cite{fischler1981} fit over the same Excess-Green peaks, is not reported
 here; nor is the comparison against the trained detector the platform itself
-deploys, which would quantify the cost of removing the learned model and is the
-most direct test of whether a vegetation index can stand in for a detector. The
+deploys, which would quantify the cost of removing the learned model and directly
+test whether a vegetation index can stand in for a detector. The
 inter-annotator agreement that would set a floor on these errors is likewise
 pending a second annotator.
 

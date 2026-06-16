@@ -27,12 +27,11 @@ established, stock computer-vision components: an Excess-Green index for vegetat
 quadratic line fit, a look-ahead tangent heading, and temporal smoothing by a median filter, an exponential
 moving average, and a jump gate. The whole pipeline runs in plain \texttt{cv2}/\texttt{numpy} with no neural
 detector and no training of any kind. The contribution is an in-field validation of this detector-free and
-training-free pipeline on a working cabbage-field robot. Three results follow from that validation. The first
-is a public real forward-view cabbage robot dataset. A leakage-free evaluation tied to human ground truth
-and expressed in navigation units forms the second. The third is the empirical finding that the temporal
-stage, and not the perception front end, is the primary source of robustness, demonstrated as error
-against ground truth and as a false-reject rate rather than as a jump-count reduction that follows by
-construction from the gate threshold. Since the pipeline never trains on any frame, no data can leak from a
+training-free pipeline on a working cabbage-field robot. The validation yields a public real forward-view
+cabbage robot dataset, a leakage-free evaluation tied to human ground truth and expressed in navigation
+units, and the finding that, for this front end, the temporal stage rather than the perception choice is the
+main source of heading stability, shown as error against ground truth and gate selectivity rather than as a
+jump-count reduction that follows by construction from the gate threshold. Since the pipeline never trains on any frame, no data can leak from a
 training set into the evaluation, and every frame is a test frame.
 
 The accuracy results in this paper are measured against a human-labelled subset of $150$ frames; the
