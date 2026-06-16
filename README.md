@@ -1,121 +1,74 @@
-# 🚀 YOLO-Pruning-RKNN 🚀
+# Detector-free cabbage crop-row guidance
 
-## ✨ Key Features
-- **Super-Efficient Training**: Train state-of-the-art object detection models as easily as using official Ultralytics YOLO ⚡
-- **Smart Model Pruning**: Use Torch-Pruning to prune models, reducing parameters by up to ​75% without losing accuracy 🎯
-- **RKNN Export Support**: One-click export to RKNN format for seamless deployment on Rockchip NPU platforms 🚀
-- **Full-Toolchain Support**: End-to-end workflow covering training, validation, inference, and deployment 🛠️
-- **Full-Model support**: Fully supports pruning for almost all versions of YOLO models, from YOLOv3 to the latest YOLO12 🌍
+A deliberately simple, **training-free** vision pipeline that produces a
+crop-row guidance line for a low-cost cabbage field robot, evaluated in the
+field. It uses only classical computer vision (NumPy + OpenCV): there is no
+neural detector, no learned weights, and no train/test split to leak. The same
+code runs unchanged across crops and growth stages.
+
+The pipeline turns a forward-view camera frame into the two signals a steering
+controller consumes:
+
+- **heading** (degrees) -- the look-ahead tangent to the fitted row, and
+- **cross-track offset** -- the lateral distance to the row, in pixels and, via
+  a reused camera-to-ground homography, in centimetres.
+
+## How it works
+
+1. **Excess-Green central-row estimator** -- a per-frame column-peak tracker
+   localises the central crop row from an Excess-Green vegetation index.
+2. **Robust curve fit** -- a quadratic `x = P(y)` is fitted to the row anchors
+   with a robust (Huber) loss to tolerate gaps and outliers.
+3. **Guidance extraction** -- the heading is the look-ahead tangent to `P(y)`;
+   the cross-track is its lateral offset.
+4. **Temporal stabilisation** -- a sliding-window median, an exponential moving
+   average, and a physical max-jump gate stabilise both signals over time.
+
+## Repository layout
+
+| File | Role |
+|------|------|
+| `cabbage_row.py` | Excess-Green central-row estimator (column-peak tracker) |
+| `guidance_curve.py` | Robust quadratic row fit -> look-ahead heading + cross-track |
+| `temporal_guidance.py` | Temporal stage: sliding median + EMA + jump gate |
+| `periodic_row.py` | Shared Excess-Green helper (`exg`) / periodic-row prototype |
+| `calib.py` | Camera-to-ground homography -> cross-track in centimetres |
+| `extract_frames.py` | Sample frames from the robot's forward-view videos |
+| `annotate_rows.py` | Manual ground-truth labelling of the row centreline |
+| `eval_cabbage.py` | Evaluation: accuracy vs ground truth + temporal stability |
+| `select_cabbage.py` | Excess-Green classifier to screen cabbage vs other greens |
+| `frame_quality.py` | Advisory frame-quality report (sharpness, exposure, row signal) |
+| `make_cabbage_figs.py` | Generate the paper's method-overlay and gallery figures |
+| `run_all.sh` | End-to-end driver (extract -> [label] -> evaluate) |
+| `paper/` | LaTeX sources for the manuscript |
 
 ## Quickstart
-### 🔧 Install Dependencies
+
 ```bash
-pip install torch-pruning 
 pip install -r requirements.txt
-```
-## 🚂 Training & Pruning
-### 📊 YOLO11 Training Example
-```python
-from ultralytics import YOLO
-
-# Create and train a model
-model = YOLO('yolo11.yaml')
-results = model.train(
-    data='coco.yaml',         # Dataset config file
-    epochs=100,               # Number of training epochs
-    imgsz=640,                # Image size
-    batch=16,                 # Batch size
-    device=[0,1,2,3],         # Use GPUs 0-3
-    name='yolo11'             # Experiment name
-)
-```
-### ✂️ YOLO11 Pruning Example
-
-#### Quick Purning
-
-Directly pruning and training pre-trained models generally results in lower accuracy and larger models. See `prune.py` for details.
-
-```python
-prunetrain(quick_pruning=True,        # Quick Pruning or not
-           data='coco.yaml',          # Dataset config
-           train_epochs=10,           # Epochs before pruning
-           imgsz=640,                 # Input size
-           batch=8,                   # Batch size
-           device=[0],                # GPU devices
-           name='yolo11',             # Save name
-           prune_ratio=0.5,           # Pruning Ratio (50%)
-           prune_iterative_steps=1    # Pruning Interative Steps
-)
+bash run_all.sh
 ```
 
-#### Normal Purning
+`run_all.sh` extracts frames from the robot videos, then evaluates the
+estimator. Labelling a subset for ground-truth accuracy is a manual step:
 
-According to the author of torch pruning, first train, then prune, and retrain after pruning.
-
-In normal pruning mode, the `prune_epochs` parameter is mandatory, representing the number of training epochs after pruning. 
-
-See `prune.py` for details.
-
-```python
-prunetrain(quick_pruning=False,       # Quick Pruning or not
-           data='coco.yaml',          # Dataset config
-           train_epochs=10,           # Epochs before pruning
-           prune_epochs=10,           # Epochs after pruning 
-           imgsz=640,                 # Input size
-           batch=8,                   # Batch size
-           device=[0],                # GPU devices
-           name='yolo11',             # Save name
-           prune_ratio=0.5,           # Pruning Ratio (50%)
-           prune_iterative_steps=1,   # Pruning Interative Steps
-           sparse_training=False      # Experimental, Allow Sparse Training Before Pruning
-)
-```
-
-Please note that the `sparse_training` parameter is experimental, and setting it to `True` may result in **better or worse** performance.
-
-## 📤 Model Export
-
-### Export to RKNN Format
-```python
-from ultralytics import YOLO
-
-# Load a trained model
-model = YOLO('yolo11.pt')
-
-# Export to RKNN format
-model.export(format='rknn')
-```
-
-### 🔮 Model Inference
-
-More details about [predict](https://docs.ultralytics.com/modes/predict/).
-```python
-from ultralytics import YOLO
-
-# Load a model (original or pruned)
-model = YOLO('yolo11.pt')  # or model = YOLO('pruned.pt')
-
-# Run inference
-model.predict(
-    'ultralytics/assets/bus.jpg',  # Input image path
-    save=True,                     # Save results
-    device=[0],                    # Use GPU 0
-    line_width=2                   # Detection box line width
-)
-```
-
-## 🔢 Model Analysis
-Use `thop` to easily calculate model parameters and FLOPs:
 ```bash
-pip install thop
+python annotate_rows.py --frames datasets/CabbageNav/frames \
+    --out datasets/CabbageNav/frames/labels.json --limit 120
 ```
-You can calculate model parameters and flops by using calculate.py
 
-## 🤝 Contributing & Support
-Feel free to submit issues or pull requests on GitHub for questions or suggestions!
+Once `labels.json` exists, `run_all.sh` reports accuracy against ground truth
+in addition to the temporal-stability metrics.
 
-## 📚 Acknowledgements
+## Data
 
-- Special thanks to [@VainF](https://github.com/VainF) for the contribution to the [Torch-Pruning](https://github.com/VainF/Torch-Pruning) project! This project relies on it for model pruning.
+The CabbageNav field dataset (two real forward-view robot runs, the extracted
+frames, and the per-frame guidance logs) is large and is **released on
+publication**; it is not committed to this repository. See the manuscript's
+*Data and Code Availability* section.
 
-- Special thanks to [@Ultralytics](https://github.com/ultralytics) for the contribution to the [ultralytics](https://github.com/ultralytics/ultralytics) project! This project relies on it for the framework.
+## Paper
+
+The accompanying manuscript, *In-Field Evaluation of a Detector-Free Vision
+Pipeline for Cabbage Crop-Row Guidance*, lives under `paper/` and is built with
+`latexmk -pdf` (the compiled `paper/main.pdf` is tracked).
