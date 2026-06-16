@@ -35,10 +35,10 @@ dataset, to be released publicly, recorded on a working field robot at a camera 
 low-cost in-row navigation; a leakage-free in-field evaluation of the detector-free, training-free
 pipeline, reported in the navigation units a controller consumes, namely heading in degrees and
 cross-track in pixels and in centimetres through a camera-to-ground homography built from the robot's
-measured camera pose, with accuracy measured against a human-labelled subset; and the finding that, for this
-front end, the temporal stage rather than the perception choice is the main source of heading stability on
-the hardest frames, shown by a lower heading error against ground truth there and a gate that fires
-selectively; ranking it against alternative front ends and fits awaits the pending baselines.
+measured camera pose, with accuracy measured against a human-labelled subset; and the finding that, across
+the front ends and indices tested, the temporal stage rather than the perception choice is the main source
+of heading stability, shown by a lower heading error against ground truth on the hardest frames, a gate that
+fires selectively, and a temporal stage that improves every front end and index tried.
 
 \noindent The scope is deliberately narrow. We study one robot, one crop, one camera pose, and an open-loop
 evaluation of the proposed pipeline, and we make no claim of generalisation beyond this setting.

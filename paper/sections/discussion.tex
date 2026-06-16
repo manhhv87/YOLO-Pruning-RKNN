@@ -65,10 +65,12 @@ different stock front end (a segmentation scan, a row-anchor estimator, or anoth
 vegetation index) would not change the underlying problem, because the single-frame
 estimate would still occasionally lock onto a weed patch, a canopy gap, or an
 adjacent row; such errors arise from scene content rather than from the estimator.
-The fit-arm comparison (Section~\ref{sec:res-accuracy}) is consistent with this,
-the three fits differing little, but swapping the front end itself is untested, so
-this remains a conjecture for the pending front-end baselines, not a result of the
-present study. The temporal stage is what is expected to convert an
+The fit-arm comparison and the front-end and index baselines of
+Section~\ref{sec:res-frontend} bear this out: the three fits differ little, and the
+temporal stage lowers the error for every usable front end and index, with the
+perception choice secondary. The stronger form of the claim, that this would hold
+for \emph{any} single-frame front end, is broader than the tested set, but within
+the front ends and indices tried it is a result rather than a conjecture. The temporal stage is what is expected to convert an
 occasionally-wrong per-frame estimate into a heading a controller can integrate.
 The sliding-window median rejects isolated contaminated frames, the EMA limits
 how fast the steering target can move, and the max-jump gate enforces that the

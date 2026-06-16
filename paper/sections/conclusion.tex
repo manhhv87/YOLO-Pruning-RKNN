@@ -36,8 +36,9 @@ guarantee: ``a row was found'' means a line was \emph{emitted}, not that it is t
 \emph{correct} line. The accuracy-bearing quantity that completes this result, heading and
 cross-track error against a human-labelled ground truth, is measured on a $150$-frame subset:
 the deployed pipeline attains a median heading error of $5.0^{\circ}$ and a median
-cross-track error of $1.1$\,cm. The empirical finding concerns the origin of robustness: for this front end, the
-temporal stage contributes more to heading stability than the perception choice. A ``raw vs.\ fused'' jump count cannot settle the question, because the max-jump
+cross-track error of $1.1$\,cm. The empirical finding concerns the origin of robustness: across the front ends and
+indices tested, the temporal stage contributes more to heading stability than the
+perception choice. A ``raw vs.\ fused'' jump count cannot settle the question, because the max-jump
 gate rejects large frame-to-frame heading changes as a matter of design, which makes such
 counts an arithmetic consequence of the gate; they appear only as explicitly-labelled
 descriptive context. Against ground truth on the gate-suppressed frames the temporal stage

@@ -315,6 +315,64 @@ pending a second annotator.
   \end{tabular}
 \end{table}}
 
+% =====================================================================
+\subsection{Front-end, index, and temporal baselines}
+\label{sec:res-frontend}
+% =====================================================================
+
+The fit-arm comparison varied the curve fit; we further varied the perception
+front end, the vegetation index, and the temporal filter, each through the same
+downstream and scored on the labelled subset (Table~\ref{tab:res-frontend}). Two
+patterns emerge. First, the temporal stage lowers the fused heading error below
+the raw per-frame error for every usable front end and index: the ExG tracker
+improves from $6.4^\circ$ to $5.1^\circ$, ExGR from $6.1^\circ$ to $4.2^\circ$,
+CIVE from $6.0^\circ$ to $5.0^\circ$, and the centroid-per-band tracker from
+$7.8^\circ$ to $5.2^\circ$, so the improvement is a property of the temporal stage
+rather than of any one front end. Second, the column-peak trackers cluster at a
+fused median of $4$--$5^\circ$ whichever standard index feeds them, so the index
+choice is immaterial, with ExGR marginally ahead of the deployed ExG. The two
+genuinely different front ends fare worse: the periodic-row tracker reaches
+$8.4^\circ$, and the Hough-line detector is the clear outlier, emitting a guidance
+line on only $59\%$ of frames and reaching $23.9^\circ$, because the discrete,
+gapped cabbage plants do not form the continuous edges a line detector relies on.
+The temporal stage does not rescue Hough -- its fused error is no lower than its
+raw error -- because its failures are systematic rather than the transient spikes
+the median and gate are designed to remove. Across the usable front ends and
+indices the temporal stage is therefore what lowers the error, and the perception
+choice is secondary.
+
+{\renewcommand{\arraystretch}{1.2}
+\begin{table}[!ht]
+  \centering
+  \caption{Front-end and vegetation-index baselines, each run through the same fit
+    and temporal stage and scored on the labelled subset: emission rate and
+    deployed (fused) heading error. The first block swaps the vegetation index in
+    the deployed column-peak tracker; the second swaps the front end itself.}
+  \label{tab:res-frontend}
+  \begin{tabular}{lcccc}
+    \hline
+    \textbf{Method} & \textbf{Emit} & \multicolumn{3}{c}{\textbf{Fused heading err ($^\circ$)}} \\
+                    &               & med & mean & p90 \\
+    \hline
+    ExG column-peak (deployed) & 100\% & 5.1 & 6.5  & 14.5 \\
+    \quad index ExGR           & 100\% & 4.2 & 5.7  & 13.6 \\
+    \quad index CIVE           & 100\% & 5.0 & 6.7  & 14.9 \\
+    \quad index NDI            & 100\% & 7.3 & 7.5  & 12.3 \\
+    \hline
+    Centroid-per-band          & 100\% & 5.2 & 6.4  & 13.9 \\
+    Periodic-row               & 100\% & 8.4 & 8.1  & 13.8 \\
+    Hough lines                & 59\%  & 23.9 & 21.9 & 39.9 \\
+    \hline
+  \end{tabular}
+\end{table}}
+
+The temporal stage is also preferable to a more elaborate filter. Replacing the
+deployed median, exponential moving average, and jump gate with a
+constant-velocity Kalman filter on the same raw ExG heading stream gives a fused
+median heading error of $6.0^\circ$, between the raw $6.4^\circ$ and the deployed
+$5.1^\circ$; the simple stage, whose complexity is matched to the $1$\,fps regime,
+is therefore sufficient and marginally better here.
+
 The two runs establish that the front end is reliable in the self-consistency
 sense, with a line emitted in $100\%$ of $1482$ frames, and that against a
 $150$-frame human-labelled subset the deployed pipeline attains a median heading

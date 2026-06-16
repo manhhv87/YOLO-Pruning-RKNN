@@ -29,8 +29,9 @@ moving average, and a jump gate. The whole pipeline runs in plain \texttt{cv2}/\
 detector and no training of any kind. The contribution is an in-field validation of this detector-free and
 training-free pipeline on a working cabbage-field robot. The validation yields a public real forward-view
 cabbage robot dataset, a leakage-free evaluation tied to human ground truth and expressed in navigation
-units, and the finding that, for this front end, the temporal stage rather than the perception choice is the
-main source of heading stability, shown as error against ground truth and gate selectivity rather than as a
+units, and the finding that, across the front ends and indices tested, the temporal stage rather than the
+perception choice is the main source of heading stability, shown as error against ground truth and gate
+selectivity rather than as a
 jump-count reduction that follows by construction from the gate threshold. Since the pipeline never trains on any frame, no data can leak from a
 training set into the evaluation, and every frame is a test frame.
 
