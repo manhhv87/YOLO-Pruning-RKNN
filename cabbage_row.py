@@ -26,8 +26,10 @@ def _peaks(p, thr):
     return [i for i in range(3, len(p) - 3) if p[i] >= p[i - 1] and p[i] >= p[i + 1] and p[i] > thr]
 
 
-def row_anchors(img, n_bands=9, corridor=0.18, smooth=21, safe_mm=220.0, gate="seed"):
+def row_anchors(img, n_bands=9, corridor=0.18, smooth=21, safe_mm=220.0, gate="seed", V=None):
     """Track the central cabbage row bottom->top via Excess-Green column peaks; return the anchor points.
+    V: optional precomputed vegetation map (higher = more vegetation); defaults to the Excess-Green index.
+    Passing a different index here runs the identical tracker on a different front end (for baselines).
 
     safe_mm/gate: the ground 'virtual safety corridor' (+/-safe_mm around the robot centreline) that drops
     side-row peaks. gate='seed' applies it only when choosing the FIRST (near-row) anchor -- this stops the
@@ -35,7 +37,8 @@ def row_anchors(img, n_bands=9, corridor=0.18, smooth=21, safe_mm=220.0, gate="s
     corridor otherwise hurts heading). gate='all' applies it to every band; gate=None or safe_mm=None
     disables it. Needs calib."""
     H, W = img.shape[:2]
-    V = exg(img)
+    if V is None:
+        V = exg(img)
     pts, cur = [], None
     for y in np.linspace(gc.Y_FIT_HI * H, gc.Y_FIT_LO * H, n_bands):
         y0, y1 = int(y - 0.04 * H), int(y + 0.04 * H)
