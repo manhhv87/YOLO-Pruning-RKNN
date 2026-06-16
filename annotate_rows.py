@@ -2,8 +2,9 @@
 """
 annotate_rows.py -- fast, FAIR human labelling of the central crop-row guidance CURVE (convention A).
 
-You mark the central corn row (ON the plants); rows bow far away, so the GT is a low-order polynomial
-x = P(y) (>=3 clicks -> quadratic; 2 -> line). Saves labels.json {frame:{coeffs,deg,pts,W,H,heading_la}}.
+You mark the central cabbage row (through the plant-head centres, interpolating across the bare gaps
+between heads); rows bow far away, so the GT is a low-order polynomial x = P(y)
+(>=3 clicks -> quadratic; 2 -> line). Saves labels.json {frame:{coeffs,deg,pts,W,H,heading_la}}.
 
 HOW TO SAVE (important): click points along the row, then press **SPACE (or s)** to SAVE that frame and
 go to the next. Nothing is written until you press SPACE/s (or q to quit). The console prints each save.
@@ -11,8 +12,8 @@ go to the next. Nothing is written until you press SPACE/s (or q to quit). The c
 Controls:  left-click = add a point ON the row  |  SPACE / s = SAVE + next  |  a = use the red proposal
            c = clear my points  |  n = skip (no label)  |  q = save all + quit
 Usage:
-  python annotate_rows.py --frames datasets/CornRobot_frames
-  python annotate_rows.py --frames datasets/CornRobot_frames --selftest      # headless check
+  python annotate_rows.py --frames datasets/CabbageNav/label_subset --out datasets/CabbageNav/frames/labels.json
+  python annotate_rows.py --frames datasets/CabbageNav/label_subset --selftest   # headless check
 """
 from __future__ import annotations
 import argparse, csv, json
@@ -78,7 +79,7 @@ def main():
     ap.add_argument("--orient", choices=["all", "landscape", "portrait"], default="all",
                     help="restrict to one orientation (so you can label/evaluate each set separately)")
     ap.add_argument("--split", choices=["all", "train", "val", "test"], default="all",
-                    help="restrict to a video-level split (run cornrobot_split.py first)")
+                    help="restrict to a video-level split (requires a 'split' column in manifest.csv)")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
     fdir = Path(args.frames); man = fdir / "manifest.csv"
@@ -89,7 +90,7 @@ def main():
                 rows = [r for r in rows if r.get("split") == args.split]
                 print(f"[annotate] split={args.split}: {len(rows)} frames")
             else:
-                print("[annotate] WARN: no 'split' column -- run cornrobot_split.py first; using all.")
+                print("[annotate] WARN: no 'split' column in manifest.csv; using all.")
         def is_land(r):
             return int(r.get("w", 1)) >= int(r.get("h", 1))
         want = args.orient
