@@ -3,29 +3,24 @@
 \vspace{2em}
 
 \begin{abstract}
-    \noindent Vision-only crop-row guidance lets a low-cost field robot steer without RTK-GPS, but for
-    every frame it must produce the heading and cross-track offset that drive the steering controller. Most
-    field systems obtain these quantities from a trained row detector, which needs field-specific
-    labelling and tends to degrade when the canopy or growth stage drifts away from the training
-    distribution. We ask whether a detector-free and training-free pipeline built from classical
-    components can meet the same interface, and we evaluate one in the field on a cabbage robot. A
-    forward-view camera feeds an Excess-Green central-row tracker, and a quadratic fit models
-    the row as a curve. The heading is taken as the look-ahead tangent and the cross-track as the lateral
-    offset of that curve, and a temporal stage of a median filter, an exponential moving average, and a
-    physical jump gate stabilises both signals. Because no component is trained, the field runs form a
-    leakage-free test set, and the tracker emits a guidance line on every frame across a wide range of
-    vegetation density. Against a human-labelled subset of $150$ frames the deployed pipeline attains a
-    median heading error of $5.0^{\circ}$ and a median cross-track error of $1.1$\,cm, reported in
-    navigation units with cross-track also expressed in centimetres through a camera-to-ground homography
-    built from the robot's measured camera pose, with a residual heavy tail on the frames where the
-    vegetation index locks onto a neighbouring row; the temporal stage measurably lowers the heading error on
-    the frames it acts upon. The contributions are a public forward-view cabbage-robot guidance dataset, a
-    leakage-free in-field evaluation of a deliberately simple pipeline, and evidence that, across the front
-    ends and indices tested, the temporal stage contributes more to heading stability than the perception
-    choice. The study is
-    bounded to one robot, one crop, one camera pose, and open-loop evaluation. Against the platform's own
-    trained YOLOv5 detector the detector-free pipeline is the less accurate of the two, chiefly on the
-    wrong-row frames, but comes within about a degree of median heading with no labelled data and no GPU.
+    \noindent Vision-only crop-row guidance lets a low-cost field robot steer without RTK-GPS; for every
+    frame the steering controller consumes a heading and a cross-track offset, not a detection score. Most
+    systems obtain these from a trained row detector, which needs costly field-specific labels and degrades
+    when the canopy drifts off the training distribution. We ask whether a detector-free, training-free
+    pipeline of classical parts can deliver the same interface, and evaluate one in the field on a cabbage
+    robot. An Excess-Green column-peak tracker, restricted to a $\pm220$\,mm ground safety corridor, locates
+    the central row; a robust quadratic fit models it; the heading is its look-ahead tangent and the
+    cross-track its offset; and a temporal stage (median, exponential moving average, jump gate) stabilises
+    both. Because nothing is trained, the field runs form a leakage-free test set. Against a $150$-frame
+    human-labelled subset the deployed pipeline reaches a median heading error of $5.0^{\circ}$ and a
+    cross-track of $1.1$\,cm, with a residual tail where the index locks onto a neighbouring row. The
+    temporal stage, not the perception choice, carries the robustness: it lowers error on the hardest frames
+    across every front end and index tried. Against the platform's own trained YOLOv5 detector the pipeline
+    comes within about a degree of median heading at zero labelling and GPU cost, the detector remaining
+    more accurate chiefly on the wrong-row frames -- the measured cost of going detector-free. The
+    contributions are a public forward-view cabbage-robot guidance dataset, a leakage-free in-field
+    evaluation, and this comparison of a detector-free pipeline against a deployed trained detector. The
+    study is bounded to one robot, one crop, one camera pose, and open-loop evaluation.
 \end{abstract}
 
 \vspace{1em}

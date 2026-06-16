@@ -13,9 +13,8 @@ guidance line is the sole interface between perception and actuation, and what t
 a \emph{heading} and a \emph{cross-track offset}, not a detection score~\cite{cth3,sogaard}.
 
 \noindent Most crop-row systems obtain that line from a trained object detector, which raises two
-difficulties. The detector is optimised for a box-level objective such as mean average precision, a target
-that is not tied to the heading dominating the look-ahead, so it is optimised for a different quantity than
-the steering signal. It also
+difficulties. The detector is optimised for a box-level objective such as mean average precision, not for the
+heading the controller consumes. It also
 needs field-specific labelled data that is costly to obtain and prone to leakage between training and
 test, and it introduces a learned failure surface that is hard to audit in the field~\cite{cth1,sogaard}.
 We therefore investigate whether crop-row guidance can be achieved without a trained detector.
@@ -31,14 +30,13 @@ runs unchanged across crops and growth stages. All components are established; o
 guidance accuracy and temporal stability this stock composition achieves in field operation.
 
 \noindent This paper makes three contributions: a real forward-view cabbage-robot crop-row guidance
-dataset, to be released publicly, recorded on a working field robot at a camera pose representative of
-low-cost in-row navigation; a leakage-free in-field evaluation of the detector-free, training-free
-pipeline, reported in the navigation units a controller consumes, namely heading in degrees and
-cross-track in pixels and in centimetres through a camera-to-ground homography built from the robot's
-measured camera pose, with accuracy measured against a human-labelled subset; and the finding that, across
-the front ends and indices tested, the temporal stage rather than the perception choice is the main source
-of heading stability, shown by a lower heading error against ground truth on the hardest frames, a gate that
-fires selectively, and a temporal stage that improves every front end and index tried.
+dataset, to be released publicly, recorded at a camera pose representative of low-cost in-row navigation; a
+leakage-free in-field evaluation of the detector-free pipeline against a human-labelled subset, including a
+like-for-like comparison with the platform's own trained YOLOv5 detector, which shows the detector-free
+pipeline comes within about a degree of median heading at zero labelling and GPU cost while the trained
+detector stays ahead chiefly on the wrong-row frames; and the finding that, across the front ends and
+indices tested, the temporal stage rather than the perception choice is the main source of heading
+stability.
 
 \noindent The scope is deliberately narrow. We study one robot, one crop, one camera pose, and an open-loop
 evaluation of the proposed pipeline, and we make no claim of generalisation beyond this setting.

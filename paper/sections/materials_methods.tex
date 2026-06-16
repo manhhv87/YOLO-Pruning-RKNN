@@ -21,25 +21,14 @@
 \section{Materials and methods}
 \label{sec:method}
 
-\noindent This work is a validation and deployment contribution rather than a new method. No new perception
-architecture, line estimator, or controller is proposed. The guidance pipeline is assembled entirely from
-established, stock computer-vision components: an Excess-Green index for vegetation segmentation, a robust
-quadratic line fit, a look-ahead tangent heading, and temporal smoothing by a median filter, an exponential
-moving average, and a jump gate. The whole pipeline runs in plain \texttt{cv2}/\texttt{numpy} with no neural
-detector and no training of any kind. The contribution is an in-field validation of this detector-free and
-training-free pipeline on a working cabbage-field robot. The validation yields a public real forward-view
-cabbage robot dataset, a leakage-free evaluation tied to human ground truth and expressed in navigation
-units, and the finding that, across the front ends and indices tested, the temporal stage rather than the
-perception choice is the main source of heading stability, shown as error against ground truth and gate
-selectivity rather than as a
-jump-count reduction that follows by construction from the gate threshold. Since the pipeline never trains on any frame, no data can leak from a
-training set into the evaluation, and every frame is a test frame.
-
-The accuracy results in this paper are measured against a human-labelled subset of $150$ frames: the
-row-emission rates, the cross-track magnitude, the heading and cross-track error against the subset, the
-temporal ablation, and the fit-arm and trained-detector baseline comparisons. The labelling was performed by
-a single annotator, so an inter-annotator agreement floor on the smallest meaningful error is not established
-and is left to future work.
+\noindent This is a validation and deployment contribution, not a new method: the pipeline is assembled
+entirely from established, stock \texttt{cv2}/\texttt{numpy} components with no neural detector and no
+training, so every frame is a test frame and no data can leak into the evaluation. This section describes the
+platform, the pipeline, and the evaluation protocol. The accuracy results are measured against a
+human-labelled subset of $150$ frames -- row emission, cross-track magnitude, heading and cross-track error,
+the temporal ablation, and the fit-arm and trained-detector baselines -- by a single annotator, so an
+inter-annotator agreement floor on the smallest meaningful error is not established and is left to future
+work.
 
 
 

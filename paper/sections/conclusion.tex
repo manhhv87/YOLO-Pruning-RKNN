@@ -19,65 +19,23 @@ smooths both signals~\cite{kalman1960}. All components are established. The stud
 an in-field validation of what this stock composition does on a real cabbage robot,
 rather than a new method.
 
-The study contributes two results and one empirical finding within a deliberately narrow
-scope. The first
-result is a dataset: the first real forward-view cabbage-field robot guidance dataset,
-comprising 1482 forward-view cabbage frames at $640\times480$, screened from two field traverses
-($\sim$20 and $\sim$14 minutes), spanning a wide range of vegetation density at a
-forward-view camera pose representative of low-cost in-row navigation. The second result
-concerns leakage-free validation. Because the estimator has no trained component, the
-entire dataset serves as a pure test set with nothing for it to leak into, so the evaluation is
-structurally leakage-free; detector-based pipelines, by contrast, depend on agricultural train/test
-splits that are expensive to label and prone to leakage. A guidance line is
-emitted on 100\% of frames (1482/1482), and this rate is uniform across vegetation density,
-with per-tertile (low/mid/high greenness) values of 491/491, 487/487, and 504/504, each
-100\%. This figure is a \emph{self-consistency} statement rather than an accuracy
-guarantee: ``a row was found'' means a line was \emph{emitted}, not that it is the
-\emph{correct} line. The accuracy-bearing quantity that completes this result, heading and
-cross-track error against a human-labelled ground truth, is measured on a $150$-frame subset:
-the deployed pipeline attains a median heading error of $5.0^{\circ}$ and a median
-cross-track error of $1.1$\,cm. The empirical finding concerns the origin of robustness: across the front ends and
-indices tested, the temporal stage contributes more to heading stability than the
-perception choice. A ``raw vs.\ fused'' jump count cannot settle the question, because the max-jump
-gate rejects large frame-to-frame heading changes as a matter of design, which makes such
-counts an arithmetic consequence of the gate; they appear only as explicitly-labelled
-descriptive context. Against ground truth on the gate-suppressed frames the temporal stage
-lowers the median heading error from $12.0^{\circ}$ to $7.9^{\circ}$, and the gate fires
-selectively, carrying a mean raw error of $14.3^{\circ}$ on the frames it holds against
-$5.5^{\circ}$ on the rest, so it suppresses contaminated frames rather than correct
-corrections.
+Against a $150$-frame human-labelled subset the deployed pipeline reaches a median heading error of
+$5.0^{\circ}$ and a cross-track of $1.1$\,cm, with a guidance line emitted on every frame. Two findings
+stand out. The temporal stage, not the perception front end, carries the robustness: it lowers heading
+error on the gate-suppressed frames, fires selectively on genuinely poor frames, and improves every front
+end and index tried, while the fit choice is secondary (Section~\ref{sec:results}). And against the
+platform's own trained YOLOv5 detector the detector-free pipeline comes within about a degree of median
+heading at no labelling or GPU cost, the detector remaining more accurate chiefly on the wrong-row frames
+where a vegetation index cannot separate crop from weed -- the measured cost of going detector-free.
 
-The scope is one robot, one crop (cabbage), one camera pose, and an open-loop evaluation of
-the proposed pipeline at 1\,fps, and the claims extend no further. The measured outcomes are
-a $100\%$ guidance-line emission rate uniform across vegetation tertiles, a deployed median
-heading error of $5.0^{\circ}$ and cross-track error of $1.1$\,cm against the labelled
-subset, and a temporal stage that improves accuracy on the hardest frames. The fit-arm comparison against
-RANSAC and equal-weight least squares~\cite{fischler1981} is reported, with the fit choice secondary to the
-temporal stage, and so is the comparison against the platform's trained YOLOv5 detector: the detector is the
-more accurate of the two, chiefly on the wrong-row frames (median cross-track $10$\,px there against
-$214$\,px), with the detector-free pipeline within about a degree of median heading at no labelling or GPU
-cost. An inter-annotator agreement study, with a second annotator, is left to future work.
-Cross-track offset $e$ is reported in pixels, as a percentage of half the image width, and
-in centimetres via an image-to-ground homography built from the robot's measured camera
-height and tilt. The dataset and code will be made
-publicly available upon publication.
+The scope is one robot, one crop, one camera pose, and an open-loop evaluation at $1$\,fps; the claims
+extend no further. The dataset and code will be made publicly available upon publication.
 
 \subsection{Future work}
 \label{sec:future-work}
-Three directions follow directly from the boundaries above. A full on-robot camera calibration
-comes first. The centimetre cross-track reported here uses an image-to-ground homography built
-from the robot's measured camera height and tilt, with intrinsics reused from the sibling
-camera and a flat-ground assumption, so a checkerboard calibration performed on the cabbage
-robot itself, capturing its own intrinsics and a ground-plane fit, would remove the residual
-planar-ground and reused-intrinsics assumptions. A closed-loop field run is the second direction. The present study
-is open-loop, so it cannot capture how perception latency, controller dynamics, and terrain
-interact with the guidance estimate and the max-jump gate's
-decisions~\cite{rajamani2012}. Replacing the recorded 1\,fps evaluation with an on-robot
-trial, with wheel odometry and a steering controller tracking $\theta$ and $e$ in real
-time, is the natural way to turn the structural robustness claim into a measured
-intervention rate. Multi-crop generalisation completes the list. The estimator is
-detector-free and training-free, so the identical code runs unchanged across crops and
-growth stages, yet validation so far covers only cabbage. Extending the dataset to
-additional row crops and conditions would test whether the temporal stage remains the
-main source of robustness under genuine distribution shift, and would show across which crops and
-conditions this stock pipeline holds up.
+Four steps follow from the boundaries above. An on-robot checkerboard calibration would replace the reused
+intrinsics and flat-ground homography with one measured on the cabbage robot. A closed-loop field trial with
+wheel odometry would turn the open-loop accuracy into a measured intervention rate and expose how controller
+and terrain dynamics interact with the gate~\cite{rajamani2012}. A second annotator would establish the
+inter-annotator agreement floor this single-annotator study lacks. And extending the dataset to further row
+crops would test whether the temporal stage remains the robustness lever under genuine distribution shift.
