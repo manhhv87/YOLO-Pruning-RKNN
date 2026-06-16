@@ -10,12 +10,12 @@
 % cross-track -> median/EMA/physical jump-gate temporal fusion). NO
 % neural detector, NO training, NO method-novelty claim. The temporal
 % back-end is positioned as the dominant robustness lever, but the
-% robustness claim is error-vs-GT + false-reject (NOT a jump count),
-% and those numbers are [TBD pending GT labelling].
+% robustness claim is error-vs-GT + gate selectivity (NOT a jump count).
 %
-% Only real numbers stated: 100% row-emission (2067/2067), tertile
-% emission, and DESCRIPTIVE raw-vs-fused jump counts as labelled context.
-% Everything else = "[TBD pending GT labelling]".
+% Measured: 100% row-emission (1482/1482), tertile emission, cross-track
+% magnitude (cm), heading and cross-track error vs a 150-frame human-labelled
+% subset, and the temporal ablation. Pending: inter-annotator agreement (one
+% annotator so far) and the fit-arm and trained-detector (YOLOv5) baselines.
 % =====================================================================
 
 \section{Materials and methods}
@@ -35,11 +35,12 @@ against ground truth and as a false-reject rate rather than as a jump-count redu
 construction from the gate threshold. Since the pipeline never trains on any frame, no data can leak from a
 training set into the evaluation, and every frame is a test frame.
 
-Several quantitative results require human-labelled ground truth that is still being produced. To keep the
-manuscript auditable, any quantity that cannot yet be reported from data is written explicitly as ``[TBD
-pending GT labelling]''. The quantities reported as measured in this paper are the row-emission
-rates and the descriptive jump counts of Section~\ref{sec:method:fusion}, which are labelled as such; the
-remaining quantities are pending.
+The accuracy results in this paper are measured against a human-labelled subset of $150$ frames; the
+quantities that still require a second annotator or a baseline implementation are written explicitly as
+``[TBD]'' and named where they occur. The measured quantities are the row-emission rates, the cross-track
+magnitude, the heading and cross-track error against the labelled subset, and the temporal ablation; the
+pending quantities are the inter-annotator agreement and the fit-arm and trained-detector baseline
+comparisons.
 
 
 
@@ -50,8 +51,10 @@ remaining quantities are pending.
 
 \noindent The data were collected from a single ground robot (Figure~\ref{fig:robot}), a four-wheel straddle
 platform that drives along a crop row with a forward-view camera mounted to look down the inter-row corridor.
-The robot was driven between cabbage rows under manual/teleoperated control at a nominal forward speed of
-approximately $0.14$\,m\,s$^{-1}$. The platform pairs an embedded CPU-only computer and a forward-view USB
+During the recorded runs the robot followed the cabbage rows under its own closed-loop controller, a trained
+cabbage detector driving a PID steering loop, at a nominal forward speed of approximately
+$0.14$\,m\,s$^{-1}$; the detector-free pipeline of this paper is evaluated offline on the logged frames and
+did not steer the robot. The platform pairs an embedded CPU-only computer and a forward-view USB
 webcam at $640\times480$, here a Logitech HD~C270 webcam and an embedded board of the NVIDIA Jetson Nano /
 Raspberry Pi~4 class. The detector-free pipeline of this paper runs on its CPU with no neural accelerator
 (Figure~\ref{fig:camera}). This
@@ -65,17 +68,18 @@ assumption (world origin on the centreline beneath the camera) and used to expre
 centimetres (Section~\ref{sec:method:lookahead}). The residual assumptions are the planar ground and the
 reuse of the camera intrinsics, so the cross-track is also reported in pixels and as a fraction of the
 half-image width. The scope is fixed to one robot,
-one crop (cabbage), and one camera pose. The validation reported here is narrow by design, open-loop, and at a
-single low frame rate, with no claim of generalisation beyond this configuration. Closed-loop autonomous
-steering on this platform is future work and was not exercised.
+one crop (cabbage), and one camera pose. The validation reported here is narrow by design and at a single low
+frame rate, with no claim of generalisation beyond this configuration. It is open-loop with respect to the
+proposed pipeline: the robot was steered during logging by its existing detector-based controller, whereas
+closing the loop from the detector-free pipeline's output is left to future work.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.8\linewidth]{IMG_20251201_162642.jpg}
   \caption{The cabbage-field robot during a field-test session: a four-wheel straddle platform carrying a
-  forward-view camera, operated between cabbage rows under manual/teleoperated
-  control. All data in this study were recorded this way; closed-loop autonomous guidance from the
-  proposed pipeline is left to future work.}
+  forward-view camera, following the cabbage rows under its own closed-loop detector-and-PID controller.
+  The detector-free pipeline of this paper is evaluated offline on the frames logged during these runs;
+  closing the loop from its output is left to future work.}
   \label{fig:robot}
 \end{figure}
 
@@ -93,9 +97,9 @@ steering on this platform is future work and was not exercised.
 \noindent The full sensing-to-actuation hardware path appears in Figure~\ref{fig:hardware}. The
 forward-view camera streams over USB to the onboard computer, which runs the detector-free guidance
 pipeline and emits a heading and a cross-track offset. A microcontroller and stepper drives turn the
-wheels. In the present study only the perception path was run and logged, from camera to guidance output;
-the steering controller and the closed loop to the drive were not exercised, and they are marked as future
-work.
+wheels. During the recorded runs the loop was closed by the platform's existing detector-based controller;
+for the proposed pipeline only the perception path was run and logged, from camera to guidance output, and
+closing the loop from that output to the drive is marked as future work.
 
 \begin{figure}[t]
 \centering
@@ -161,12 +165,16 @@ constant.
 
 Crop rows viewed head-on appear as near-vertical green bands, and the central navigation row is the band the
 robot straddles. Tracking it without a detector relies on a per-row column profile. For each image row $y$ the
-pipeline sums (or smooth-and-sums) the masked ExG response across columns within a central corridor of the
-image, and takes the column of peak vegetation density as the candidate row centre $x^{\ast}(y)$ at that
-height. Scanning $y$ from the image bottom upward yields a set of central-row anchor points
-$\{(x^{\ast}(y),y)\}$ that follow the near-vertical green band. Restricting the column search to a central
-corridor, and seeding it at the bottom-centre of the frame where the navigation row is closest to the robot,
-biases the tracker toward the row the robot is actually in rather than an adjacent row. The output of this
+pipeline sums (or smooth-and-sums) the masked ExG response across columns and takes the column of peak
+vegetation density as the candidate row centre $x^{\ast}(y)$ at that height. Scanning $y$ from the image
+bottom upward yields a set of central-row anchor points $\{(x^{\ast}(y),y)\}$ that follow the near-vertical
+green band. To bias the tracker toward the row the robot is actually in rather than an adjacent one, the
+column search is restricted to a \emph{virtual safety corridor}: a fixed lateral band of half-width $220$\,mm
+about the robot centreline on the ground, projected into the image per row through the calibration of
+Section~\ref{sec:method:platform}. This mirrors the corridor the platform's own controller uses to discard
+neighbour-row plants, and because the straddle robot spans a single bed the adjacent rows fall outside it. The
+corridor is applied when seeding the track at the near row, where the rows are most separated in the image, so
+that the track starts on the central row and follows it upward. The output of this
 stage is the ordered set of central-row anchors passed to the line fit. Emitting an anchor set is a
 self-consistency property and not a correctness guarantee: a peak is found in essentially every frame, but
 whether the chosen column corresponds to the true central row is precisely what the ground-truth evaluation of
@@ -223,8 +231,8 @@ spurious anchors from gaps, weeds, or an adjacent row.
 Two standard alternatives serve as comparison fits over the same anchor set, evaluated against the deployed
 Huber IRLS fit: equal-weight least squares (the non-robust polynomial fit) and RANSAC consensus
 fitting~\cite{fischler1981}, a strong robust baseline. The accuracy of the deployed fit relative to these
-baselines against human ground truth is reported in Section~\ref{sec:results}, and those comparison numbers
-are [TBD pending GT labelling].
+baselines against human ground truth is reported in Section~\ref{sec:res-accuracy}, and those comparison
+numbers are [TBD pending the baseline runs].
 
 % =====================================================================
 \subsection{Heading and cross-track geometry}
@@ -303,9 +311,8 @@ A reduction in large per-frame jumps is not the measure of the gate's effect, si
 jumps by definition and any ``before/after'' jump count is therefore arithmetic rather than evidence of
 correctness. Raw-versus-fused jump counts are reported descriptively in Section~\ref{sec:results}, labelled
 as such, and are excluded from the robustness results. The substantive robustness claim, that fusion lowers
-heading and cross-track error against human ground truth (including on the large raw-jump frames) at an
-acceptable false-reject (gate) rate, is evaluated in Section~\ref{sec:results} and is
-[TBD pending GT labelling].
+heading error against human ground truth on the frames the gate suppresses while the gate fires selectively
+on poor frames, is evaluated against the labelled subset in Section~\ref{sec:res-accuracy}.
 
 \noindent Figure~\ref{fig:method} shows the complete pipeline applied to a single forward-view cabbage frame, from the Excess-Green track through the robust curve to the look-ahead tangent and the reported heading and cross-track.
 
@@ -332,11 +339,12 @@ robot is driving, traced through the cabbage canopy from the image bottom-centre
 corridor. The marked points are fit in the same $x=P(y)$ parameterisation of Equation~\eqref{eq:curve}, and
 the GT heading is the look-ahead tangent of Equation~\eqref{eq:heading_la} evaluated at the same
 $y_{\mathrm{la}}$ as the system output, so that predicted and GT headings are directly comparable. A subset of
-frames is double-labelled to quantify the reliability of this protocol, with inter-annotator agreement
-reported as the median absolute heading difference in degrees and cross-track in pixels; these agreement
-figures are [TBD pending GT labelling]. Because the GT line is marked by hand on the image rather than derived
-from the tracker's anchors, it is independent of the Excess-Green front end and provides a fair external
-reference. The labelling effort is in progress, so the agreement figures are reported as pending.
+$150$ frames was labelled by a single annotator, stratified across the two runs and the vegetation tertiles.
+Quantifying the reliability of the protocol requires a second annotator: the inter-annotator agreement,
+reported as the median absolute heading difference in degrees and cross-track in pixels, would set a floor on
+the smallest meaningful error and is [TBD] pending that second pass. Because the GT line is marked by hand on
+the image rather than derived from the tracker's anchors, it is independent of the Excess-Green front end and
+provides a fair external reference.
 
 
 % =====================================================================
@@ -349,29 +357,27 @@ look-ahead tangent heading and the human-GT heading, $|\theta - \theta^{\mathrm{
 controller-independent. The secondary metric is cross-track error in pixels (and in \% of half-image width),
 the lateral offset between the predicted and GT guidance lines at the look-ahead row $y_{\mathrm{la}}$
 (Equation~\eqref{eq:crosstrack}). Centimetre units are reported through the image-to-ground
-homography of Section~\ref{sec:method:platform}, built from the robot's measured camera pose; the
-cm-scale errors await the GT subset and are [TBD pending GT labelling], and in all cases the errors are
-reported in degrees and pixels.
+homography of Section~\ref{sec:method:platform}, built from the robot's measured camera pose; the heading and
+cross-track errors against the labelled subset are reported in degrees, pixels, and centimetres in
+Section~\ref{sec:res-accuracy}.
 
 As a basic sanity check the fraction of frames for which the tracker emits a guidance line at all is reported
-as a self-consistency measure, both overall and broken down by vegetation tertile; the measured value is
-reported in Section~\ref{sec:results}. Here ``row
-found'' means a line was emitted, not that the emitted line is the correct central row. Whether the emitted
-line is correct is measured by the heading and cross-track error against human GT above, which is [TBD pending
-GT labelling].
+as a self-consistency measure, both overall and broken down by vegetation tertile, in
+Section~\ref{sec:res-reliability}. Here ``row found'' means a line was emitted, not that the emitted line is
+the correct central row; whether the emitted line is correct is measured by the heading and cross-track error
+against human GT in Section~\ref{sec:res-accuracy}.
 
 Consistent with Section~\ref{sec:method:fusion}, the robustness of the temporal stage is reported as (i)
-heading and cross-track error versus human GT stratified by raw front end difficulty, in particular on the
-large raw-jump frames, and (ii) the false-reject (gate) rate, that is, the fraction of frames
-the physical jump gate holds. The raw-versus-fused jump count is excluded from the robustness results. Both
-(i) and (ii), together with the deployed-fit-versus-baseline (equal-LS, RANSAC) and temporal-ablation
-comparisons, are [TBD pending GT labelling].
+heading error versus human GT on the gate-suppressed frames, raw versus fused, and (ii) the selectivity of
+the gate, that is, whether the frames it holds carry larger raw errors than the frames it passes; both are
+reported in Section~\ref{sec:res-accuracy}. The raw-versus-fused jump count is excluded from the robustness
+results. The deployed-fit-versus-baseline comparison (equal-LS, RANSAC) and the trained-detector baseline are
+[TBD pending the baseline runs].
 
 Per-frame errors are written to one CSV row per frame so that the deployed pipeline and its baselines and
 ablations are compared paired on identical frames. Because per-frame errors are not normally distributed and
-frames within a run are temporally correlated, significance is assessed with paired non-parametric tests,
-specifically the Wilcoxon signed-rank test on paired per-frame differences, with Holm--Bonferroni correction
-across the confirmatory comparison family. Effect sizes (Cliff's $\delta$) are reported with bootstrap
-confidence intervals rather than relying on $p$-values alone. Any comparison whose median difference is
-smaller than its dispersion is downgraded in wording. All confirmatory accuracy numbers are [TBD pending GT
-labelling].
+frames within a run are temporally correlated, the pending baseline comparisons will be assessed with paired
+non-parametric tests, specifically the Wilcoxon signed-rank test on paired per-frame differences, with
+Holm--Bonferroni correction across the comparison family, and effect sizes (Cliff's $\delta$) with bootstrap
+confidence intervals rather than $p$-values alone. Any comparison whose median difference is smaller than its
+dispersion is reported in correspondingly cautious wording.

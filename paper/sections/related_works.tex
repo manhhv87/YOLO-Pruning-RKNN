@@ -111,10 +111,11 @@ line, are the quantities that matter for guidance.
 Navigation-unit evaluation needs a ground-truth line, which in turn needs human
 labelling and a study of inter-annotator agreement. Absent that line, an
 extractor can report how often it emitted a line but cannot report whether the
-emitted line was correct. The accuracy claim against a human ground truth and
-the inter-annotator agreement are therefore deferred [TBD pending GT labelling].
-The camera calibration that expresses cross-track in centimetres is already
-available (Section~\ref{sec:method:platform}).
+emitted line was correct. The accuracy claim against a human ground truth is
+reported here on a labelled subset; the inter-annotator agreement that would set
+a floor on it is deferred to a second annotator. The camera calibration that
+expresses cross-track in centimetres is built from the robot's measured camera
+pose (Section~\ref{sec:method:platform}).
 
 \subsection{Temporal filtering and path tracking}
 \label{subsec:rw_temporal}
@@ -135,9 +136,9 @@ the per-frame stability of a guidance system. A transparent temporal stage, kept
 in front of a simple stock extractor, occupies the role that learned pipelines
 fill implicitly. The substantive robustness questions, namely heading error
 against a human ground truth on the frames where the raw extractor diverges, and
-the false-reject rate of the gate, require labels and are deferred [TBD pending
-GT labelling], together with baseline comparisons against RANSAC and equal-weight
-least-squares fits and an ablation of the temporal stages.
+the selectivity of the gate, are answered against the labelled subset in
+Section~\ref{sec:res-accuracy}; the baseline comparisons against RANSAC and
+equal-weight least-squares fits are deferred to those baseline runs.
 
 \subsection{Positioning of the present study}
 \label{subsec:rw_position}
@@ -149,5 +150,5 @@ by Huber IRLS~\cite{huber1964}, a look-ahead tangent heading, and a
 median/EMA/jump-gate temporal stage~\cite{kalman1960}. All components are
 established. Positioned against prior art, the open question is whether
 such a pipeline holds up on real forward-view cabbage field video and can be
-validated in navigation units against a human ground truth [TBD pending GT
-labelling], a question the remaining sections take up.
+validated in navigation units against a human ground truth, a question the
+remaining sections take up.

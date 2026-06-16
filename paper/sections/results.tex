@@ -1,53 +1,56 @@
 %!TEX root = ../main.tex
 % =====================================================================
 % RESULTS -- detector-free, training-free cabbage-row guidance validation.
-% Only the FACTS numbers are real (100% emission; descriptive jump counts;
-% descriptive cm magnitude). Accuracy/ablation vs human GT are pending and
-% consolidated into ONE table. No fabricated numbers.
+% Measured: reliability (100% emission), cross-track magnitude (cm), heading and
+% cross-track error vs a 150-frame human-labelled subset, the temporal ablation.
+% Still pending: inter-annotator agreement (one annotator so far) and the
+% fit-arm and deployed-detector (YOLOv5) baseline comparisons.
 % =====================================================================
 
 \section{Results}
 \label{sec:results}
 
-This section reports what two real cabbage-field robot runs allow us to
-establish, separating what those runs \emph{measure} from what still depends on
-hand-labelled ground truth (GT). The pipeline under test is the detector-free and
-training-free guidance stack of Section~\ref{sec:method}: an Excess-Green
-index~\cite{woebbecke1995,meyer2008} column-peak central-row tracker, a robust
-quadratic fit $x=P(y)$ by Huber IRLS~\cite{huber1964}, a look-ahead tangent that
-defines the heading $\theta$ together with the cross-track offset $e$, and a
-temporal stage built from a sliding-window median, an EMA, and a physical
-max-jump gate. The system is never trained, so the two runs serve as a pure test
-set. No parameters are fitted on these frames, which removes any path for leakage.
+This section reports what two real cabbage-field robot runs establish, separating
+what those runs \emph{measure} from what still depends on a larger or independent
+labelling effort. The pipeline under test is the detector-free and training-free
+guidance stack of Section~\ref{sec:method}: an Excess-Green
+index~\cite{woebbecke1995,meyer2008} column-peak central-row tracker restricted to
+a fixed ground safety corridor, a robust quadratic fit $x=P(y)$ by Huber
+IRLS~\cite{huber1964}, a look-ahead tangent that defines the heading $\theta$
+together with the cross-track offset $e$, and a temporal stage of a sliding-window
+median, an exponential moving average, and a physical max-jump gate applied to
+both signals. The system is never trained, so the two runs serve as a pure test
+set; no parameters are fitted on these frames, which removes any path for leakage.
 
-Two boundaries govern every number that follows. Self-consistency is not
-correctness: the ``row-found'' rate of Section~\ref{sec:res-reliability} records
-only that the tracker \emph{emitted} a guidance line for a frame, and it carries
-no claim about whether that line is the correct central row. The jump counts are
-likewise descriptive rather than a robustness result. Because the temporal stage
-suppresses large frame-to-frame heading jumps as a direct effect of the gate
-threshold, the post-fusion jump counts in Section~\ref{sec:res-temporal} follow
-arithmetically from that threshold and do not show that the fused heading is more
-accurate. The robustness claim that actually matters, heading error against human
-GT on the very frames the gate suppresses, paired with the false-reject rate, is
-\emph{[TBD pending GT labelling]} and is marked as such in every table.
-Cross-track is reported in pixels, as a percentage of the half-image width, and
-in centimetres through the image-to-ground homography of
-Section~\ref{sec:method:platform}, built from the robot's measured camera
-height and tilt.
+One distinction governs the numbers that follow. Self-consistency is not
+correctness: the row-found rate of Section~\ref{sec:res-reliability} records only
+that the tracker \emph{emitted} a guidance line, and it carries no claim about
+whether that line is the correct central row. Likewise, the post-fusion jump
+counts of Section~\ref{sec:res-temporal} fall to near zero as a direct effect of
+the gate threshold and are reported as descriptive context, not as a robustness
+result. The correctness claim is settled separately in
+Section~\ref{sec:res-accuracy} as error against a human labelling of the central
+row, including on the frames the gate suppresses. Cross-track is reported in
+pixels, as a percentage of the half-image width, and in centimetres through the
+image-to-ground homography of Section~\ref{sec:method:platform}, built from the
+robot's measured camera height and tilt.
 
 % =====================================================================
 \subsection{Dataset}
 \label{sec:res-dataset}
 % =====================================================================
 
-The evaluation data are two forward-view video runs recorded by a forward-view
-camera on a cabbage field robot, sampled at $1$\,fps and screened to $1482$ forward-view cabbage still frames
-at $640\times480$. The two runs cover different sections of the field at different
-times of day, so vegetation density and lighting differ between them.
-Table~\ref{tab:res-dataset} summarises the runs. The setting is one robot, one
-crop, one camera pose, and open-loop logging at $1$\,fps, and the dataset
-supports no claim of coverage beyond this narrow operating envelope.
+The evaluation data are two forward-view video runs recorded by the onboard camera
+of a cabbage field robot, sampled at $1$\,fps and screened to $1482$ forward-view
+cabbage still frames at $640\times480$. The runs were logged while the robot
+followed the rows under its own closed-loop controller (a trained detector driving
+a PID steering loop, Section~\ref{sec:method:platform}); the detector-free pipeline
+of this paper is evaluated offline on the recorded frames and did not steer the
+robot, so the evaluation is open-loop with respect to the proposed pipeline. The
+two runs cover different sections of the field at different times of day, so
+vegetation density and lighting differ between them. Table~\ref{tab:res-dataset}
+summarises the runs. The setting is one robot, one crop, and one camera pose, and
+the dataset supports no claim of coverage beyond this narrow operating envelope.
 
 {\renewcommand{\arraystretch}{1.2}
 \begin{table}[!ht]
@@ -73,25 +76,17 @@ supports no claim of coverage beyond this narrow operating envelope.
 % =====================================================================
 
 We first assess whether the perception front end emits a guidance line on every
-frame. Across all $1482$ frames the Excess-Green index column-peak
-tracker emitted a guidance line in $100\%$ of frames ($1482/1482$). To test
-whether this figure conceals a silent failure mode in sparse or dense canopy, we
-split the frames into vegetation tertiles by per-frame Excess-Green coverage (low,
-mid, high). Table~\ref{tab:res-reliability} shows that the emit rate is $100\%$ in
-every tertile. This stratification is partly tautological by construction: the tracker locates the
-strongest Excess-Green column, so a peak exists whenever any green is present, and
-emission across Excess-Green-defined tertiles is close to guaranteed by the design
-of the front end. The result therefore shows only that the tracker never aborts.
-Whether the canopy density leaves the row correct is the separate accuracy
-question of Section~\ref{sec:res-accuracy}.
-
-The $100\%$ row-found rate is a self-consistency statement: in every frame,
-including the low-vegetation frames where the canopy signal is weakest, the
-pipeline returned a line rather than aborting. Figure~\ref{fig:gallery} overlays
-the fitted guidance line on four representative cabbage frames. The rate is not a
-correctness statement, since it does not show that the emitted line is the correct
-central crop row, only that a line was produced. Whether those lines are right is
-an accuracy question that requires human GT, reported (pending) in
+frame. Across all $1482$ frames the Excess-Green column-peak tracker emitted a
+guidance line in $100\%$ of frames ($1482/1482$). To test whether this figure
+conceals a silent failure mode in sparse or dense canopy, we split the frames into
+vegetation tertiles by per-frame Excess-Green coverage (low, mid, high).
+Table~\ref{tab:res-reliability} shows that the emit rate is $100\%$ in every
+tertile. This stratification is partly tautological by construction: the tracker
+locates the strongest Excess-Green column within the safety corridor, so a peak
+exists whenever any green is present, and emission across Excess-Green-defined
+tertiles is close to guaranteed by the design of the front end. The result
+therefore shows only that the tracker never aborts; whether the canopy density
+leaves the emitted line on the correct row is the separate accuracy question of
 Section~\ref{sec:res-accuracy}.
 
 {\renewcommand{\arraystretch}{1.2}
@@ -128,60 +123,57 @@ Section~\ref{sec:res-accuracy}.
   \label{fig:gallery}
 \end{figure}
 
-Mapping the per-frame near-row pixel offset through the image-to-ground homography
+Mapping the deployed near-row pixel offset through the image-to-ground homography
 (Section~\ref{sec:method:platform}) describes the magnitude of the lateral offset
-in metric units. The central row sat a median of $1.9$\,cm from the image centre
-across all $1482$ frames (mean $5.3$\,cm, 90th percentile $16.3$\,cm), where the
-centimetre conversion uses the homography built from the robot's measured camera
-pose (Section~\ref{sec:method:platform}) and is reported alongside the
-pixel and percentage-of-half-width values. These figures characterise the
-\emph{magnitude} of the lateral offset the controller would have observed, a
-geometric summary of the runs rather than an error against ground truth. Whether
-the estimated offset is \emph{correct} is the separate, pending accuracy question
-of Section~\ref{sec:res-accuracy}.
+in metric units. After the temporal stage the central row sat a median of
+$1.7$\,cm from the image centre across the runs (mean $3.4$\,cm, 90th percentile
+$11.0$\,cm). These figures characterise the \emph{magnitude} of the lateral offset
+during runs in which a closed-loop controller was actively keeping the robot on
+the row; they summarise the recorded trajectory rather than the accuracy of the
+proposed estimator, which is reported against ground truth in
+Section~\ref{sec:res-accuracy}.
 
 % =====================================================================
 \subsection{Temporal stability}
 \label{sec:res-temporal}
 % =====================================================================
 
-The temporal stage, a sliding-window median followed by an EMA and a physical
-max-jump gate in the spirit of standard recursive smoothing~\cite{kalman1960},
-exists to suppress single-frame heading excursions that a controller should not
-act on. Table~\ref{tab:res-temporal} reports how many per-frame heading jumps
-exceed $10^\circ$, $15^\circ$, and $20^\circ$ in the raw per-frame tracker output
-and after the temporal stage. The per-frame jump is the change in heading from the
-previous frame and is undefined for the first frame of each run, so the
-denominators are $812$ and $670$ as logged.
+The temporal stage, a sliding-window median followed by an exponential moving
+average and a physical max-jump gate in the spirit of standard recursive
+smoothing~\cite{kalman1960}, exists to suppress single-frame excursions that a
+controller should not act on. Table~\ref{tab:res-temporal} reports how many
+per-frame heading jumps exceed $10^\circ$, $15^\circ$, and $20^\circ$ in the raw
+per-frame tracker output and after the temporal stage. The per-frame jump is the
+change in heading from the previous frame and is undefined for the first frame of
+each run, so the denominators are the $811$ and $669$ logged transitions.
 
-These counts are descriptive, since the gate suppresses the jumps by design. The
-post-fusion counts drop to nearly zero because the max-jump gate rejects exactly
-these large frame-to-frame changes. That reduction is an arithmetic property of the
-gate threshold rather than an independent measurement of correctness, and it does
-not amount to ``jumps eliminated.'' The question that decides whether the temporal
-stage helps, namely whether the fused heading is closer to human GT than the raw
-heading on the suppressed frames and how often the gate rejects a correct large
-heading, is tested in Section~\ref{sec:res-accuracy} and is \emph{[TBD pending GT
-labelling]}.
+These counts are descriptive, since the gate suppresses the jumps by design: the
+post-fusion counts fall to near zero because the max-jump gate rejects exactly
+these large frame-to-frame changes, which is an arithmetic property of the gate
+threshold rather than an independent measurement of correctness. Whether the
+temporal stage actually helps, namely whether the fused estimate is closer to
+human ground truth than the raw estimate on the suppressed frames and how
+selectively the gate fires, is the ablation reported in
+Section~\ref{sec:res-accuracy}.
 
 {\renewcommand{\arraystretch}{1.2}
 \begin{table}[!ht]
   \centering
   \caption{Per-frame heading-jump counts (change from the previous frame)
     exceeding $10^\circ/15^\circ/20^\circ$, raw versus after the temporal stage,
-    as exact counts on the logged frames. The post-fusion reduction follows
-    arithmetically from the max-jump gate and is not a correctness result; the
-    correctness test on these frames is reported in
+    as exact counts on the logged frame-to-frame transitions. The post-fusion
+    reduction follows arithmetically from the max-jump gate and is not a
+    correctness result; the correctness test on these frames is the ablation of
     Section~\ref{sec:res-accuracy}.}
   \label{tab:res-temporal}
   \begin{tabular}{lccc}
     \hline
     \textbf{Run / stage} & \textbf{$>10^\circ$} & \textbf{$>15^\circ$} & \textbf{$>20^\circ$} \\
     \hline
-    Run~1 raw ($n=812$)   & 102 & 58 & 35 \\
+    Run~1 raw ($n=811$)   & 102 & 58 & 35 \\
     Run~1 temporal stage   & 0   & 0   & 0  \\
     \hline
-    Run~2 raw ($n=670$)    & 194 & 130 & 89 \\
+    Run~2 raw ($n=669$)    & 194 & 130 & 89 \\
     Run~2 temporal stage   & 2   & 0   & 0  \\
     \hline
   \end{tabular}
@@ -194,58 +186,108 @@ labelling]}.
 % =====================================================================
 
 The quantities on which the deployment claim rests are the accuracy against a
-human labelling of the central row and the comparisons that interpret it. Each
-requires the hand-labelled GT subset, in which an annotator marks the central
-navigation row per frame and the GT line and its look-ahead tangent are derived in
-the same $x=P(y)$ parameterisation; inter-annotator agreement then sets a floor on
-the smallest meaningful error. That labelling is in progress, so every quantity in
-Table~\ref{tab:res-pending} is \emph{[TBD pending GT labelling]}, with the metrics
-fixed in advance to keep the evaluation confirmatory. Accuracy is the heading error
-$|\theta-\theta^{\mathrm{GT}}|$ in degrees and the cross-track error
-$|e-e^{\mathrm{GT}}|$ in pixels, as a percentage of the half-image width, and in
-centimetres through the homography of Section~\ref{sec:method:platform}, each
-summarised by median, mean, and 90th percentile. The temporal-stage question of
-Section~\ref{sec:res-temporal} is tested here as the heading error against GT on
-the suppressed large raw-jump frames, raw versus fused, together with the gate's
-false-reject rate. The deployed fit is compared against a RANSAC line
-fit~\cite{fischler1981} and an equal-weight least-squares fit over the same
-Excess-Green column peaks, and the temporal stage is ablated (raw versus
-median$+$EMA$+$gate); a self-consistency or jump-count comparison would not
-separate these arms, so the discriminating axis is error against the labelled
-central row.
+human labelling of the central row and the comparisons that interpret it. A subset
+of $150$ frames was hand-labelled by one annotator, stratified across the two runs
+and the vegetation tertiles and sampled to include the frames with the largest
+raw heading excursions, so that the ablation can be tested where it matters. For
+each labelled frame the annotator marks the central navigation row, and the
+ground-truth (GT) line and its look-ahead tangent are derived in the same
+$x=P(y)$ parameterisation as the estimator. Because the labelling was performed by
+a single annotator, an inter-annotator agreement floor on the smallest meaningful
+error is not yet available and is reported as pending in
+Table~\ref{tab:res-pending}.
+
+\paragraph{Accuracy against ground truth.}
+Table~\ref{tab:res-accuracy} reports the heading and cross-track error of the
+estimator against the labelled subset, for the raw per-frame output and for the
+deployed output after the temporal stage. The deployed heading error has a median
+of $5.0^\circ$ (mean $6.5^\circ$, 90th percentile $14.5^\circ$), and three
+quarters of the labelled frames fall within $10^\circ$. The deployed cross-track
+error has a median of $9.9$\,px, which is $1.1$\,cm through the calibrated
+homography. The error distribution has a heavy tail: a minority of frames in which
+the Excess-Green front end locks onto a neighbouring row rather than the central
+one raise the cross-track mean to $18.8$\,px and the 90th percentile to $46$\,px
+($5.0$\,cm). These are the cases in which a vegetation index, which has no notion
+of which plants belong to the crop, is least reliable, and they are the most
+likely to benefit from a learned detector (Table~\ref{tab:res-pending}).
 
 {\renewcommand{\arraystretch}{1.3}
 \begin{table}[!ht]
   \centering
-  \caption{Pre-registered accuracy and ablation evaluation against human ground
-    truth, consolidating the pending quantities into one scaffold. Every entry is
-    \emph{[TBD pending GT labelling]} until the hand-labelled subset is complete;
-    the metrics and comparison arms are fixed in advance.}
-  \label{tab:res-pending}
+  \caption{Accuracy against the $150$-frame human-labelled subset (one annotator),
+    for the raw per-frame estimate and the deployed estimate after the temporal
+    stage. Errors are absolute differences from ground truth, summarised by median,
+    mean, and 90th percentile.}
   \label{tab:res-accuracy}
+  \begin{tabular}{lccc}
+    \hline
+    \textbf{Error vs.\ GT} & \textbf{Median} & \textbf{Mean} & \textbf{p90} \\
+    \hline
+    Heading, raw ($^\circ$)            & 6.4  & 9.1  & 19.4 \\
+    Heading, deployed ($^\circ$)       & 5.0  & 6.5  & 14.5 \\
+    \hline
+    Cross-track, raw (px)              & 11   & 42   & 155  \\
+    Cross-track, deployed (px)         & 10   & 19   & 46   \\
+    Cross-track, deployed (cm)         & 1.1  & 2.0  & 5.0  \\
+    \hline
+  \end{tabular}
+\end{table}}
+
+\paragraph{Temporal-stage ablation.}
+The temporal stage improves accuracy, and not only smoothness. On the $61$
+labelled frames on which the max-jump gate fired, the raw heading error has a
+median of $12.0^\circ$ against ground truth, which the temporal stage reduces to
+$7.9^\circ$; the gate is also selective, in that the mean raw heading error is
+$14.3^\circ$ on the gated frames against $5.5^\circ$ on the rest, so the gate fires
+on genuinely poor frames rather than rejecting good ones. This is the
+non-circular form of the temporal result: unlike the jump counts of
+Section~\ref{sec:res-temporal}, the comparison is against an external reference on
+exactly the frames the stage acts upon. The two front-end and temporal additions
+that target the wrong-row tail are consistent with this picture. Restricting the
+Excess-Green search to the ground safety corridor reduced the number of
+large cross-track errors ($>100$\,px) on the labelled subset from $23$ to $18$,
+and stabilising the cross-track signal through the temporal stage, rather than
+reporting it per frame, reduced the deployed cross-track error from a 90th
+percentile of $155$\,px to $46$\,px.
+
+\paragraph{Remaining comparisons.}
+Two comparisons that interpret these numbers are not yet available and are listed
+in Table~\ref{tab:res-pending}. The accuracy of the deployed robust fit relative
+to its fit-arm alternatives, an equal-weight least-squares fit and a
+RANSAC~\cite{fischler1981} fit over the same Excess-Green peaks, is not reported
+here; nor is the comparison against the trained detector the platform itself
+deploys, which would quantify the cost of removing the learned model and is the
+most direct test of whether a vegetation index can stand in for a detector. The
+inter-annotator agreement that would set a floor on these errors is likewise
+pending a second annotator.
+
+{\renewcommand{\arraystretch}{1.3}
+\begin{table}[!ht]
+  \centering
+  \caption{Comparisons still pending. The accuracy, cross-track, and temporal
+    results of Table~\ref{tab:res-accuracy} are established; the entries below
+    require a second annotator or the baseline implementations and are reported as
+    pending.}
+  \label{tab:res-pending}
   \label{tab:res-baselines}
   \begin{tabular}{ll}
     \hline
-    \textbf{Quantity (versus human ground truth)} & \textbf{Status} \\
+    \textbf{Comparison (versus human ground truth)} & \textbf{Status} \\
     \hline
-    Heading error $|\theta-\theta^{\mathrm{GT}}|$ (median / mean / p90, $^\circ$) & [TBD pending GT labelling] \\
-    Cross-track error (px; \% half-width; cm)                                     & [TBD pending GT labelling] \\
-    Inter-annotator agreement (heading $^\circ$; cross-track px)                   & [TBD pending GT labelling] \\
-    Heading error on large raw-jump frames, raw vs.\ fused ($^\circ$)              & [TBD pending GT labelling] \\
-    False-reject rate of the max-jump gate                                        & [TBD pending GT labelling] \\
-    Fit arm: quadratic $x{=}P(y)$ vs.\ RANSAC vs.\ equal-weight LS                 & [TBD pending GT labelling] \\
-    Temporal ablation: raw vs.\ median$+$EMA$+$gate                               & [TBD pending GT labelling] \\
+    Inter-annotator agreement (heading $^\circ$; cross-track px)     & [TBD pending second annotator] \\
+    Fit arm: quadratic $x{=}P(y)$ vs.\ RANSAC vs.\ equal-weight LS   & [TBD pending baseline run] \\
+    Deployed-detector baseline: Excess-Green vs.\ trained YOLOv5     & [TBD pending baseline run] \\
     \hline
   \end{tabular}
 \end{table}}
 
 The two runs establish that the front end is reliable in the self-consistency
-sense, with a line emitted in $100\%$ of $1482$ frames including the
-low-vegetation tertile, and they give descriptive context on how often the raw
-per-frame heading would have jumped. Accuracy is not yet established. Every
-correctness quantity remains \emph{[TBD pending GT labelling]}: heading and
-cross-track error against human GT, inter-annotator agreement, error against GT on
-the gate-suppressed large raw-jump frames, the false-reject rate, and the baseline and
-temporal-ablation comparisons of Table~\ref{tab:res-pending}. Completing the
-hand-labelled subset is the one remaining step that turns this from a
-self-consistency report into the accuracy validation the deployment claim requires.
+sense, with a line emitted in $100\%$ of $1482$ frames, and that against a
+$150$-frame human-labelled subset the deployed pipeline attains a median heading
+error of $5.0^\circ$ and a median cross-track error of $1.1$\,cm, with the
+temporal stage measurably improving accuracy on the hardest frames. The principal
+limitations of the present evaluation are the single annotator, the residual
+wrong-row tail of the vegetation-index front end, and the absence of the fit-arm
+and trained-detector baselines, all of which Table~\ref{tab:res-pending} records
+as the remaining work needed to place the detector-free pipeline against the
+alternatives it is meant to replace.

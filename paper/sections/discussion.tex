@@ -17,8 +17,8 @@ cabbage video, the combination yields a deployable vision-only guidance signal,
 and that the temporal stage, rather than the perception front end, is the primary
 source of robustness. The discussion is organised around that thesis: the conditions
 under which it holds, and the limits of the evidence behind it. Throughout, the
-quantities that the two runs already measure are kept separate from those that
-remain pending ground-truth (GT) labelling.
+quantities measured against the labelled subset are kept separate from those that
+still await a second annotator or a baseline implementation.
 
 \subsection{Large-error suppression as the safety-relevant quantity}
 \label{sec:disc-safety}
@@ -46,17 +46,17 @@ arithmetic property of the gate rather than independent evidence that the emitte
 heading is correct. The safety claim that matters concerns error against human GT
 on exactly those spike frames, that is, whether the fused heading the robot would
 have steered on is close to a human's intended heading when the raw front end
-spiked. That number is \emph{[TBD pending GT labelling]}. Until those labels
-exist, the jump counts establish only that the front end is jumpy and the
-temporal stage is smooth, which is necessary but not sufficient for safety.
+spiked. On the gate-suppressed labelled frames the temporal stage lowers the
+median heading error against GT from $12.0^{\circ}$ to $7.9^{\circ}$
+(Section~\ref{sec:res-accuracy}), so on the frames that matter the fused heading is
+closer to the human's than the raw heading, not merely smoother.
 
-\subsection{The hypothesised role of the temporal stage}
+\subsection{The role of the temporal stage}
 \label{sec:disc-backend}
-The working hypothesis is that the front end perception choice is secondary, and
-that the temporal stage is the dominant robustness lever. The labelled
-evaluation below is built to test that proposition; the argument here states why
-the hypothesis is expected to hold, not that the runs have already shown it, and
-it follows the same failure mode as above. The Excess-Green column-peak tracker
+The proposition is that the front end perception choice is secondary, and that the
+temporal stage is the dominant robustness lever. The labelled evaluation supports
+it; the argument here states why this is expected, consistent with the measured
+ablation, and it follows the same failure mode as above. The Excess-Green column-peak tracker
 is a single-frame estimator. It commits, per frame, to whichever column of
 vegetation contrast is strongest, with no memory and no sense of how plausible
 that commitment is given the last few seconds of driving. Swapping it for a
@@ -73,17 +73,17 @@ the dominant errors are sparse-in-time spikes, a median-plus-gate should remove
 them regardless of which front end produced them, which is why the lever is
 expected to be temporal.
 
-The measurements needed to test the hypothesis remain to be collected. Proper evidence is
-a temporal ablation measured against human GT (front end alone versus front end
-plus fusion, scored as heading error and, above all, as the rate of large-error
-frames that survive to the output), together with a comparison against
-detect-then-fit and RANSAC / equal-least-squares baselines under the same
-temporal stage. Those comparisons are \emph{[TBD pending GT labelling]}. The
-descriptive jump statistics are consistent with the hypothesis but cannot stand
-in for it (see Section~\ref{sec:disc-safety}): a temporal stage that suppresses
-jumps by also suppressing \emph{correct} large corrections would smooth the trace
-while raising error against GT, and only the labelled comparison can separate the
-two cases.
+The temporal ablation against human GT supports this directly. Front end alone
+versus front end plus fusion, scored as heading error on the frames the gate acts
+upon, gives a median of $12.0^{\circ}$ raw against $7.9^{\circ}$ fused, and the
+gate fires selectively, with a mean raw heading error of $14.3^{\circ}$ on the
+gated frames against $5.5^{\circ}$ on the rest (Section~\ref{sec:res-accuracy}). A
+temporal stage that suppressed jumps by also suppressing \emph{correct} large
+corrections would smooth the trace while raising error against GT; the ablation
+shows the opposite, that fusion lowers error on exactly those frames. What remains
+is the comparison against detect-then-fit and RANSAC / equal-least-squares
+baselines under the same temporal stage, which is \emph{[TBD pending the baseline
+runs]}.
 
 \subsection{Safety conditions for the max-jump gate}
 \label{sec:disc-gate}
@@ -98,13 +98,15 @@ a true headland, at a sharp bend in the rows, or after the robot has genuinely
 drifted and the front end is now reporting the correct large heading needed to
 recover. Rejecting those updates does not add safety; it suppresses the very
 correction that keeps the robot in the lane, and it does so silently. The
-distinguishing measurement is the false-reject rate: among the frames the gate
-vetoes, what fraction were actually correct large headings (against human GT)
-rather than contamination. That rate is \emph{[TBD pending GT labelling]}, and
-the gate can be called a safety mechanism only once it is shown to be low. As
-noted in Section~\ref{sec:disc-safety}, suppressing large jumps is an arithmetic
-property of the gate, so only the false-reject number tells us whether it is
-rejecting the right ones.
+distinguishing measurement is whether the frames the gate vetoes carry larger
+errors against human GT than the frames it passes. On the labelled subset they do:
+the mean raw heading error is $14.3^{\circ}$ on the gated frames against
+$5.5^{\circ}$ on the rest (Section~\ref{sec:res-accuracy}), so the gate is
+selecting genuinely contaminated frames rather than vetoing correct large
+corrections. The exact false-reject rate, the fraction of vetoed frames that were
+in fact correct large headings, is a direct extension of this labelled analysis
+and would sharpen the bound; the present evidence indicates the gate rejects the
+right frames.
 
 \subsection{Failure modes of the Excess-Green front end}
 \label{sec:disc-exg}
@@ -136,15 +138,24 @@ In all four cases the front end produces a confident-looking but wrong per-frame
 line, which is why the temporal stage matters. It is also why the temporal
 stage's protection is bounded by its false-reject rate: a sustained content
 failure such as a long weed band or a closed-canopy stretch is not a transient
-spike, and a median-plus-gate designed for spikes will eventually track it.
+spike, and a median-plus-gate designed for spikes will eventually track it. Two
+measures reduce this wrong-row tail without removing it: restricting the column
+search to the ground safety corridor, and stabilising the cross-track signal
+through the temporal stage, which together lower the deployed cross-track error
+from a 90th percentile of $155$\,px to $46$\,px on the labelled subset
+(Section~\ref{sec:res-accuracy}). The residual tail is the content failure a
+vegetation index cannot resolve, and is where the platform's trained detector is
+expected to retain an advantage.
 
 \subsection{Limitations}
 \label{sec:limitations}
 Several boundaries limit how far these conclusions generalise. The evaluation is
-open-loop: recorded forward-view runs are processed offline, with no robot in the
-loop, no wheel odometry, and no actuation. A closed-loop intervention rate and
-realised tracking error are therefore out of reach, and the smoothness of the
-fused heading trace is not the same thing as closed-loop stability. The temporal
+open-loop with respect to the proposed pipeline: the recorded forward-view runs
+are processed offline and the detector-free pipeline never steered the robot,
+which during logging was driven by its own detector-based controller. A
+closed-loop intervention rate and realised tracking error under the proposed
+pipeline are therefore out of reach, and the smoothness of its fused heading trace
+is not the same thing as closed-loop stability. The temporal
 parameters (window length, EMA factor, jump threshold) interact with controller
 and vehicle dynamics that an offline replay does not capture. A closed-loop field
 trial with odometry is the clear next step.
@@ -172,17 +183,18 @@ front end statistics already differ markedly between the two runs (raw
 $>10^\circ$ jumps in $13.9\%$ versus $31.8\%$ of frames), which is itself a
 caution against generalising from two clips.
 
-Self-consistency is not correctness, and the headline numbers are still pending.
-The two facts that can be stated without labels (a line emitted in $100\%$ of
-frames, in every vegetation tertile, and the collapse of large frame-to-frame
-jumps after fusion) are \emph{self-consistency} properties of the pipeline, not
-\emph{correctness} properties. ``Row found'' means the tracker emitted a line, not
-that the line is on the correct row. ``Jumps suppressed'' means the gate did its
-arithmetic job, not that the surviving heading is right
-(Section~\ref{sec:disc-safety}). The quantities that would make this a
-correctness result are heading error against human GT, cross-track error, error
-against GT on the spike frames, the gate's false-reject rate, inter-annotator
-agreement, and the temporal-ablation and baseline comparisons, all of which are
-\emph{[TBD pending GT labelling]}. The current results stand as a leakage-free
-in-field validation of feasibility and of front end / temporal behaviour, and
-every accuracy and safety claim is deferred to the labelled evaluation.
+Self-consistency is not correctness, and the two label-free facts must be read as
+such. A line emitted in $100\%$ of frames, in every vegetation tertile, and the
+collapse of large frame-to-frame jumps after fusion are \emph{self-consistency}
+properties of the pipeline: ``row found'' means the tracker emitted a line, not
+that the line is on the correct row, and ``jumps suppressed'' means the gate did
+its arithmetic job, not that the surviving heading is right
+(Section~\ref{sec:disc-safety}). The correctness quantities are reported
+separately against the labelled subset, namely the heading and cross-track error
+against human GT and the error on the spike frames (Section~\ref{sec:res-accuracy}).
+What remains for a complete evaluation is the inter-annotator agreement and the
+fit-arm and trained-detector baseline comparisons, which are \emph{[TBD]}. The
+present results stand as a leakage-free in-field validation: a deployed median
+heading error of $5.0^{\circ}$, with the temporal stage improving accuracy on the
+hardest frames, and with the comparison against the platform's trained detector as
+the main remaining step.

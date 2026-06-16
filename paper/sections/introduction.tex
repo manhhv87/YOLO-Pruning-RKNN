@@ -34,13 +34,13 @@ dataset, to be released publicly, recorded on a working field robot at a camera 
 low-cost in-row navigation; a leakage-free in-field evaluation of the detector-free, training-free
 pipeline, reported in the navigation units a controller consumes, namely heading in degrees and
 cross-track in pixels and in centimetres through a camera-to-ground homography built from the robot's
-measured camera pose, with accuracy against human ground truth the subject of ongoing annotation; and a testable hypothesis, which the
-evaluation is designed to assess, that the temporal stage rather than the perception front end is the
-primary source of robustness, examined by comparing heading error against ground truth on the hardest
-frames together with the gate's false-reject rate.
+measured camera pose, with accuracy measured against a human-labelled subset; and the empirical finding
+that the temporal stage rather than the perception front end is the primary source of robustness, shown by a
+lower heading error against ground truth on the hardest frames together with a gate that fires selectively on
+those frames.
 
-\noindent The scope is deliberately narrow. We study one robot, one crop, one camera pose, and open-loop
-operation, and we make no claim of generalisation beyond this setting.
+\noindent The scope is deliberately narrow. We study one robot, one crop, one camera pose, and an open-loop
+evaluation of the proposed pipeline, and we make no claim of generalisation beyond this setting.
 Section~\ref{sec:method} describes the platform, the pipeline, and the evaluation protocol;
 Section~\ref{sec:results} reports the results; and Sections~\ref{sec:discussion} and~\ref{sec:conclusion}
 discuss the findings and conclude.

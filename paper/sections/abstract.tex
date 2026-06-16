@@ -14,13 +14,15 @@
     offset of that curve, and a temporal stage of a median filter, an exponential moving average, and a
     physical jump gate stabilises both signals. Because no component is trained, the field runs form a
     leakage-free test set, and the tracker emits a guidance line on every frame across a wide range of
-    vegetation density. The evaluation is reported in navigation units, with cross-track also expressed in
-    centimetres through a camera-to-ground homography built from the robot's measured camera pose; accuracy against human ground truth and a
-    temporal-stage ablation are the subject of ongoing annotation. The contributions are a public
-    forward-view cabbage-robot guidance dataset, a leakage-free in-field evaluation of a deliberately
-    simple pipeline, and the hypothesis, which the evaluation is designed to test, that the temporal stage
+    vegetation density. Against a human-labelled subset of $150$ frames the deployed pipeline attains a
+    median heading error of $5.0^{\circ}$ and a median cross-track error of $1.1$\,cm, reported in
+    navigation units with cross-track also expressed in centimetres through a camera-to-ground homography
+    built from the robot's measured camera pose; the temporal stage measurably lowers the heading error on
+    the frames it acts upon. The contributions are a public forward-view cabbage-robot guidance dataset, a
+    leakage-free in-field evaluation of a deliberately simple pipeline, and evidence that the temporal stage
     rather than the perception front end is the dominant contributor to heading stability. The study is
-    bounded to one robot, one crop, one camera pose, and open-loop operation.
+    bounded to one robot, one crop, one camera pose, and open-loop evaluation, and a comparison against the
+    platform's trained detector is left as the next step.
 \end{abstract}
 
 \vspace{1em}

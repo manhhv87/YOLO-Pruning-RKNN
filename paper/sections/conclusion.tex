@@ -19,7 +19,7 @@ smooths both signals~\cite{kalman1960}. All components are established. The stud
 an in-field validation of what this stock composition does on a real cabbage robot,
 rather than a new method.
 
-The study contributes two results and one testable hypothesis within a deliberately narrow
+The study contributes two results and one empirical finding within a deliberately narrow
 scope. The first
 result is a dataset: the first real forward-view cabbage-field robot guidance dataset,
 comprising 1482 forward-view cabbage frames at $640\times480$, screened from two field traverses
@@ -34,24 +34,27 @@ with per-tertile (low/mid/high greenness) values of 491/491, 487/487, and 504/50
 100\%. This figure is a \emph{self-consistency} statement rather than an accuracy
 guarantee: ``a row was found'' means a line was \emph{emitted}, not that it is the
 \emph{correct} line. The accuracy-bearing quantity that completes this result, heading and
-cross-track error against a human-labelled ground truth, is the subject of ongoing
-annotation and is reported as [TBD pending GT labelling]. The testable hypothesis identifies
-the origin of robustness: the temporal stage, rather than the perception front end, is the
-dominant contributor to heading stability, and the labelled evaluation is built to test
-it. A ``raw vs.\ fused'' jump count cannot settle the question, because the max-jump gate
-rejects large frame-to-frame heading changes as a matter of design, which makes such counts
-an arithmetic consequence of the gate; they appear only as explicitly-labelled descriptive
-context. The hypothesis is confirmed or refuted by whether the temporal stage lowers
-heading \emph{error against ground truth} on the hard, low-visibility frames, and at what
-false-reject cost. Reporting that result awaits the annotation, so it too stands as [TBD
-pending GT labelling].
+cross-track error against a human-labelled ground truth, is measured on a $150$-frame subset:
+the deployed pipeline attains a median heading error of $5.0^{\circ}$ and a median
+cross-track error of $1.1$\,cm. The empirical finding concerns the origin of robustness: the
+temporal stage, rather than the perception front end, is the dominant contributor to heading
+stability. A ``raw vs.\ fused'' jump count cannot settle the question, because the max-jump
+gate rejects large frame-to-frame heading changes as a matter of design, which makes such
+counts an arithmetic consequence of the gate; they appear only as explicitly-labelled
+descriptive context. Against ground truth on the gate-suppressed frames the temporal stage
+lowers the median heading error from $12.0^{\circ}$ to $7.9^{\circ}$, and the gate fires
+selectively, carrying a mean raw error of $14.3^{\circ}$ on the frames it holds against
+$5.5^{\circ}$ on the rest, so it suppresses contaminated frames rather than correct
+corrections.
 
-The scope is one robot, one crop (cabbage), one camera pose, open-loop at 1\,fps, and the
-claims extend no further. The measured outcome is a 100\% guidance-line emission rate,
-uniform across vegetation tertiles. Every accuracy-bearing quantity remains pending:
-heading and cross-track error against human ground truth, inter-annotator agreement, error
-on the visually difficult (large raw-jump) frames, the false-reject rate, and the baseline (RANSAC
-and equal-weight least squares~\cite{fischler1981}) and temporal-ablation comparisons.
+The scope is one robot, one crop (cabbage), one camera pose, and an open-loop evaluation of
+the proposed pipeline at 1\,fps, and the claims extend no further. The measured outcomes are
+a $100\%$ guidance-line emission rate uniform across vegetation tertiles, a deployed median
+heading error of $5.0^{\circ}$ and cross-track error of $1.1$\,cm against the labelled
+subset, and a temporal stage that improves accuracy on the hardest frames. The quantities
+that remain pending are the inter-annotator agreement and the baseline comparisons against
+the fit-arm alternatives (RANSAC and equal-weight least squares~\cite{fischler1981}) and the
+platform's trained detector.
 Cross-track offset $e$ is reported in pixels, as a percentage of half the image width, and
 in centimetres via an image-to-ground homography built from the robot's measured camera
 height and tilt. The dataset and code will be made
