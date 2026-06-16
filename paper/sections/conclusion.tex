@@ -2,17 +2,77 @@
 
 % Main Text
 \section{Conclusions}
+\label{sec:conclusion}
 
-\noindent Vision-only crop-row navigation on low-cost edge hardware has to do two things that the prevailing recipe does not separate. It has to emit a guidance line---a heading and a cross-track offset---without RTK-GPS, and it has to know \emph{when not to trust} that line so a steering controller can slow or stop instead of driving along a wrong-row estimate. The dominant pipeline detects row segments as boxes, fits a guidance line through the box centroids with equal or heuristic point weights, and reports a point heading guarded, at best, by a hand-tuned confidence threshold~\cite{diao_yolox,cth1}. The same pattern recurs across the segmentation, row-anchor and curve-regression paradigms~\cite{alnet,rowdetr,ufld}: systems are tuned and reported in detection units (mAP), the deployed quantity is a navigation error, and there is no statement of how often the emitted estimate is actually correct. This paper has treated the missing trust layer, not the detector, as the object of study.
+On a low-cost field robot without RTK-GPS, the quantities a steering controller actually
+consumes are a heading and a cross-track offset, not a detection
+score~\cite{cth3,sogaard}. Adopting that interface, this work examines what crop-row
+guidance accuracy is achievable with a pipeline that has no trained detector and
+no learned weights of any kind. The guidance estimator is assembled entirely from
+well-understood stock parts. An Excess-Green index~\cite{woebbecke1995,meyer2008} feeds a
+column-peak central-row tracker; a robust quadratic fit $x=P(y)$ by Huber IRLS
+($\delta=1.345$, scale $1.4826\cdot\mathrm{MAD}$) models the guidance
+line~\cite{huber1964,marchant1995}; the heading $\theta$ is taken as the look-ahead tangent
+to $P$ and the cross-track offset $e$ at the vehicle reference row; and a temporal stage of
+a sliding-window median, an exponential moving average, and a physical max-jump gate
+smooths both signals~\cite{kalman1960}. All components are established. The study offers
+an in-field validation of what this stock composition does on a real cabbage robot,
+rather than a new method.
 
-\noindent Our contribution is an applied one: a trust layer placed on top of a stock detector, deployable on the same edge graph it already runs. Concretely:
+The study contributes two results and one testable hypothesis within a deliberately narrow
+scope. The first
+result is a dataset: the first real forward-view cabbage-field robot guidance dataset,
+comprising 2067 frames at $640\times480$, sampled at 1\,fps from two field traverses
+($\sim$20 and $\sim$14 minutes), spanning a wide range of vegetation density at a
+forward-view camera pose representative of low-cost in-row navigation. The second result
+concerns leakage-free validation. Because the estimator has no trained component, the
+entire dataset serves as a pure test set with nothing for it to leak into, and the
+validation is structurally leakage-free in a way that detector-based pipelines, with their
+expensive and leak-prone agricultural train/test splits, are not. A guidance line is
+emitted on 100\% of frames (2067/2067), and this rate is uniform across vegetation density,
+with per-tertile (low/mid/high greenness) values of 683/683, 681/681, and 703/703, each
+100\%. This figure is a \emph{self-consistency} statement rather than an accuracy
+guarantee: ``a row was found'' means a line was \emph{emitted}, not that it is the
+\emph{correct} line. The accuracy-bearing quantity that completes this result, heading and
+cross-track error against a human-labelled ground truth, is the subject of ongoing
+annotation and is reported as [TBD pending GT labelling]. The testable hypothesis identifies
+the origin of robustness: the temporal stage, rather than the perception front end, is the
+dominant contributor to heading stability, and the labelled evaluation is built to test
+it. A ``raw vs.\ fused'' jump count cannot settle the question, because the max-jump gate
+rejects large frame-to-frame heading changes as a matter of design, which makes such counts
+an arithmetic consequence of the gate; they appear only as explicitly-labelled descriptive
+context. The hypothesis is confirmed or refuted by whether the temporal stage lowers
+heading \emph{error against ground truth} on the hard, low-visibility frames, and at what
+false-reject cost. Reporting that result awaits the annotation, so it too stands as [TBD
+pending GT labelling].
 
-\begin{itemize}
-  \item \textbf{C1 --- A navigation-native, detector-agnostic guidance readout.} A stock lightweight detector (YOLOv8n~\cite{ct4}) followed by a robust Huber-IRLS line fit over detected row centroids attains, in our experiments, a sub-degree median heading at no added NPU operations: the readout is CPU-side arithmetic over post-NMS boxes, so the exported INT8/RKNN or TensorRT graph is a vanilla detector with no new operator. It matches a RANSAC baseline and improves on equal-weight least squares (E1). We also report a negative motivating finding: the detector's native DFL box-distribution variance $\sigma^2_{\mathrm{DFL}}$~\cite{gfl} is non-informative for heading error here (Spearman $\rho=-0.13$, E0), so robustness---not variance weighting---is what works, and box-uncertainty heads designed for detection~\cite{klloss,gaussianyolo} are not the right signal for this task.
-  \item \textbf{C2 --- A label-free trust score feeding a conformal interval and a risk-controlled policy.} The nonconformity score $s$ is the leave-one-out heading dispersion over centroid refits, a label-free quantity matched to the dominant failure mode (wrong-row contamination). Fed to a split-conformal layer, it produces finite-sample-valid heading prediction intervals of half-width $h=\hat{q}\,s$ at nominal miscoverage $\alpha\in\{0.10,0.05\}$ (E2), and the resulting width-based abstain/slow/proceed policy, at a matched abort rate, lowers the rate of large-heading-error accepted frames relative to a fixed-confidence gate (E4; with an open-loop kinematic policy replay in E6). We position this as a domain instantiation of conformal prediction~\cite{vovk2005,lei2018,angelopoulos2023,romano2019cqr} and selective risk control~\cite{angelopoulos2022rcps,geifman2017selective}, and we contrast rather than claim primacy over prior conformal-on-detector work~\cite{confdet1,confdet2}.
-  \item \textbf{C3 --- A navigation-grounded evaluation and a public field-video dataset.} We release a diverse crop-row field-video dataset (real maize video) with a hand-labelled evaluation subset, and report cross-dataset transfer between CRDLD~\cite{cth1} and CRBD~\cite{crbd} (different camera, crop and resolution) together with edge deployment on Jetson Nano (TensorRT~\cite{tensorrt}) and an RKNN INT8 graph~\cite{rknntoolkit}, with latency, throughput, and a test of whether conformal coverage survives INT8 quantization~\cite{jacob2018int8} (E5).
-\end{itemize}
+The scope is one robot, one crop (cabbage), one camera pose, open-loop at 1\,fps, and the
+claims extend no further. The measured outcome is a 100\% guidance-line emission rate,
+uniform across vegetation tertiles. Every accuracy-bearing quantity remains pending:
+heading and cross-track error against human ground truth, inter-annotator agreement, error
+on the visually difficult (large raw-jump) frames, the false-reject rate, and the baseline (RANSAC
+and equal-weight least squares~\cite{fischler1981}) and temporal-ablation comparisons.
+Cross-track offset $e$ is reported in pixels, as a percentage of half the image width, and
+in centimetres via an image-to-ground homography reused from the shared robot's camera
+calibration under a stated camera-pose assumption. The dataset and code will be made
+publicly available upon publication.
 
-\noindent The scope of these claims is deliberately narrow. This is an applied contribution, not a methods breakthrough: the detector is stock, the line fit is standard robust regression, and the conformal layer is an instantiation of existing theory on a new readout. Metric units (cm) are reported only where the camera is calibrated---the robot platform and the CRDLD homography---while field video stays in pixels and degrees. The conformal coverage guarantee is finite-sample-valid only under exchangeability within a single distribution; CRBD and the field video are therefore presented as a coverage-\emph{degradation} study, not as a guarantee, and we report realised versus nominal coverage with Clopper--Pearson/Wilson intervals, split by base image, in every case (E2). Finally, we have not yet run on a real field robot: the steering policy is evaluated by open-loop kinematic-bicycle replay~\cite{rajamani2012} over recorded video (E6), which shows the abstain policy reduces large-heading-error accepted frames relative to a fixed threshold but does not capture closed-loop dynamics. All quantitative entries above are placeholders to be filled by the experimental runs [TODO: report measured values once experiments are complete].
-
-\noindent Three directions follow directly. The most important is closed-loop field validation: replacing the open-loop replay with trials on the named edge platforms, where measured perception latency, controller dynamics and terrain interact with the guidance estimate and its abstain decisions. A second is temporal conformal prediction over video: the per-frame score and interval are currently independent, and fusing them across time---under the weaker exchangeability that video sequences afford---should both tighten intervals and stabilise the policy at the look-ahead row. A third is broadening the public dataset beyond maize to a multi-crop, multi-condition benchmark, so that the coverage-degradation study under distribution shift becomes a systematic characterisation of when the trust layer can, and cannot, be relied upon.
+\subsection{Future work}
+\label{sec:future-work}
+Three directions follow directly from the boundaries above. An on-robot camera calibration
+comes first. The centimetre cross-track reported here relies on an image-to-ground
+homography reused from the shared platform's calibration, so capturing the intrinsics and
+the image-to-ground mapping on the cabbage robot itself, with its own measured camera
+height and tilt, would remove the pose assumption and make the metric cross-track exact
+rather than indicative. A closed-loop field run is the second direction. The present study
+is open-loop, so it cannot capture how perception latency, controller dynamics, and terrain
+interact with the guidance estimate and the max-jump gate's
+decisions~\cite{rajamani2012}. Replacing the recorded 1\,fps evaluation with an on-robot
+trial, with wheel odometry and a steering controller tracking $\theta$ and $e$ in real
+time, is the natural way to turn the structural robustness claim into a measured
+intervention rate. Multi-crop generalisation completes the list. The estimator is
+detector-free and training-free, so the identical code runs unchanged across crops and
+growth stages, yet validation so far covers only cabbage. Extending the dataset to
+additional row crops and conditions would test whether the temporal stage remains the
+primary source of robustness under genuine distribution shift, and would turn the single-crop validation into a
+systematic characterisation of when this stock pipeline can, and cannot, be relied upon.

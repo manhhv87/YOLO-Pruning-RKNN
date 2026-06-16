@@ -1,457 +1,251 @@
 %!TEX root = ../main.tex
+% =====================================================================
+% RESULTS -- detector-free, training-free cabbage-row guidance validation.
+% Only the FACTS numbers are real (100% emission; descriptive jump counts;
+% descriptive cm magnitude). Accuracy/ablation vs human GT are pending and
+% consolidated into ONE table. No fabricated numbers.
+% =====================================================================
 
 \section{Results}
 \label{sec:results}
 
-This section reports the empirical evaluation of the proposed trust layer --- a
-split-conformal heading-interval and risk-controlled steering policy bolted onto
-a \emph{stock} detector (YOLOv8n) with a robust Huber-IRLS line fit. \emph{No
-dataset-level numbers are filled in yet}: every quantitative cell is a
-placeholder (``\texttt{--}'' in tables, ``[TODO]'' in prose) to be completed once
-the pre-registered runs (experiments E0--E6) have finished. The table
-structures, comparison arms, metrics, statistical tests, and pass criteria below
-are fixed in advance so that the analysis is confirmatory rather than
-exploratory. Each table and figure is wrapped in \verb|\IfFileExists| so the
-manuscript compiles today; the auto-generated file is \verb|\input| once a run
-produces it.
+This section reports what two real cabbage-field robot runs allow us to
+establish, separating what those runs \emph{measure} from what still depends on
+hand-labelled ground truth (GT). The pipeline under test is the detector-free and
+training-free guidance stack of Section~\ref{sec:method}: an Excess-Green
+index~\cite{woebbecke1995,meyer2008} column-peak central-row tracker, a robust
+quadratic fit $x=P(y)$ by Huber IRLS~\cite{huber1964}, a look-ahead tangent that
+defines the heading $\theta$ together with the cross-track offset $e$, and a
+temporal stage built from a sliding-window median, an EMA, and a physical
+max-jump gate. The system is never trained, so the two runs serve as a pure test
+set. No parameters are fitted on these frames, which removes any path for leakage.
 
-We restate the readout so the tables are self-contained. From the post-NMS box
-centroids $\{(x_i,y_i)\}_{i=1}^{n}$ we fit the guidance line $x = a\,y + b$ by
-robust Huber-IRLS, with weights $w_i$ from the Huber influence function; the
-heading is $\theta = \arctan(a)$ in degrees from vertical and the cross-track
-offset is $e_{ct}$ (px, or cm only under the calibrated homography of
-Section~\ref{sec:setup-homography}). This readout adds no NPU operators because
-it is CPU math executed after NMS; the exported detector graph is a vanilla YOLO.
-The trust score is the leave-one-out (LOO) heading dispersion $s$ (deg): the
-dispersion of $\theta$ over refits that each omit one centroid, which targets
-wrong-row contamination without any extra labels. Split-conformal calibration on
-a held-out score set $\{s_1,\dots,s_m\}$ (split \emph{by base image}) gives the
-quantile $\hat q$, and the heading interval is $[\theta - h, \theta + h]$ with
-half-width $h = \hat q\,s$, locally adaptive in the sense of conformalized
-quantile regression~\cite{romano2019cqr,lei2018,vovk2005,angelopoulos2023}. We
-report nominal miscoverage $\alpha\in\{0.10,0.05\}$ and the realised coverage,
-with Clopper--Pearson / Wilson intervals. Throughout, the detector's native DFL
-box-edge distribution variance $\sigma^2_{\mathrm{DFL}}$~\cite{gfl,gflv2} appears
-\emph{only} as a non-informative negative control; the deployed line fit is
-robust Huber-IRLS, not variance weighting.
+Two boundaries govern every number that follows. Self-consistency is not
+correctness: the ``row-found'' rate of Section~\ref{sec:res-reliability} records
+only that the tracker \emph{emitted} a guidance line for a frame, and it carries
+no claim about whether that line is the correct central row. The jump counts are
+likewise descriptive rather than a robustness result. Because the temporal stage
+suppresses large frame-to-frame heading jumps as a direct effect of the gate
+threshold, the post-fusion jump counts in Section~\ref{sec:res-temporal} follow
+arithmetically from that threshold and do not show that the fused heading is more
+accurate. The robustness claim that actually matters, heading error against human
+GT on the very frames the gate suppresses, paired with the false-reject rate, is
+\emph{[TBD pending GT labelling]} and is marked as such in every table.
+Cross-track is reported in pixels, as a percentage of the half-image width, and
+in centimetres through the shared-robot image-to-ground homography of
+Section~\ref{sec:method:platform} (under the camera-pose assumption stated
+there).
 
-\paragraph{Scope and honesty caveats.} Three caveats bound every claim below.
-(i)~This is an \emph{applied} contribution --- a trust layer and evaluation on a
-stock detector --- not a new detector architecture. (ii)~The conformal coverage
-guarantee is finite-sample-valid only \emph{under exchangeability within one
-distribution}; results on CRBD and on field video are therefore a
-coverage-\emph{degradation} study, not a guarantee, and are labelled as such
-wherever coverage is reported. (iii)~The policy replay (E6) is an
-\emph{open-loop} kinematic-bicycle replay~\cite{rajamani2012}, not a closed-loop
-field-robot run: no odometry is in the loop, so E6 measures how the abstain
-policy would have filtered large-heading-error frames, not realised tracking
-error. Centimetre units are used only where the camera is calibrated (the robot
-platform and the CRDLD homography); field video stays in px and deg.
+% =====================================================================
+\subsection{Dataset}
+\label{sec:res-dataset}
+% =====================================================================
 
-\subsection{E0 --- Is the trust score informative? (and the DFL-variance negative control)}
-\label{sec:res-e0-trustinfo}
+The evaluation data are two forward-view video runs recorded by a forward-view
+camera on a cabbage field robot, sampled at $1$\,fps to give $2067$ still frames
+at $640\times480$. The two runs cover different sections of the field at different
+times of day, so vegetation density and lighting differ between them.
+Table~\ref{tab:res-dataset} summarises the runs. The setting is one robot, one
+crop, one camera pose, and open-loop logging at $1$\,fps, and the dataset
+supports no claim of coverage beyond this narrow operating envelope.
 
-E0 tests the premise of the whole trust layer: that the LOO dispersion score $s$
-actually tracks the realised heading error, frame by frame. Table~\ref{tab:e0-trustinfo}
-reports the Spearman rank correlation $\rho(s,\,|\theta-\theta^\star|)$ between
-the score and the realised heading error on CRDLD test (split by base image,
-$\ge 5$ seeds), with a bootstrap CI. The pass criterion is $\rho > 0$ with a CI
-excluding zero: a positive, significant correlation is what licenses using $s$
-as a nonconformity score in E2--E4. The same table reports, as a \emph{negative
-control}, the rank correlation of the detector's native DFL box-edge variance
-$\sigma^2_{\mathrm{DFL}}$~\cite{gfl,gflv2} with the identical error target; our
-prior measurement on this data is $\rho_{\mathrm{DFL}} = -0.13$, i.e.\
-non-informative (and, if anything, anti-correlated). This contrast is the
-empirical reason the deployed readout uses robust Huber-IRLS rather than
-DFL-variance precision weighting: the box-distribution variance does not track
-heading reliability here. Figure~\ref{fig:e0-scatter} visualises both
-relationships as score-versus-error scatters.
+{\renewcommand{\arraystretch}{1.2}
+\begin{table}[!ht]
+  \centering
+  \caption{Field dataset: two real forward-view cabbage robot runs used as a
+    pure test set (no training, so no leakage). Frames are sampled at $1$\,fps.}
+  \label{tab:res-dataset}
+  \begin{tabular}{lccccc}
+    \hline
+    \textbf{Run} & \textbf{Duration} & \textbf{Frames} & \textbf{Rate (fps)} & \textbf{Resolution} & \textbf{Camera} \\
+    \hline
+    Run~1 & $\sim$20\,min & 1218 & 1 & $640\times480$ & forward-view \\
+    Run~2 & $\sim$14\,min & 847  & 1 & $640\times480$ & forward-view \\
+    \hline
+    \textbf{Total} & $\sim$34\,min & \textbf{2067} & 1 & $640\times480$ & forward-view \\
+    \hline
+  \end{tabular}
+\end{table}}
 
-\IfFileExists{tables/tab_e0.tex}{\input{tables/tab_e0.tex}}{%
+% =====================================================================
+\subsection{Row-emission reliability}
+\label{sec:res-reliability}
+% =====================================================================
+
+We first assess whether the perception front end emits a guidance line on every
+frame. Across all $2067$ frames the Excess-Green index column-peak
+tracker emitted a guidance line in $100\%$ of frames ($2067/2067$). To test
+whether this figure conceals a silent failure mode in sparse or dense canopy, we
+split the frames into vegetation tertiles by per-frame Excess-Green coverage (low,
+mid, high). Table~\ref{tab:res-reliability} shows that the emit rate is $100\%$ in
+every tertile. This stratification is partly tautological by construction: the tracker locates the
+strongest Excess-Green column, so a peak exists whenever any green is present, and
+emission across Excess-Green-defined tertiles is close to guaranteed by the design
+of the front end. The result therefore shows only that the tracker never aborts.
+Whether the canopy density leaves the row correct is the separate accuracy
+question of Section~\ref{sec:res-accuracy}.
+
+The $100\%$ row-found rate is a self-consistency statement: in every frame,
+including the low-vegetation frames where the canopy signal is weakest, the
+pipeline returned a line rather than aborting. Figure~\ref{fig:gallery} overlays
+the fitted guidance line on four representative cabbage frames. The rate is not a
+correctness statement, since it does not show that the emitted line is the correct
+central crop row, only that a line was produced. Whether those lines are right is
+an accuracy question that requires human GT, reported (pending) in
+Section~\ref{sec:res-accuracy}.
+
+{\renewcommand{\arraystretch}{1.2}
+\begin{table}[!ht]
+  \centering
+  \caption{Reliability (self-consistency, \emph{not} correctness): fraction of
+    frames in which the tracker emitted a guidance line, overall and by
+    vegetation tertile (Excess-Green coverage). A $100\%$ rate means a line was
+    \emph{emitted}, not that it is the correct central row.}
+  \label{tab:res-reliability}
+  \begin{tabular}{lccc}
+    \hline
+    \textbf{Stratum} & \textbf{Frames} & \textbf{Row emitted} & \textbf{Rate} \\
+    \hline
+    All frames               & 2067 & 2067 & 100\% \\
+    \hline
+    Vegetation: low (T1)     & 683  & 683  & 100\% \\
+    Vegetation: mid (T2)     & 681  & 681  & 100\% \\
+    Vegetation: high (T3)    & 703  & 703  & 100\% \\
+    \hline
+  \end{tabular}
+\end{table}}
+
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=\linewidth]{fig_cabbage_gallery.png}
+  \caption{Qualitative behaviour of the detector-free estimator on four real forward-view \emph{cabbage}
+  frames from the two runs (each panel overlays the Excess-Green column-peak track in orange, the robust
+  quadratic guidance curve $x=P(y)$ in green, the look-ahead tangent/heading in red, and the near-row
+  cross-track in blue; the reported $\theta$ and $e$ are printed). The tracker follows the central cabbage
+  row across growth stages and lighting; the top-left frame also shows operators standing beside the
+  robot during the supervised run. These panels are illustrative, not a correctness measurement (cf.\
+  Section~\ref{sec:res-accuracy}).}
+  \label{fig:gallery}
+\end{figure}
+
+Mapping the per-frame near-row pixel offset through the image-to-ground homography
+(Section~\ref{sec:method:platform}) describes the magnitude of the lateral offset
+in metric units. The central row sat a median of $1.7$\,cm from the image centre
+across all $2067$ frames (mean $3.8$\,cm, 90th percentile $9.7$\,cm), where the
+centimetre figures are indicative only under the unverified camera-pose
+assumption of Section~\ref{sec:method:platform} and are reported alongside the
+pixel and percentage-of-half-width values. These figures characterise the
+\emph{magnitude} of the lateral offset the controller would have observed, a
+geometric summary of the runs rather than an error against ground truth. Whether
+the estimated offset is \emph{correct} is the separate, pending accuracy question
+of Section~\ref{sec:res-accuracy}.
+
+% =====================================================================
+\subsection{Temporal stability}
+\label{sec:res-temporal}
+% =====================================================================
+
+The temporal stage, a sliding-window median followed by an EMA and a physical
+max-jump gate in the spirit of standard recursive smoothing~\cite{kalman1960},
+exists to suppress single-frame heading excursions that a controller should not
+act on. Table~\ref{tab:res-temporal} reports how many per-frame heading jumps
+exceed $10^\circ$, $15^\circ$, and $20^\circ$ in the raw per-frame tracker output
+and after the temporal stage. The per-frame jump is the change in heading from the
+previous frame and is undefined for the first frame of each run, so the
+denominators are $1218$ and $847$ as logged.
+
+These counts are descriptive, since the gate suppresses the jumps by design. The
+post-fusion counts drop to nearly zero because the max-jump gate rejects exactly
+these large frame-to-frame changes. That reduction is an arithmetic property of the
+gate threshold rather than an independent measurement of correctness, and it does
+not amount to ``jumps eliminated.'' The question that decides whether the temporal
+stage helps, namely whether the fused heading is closer to human GT than the raw
+heading on the suppressed frames and how often the gate rejects a correct large
+heading, is tested in Section~\ref{sec:res-accuracy} and is \emph{[TBD pending GT
+labelling]}.
+
+{\renewcommand{\arraystretch}{1.2}
+\begin{table}[!ht]
+  \centering
+  \caption{Per-frame heading-jump counts (change from the previous frame)
+    exceeding $10^\circ/15^\circ/20^\circ$, raw versus after the temporal stage,
+    as exact counts on the logged frames. The post-fusion reduction follows
+    arithmetically from the max-jump gate and is not a correctness result; the
+    correctness test on these frames is reported in
+    Section~\ref{sec:res-accuracy}.}
+  \label{tab:res-temporal}
+  \begin{tabular}{lccc}
+    \hline
+    \textbf{Run / stage} & \textbf{$>10^\circ$} & \textbf{$>15^\circ$} & \textbf{$>20^\circ$} \\
+    \hline
+    Run~1 raw ($n=1218$)   & 169 & 114 & 74 \\
+    Run~1 temporal stage   & 0   & 0   & 0  \\
+    \hline
+    Run~2 raw ($n=847$)    & 269 & 191 & 138 \\
+    Run~2 temporal stage   & 2   & 0   & 0  \\
+    \hline
+  \end{tabular}
+\end{table}}
+
+% =====================================================================
+\subsection{Accuracy and ablation evaluation}
+\label{sec:res-accuracy}
+\label{sec:res-baselines}
+% =====================================================================
+
+The quantities on which the deployment claim rests are the accuracy against a
+human labelling of the central row and the comparisons that interpret it. Each
+requires the hand-labelled GT subset, in which an annotator marks the central
+navigation row per frame and the GT line and its look-ahead tangent are derived in
+the same $x=P(y)$ parameterisation; inter-annotator agreement then sets a floor on
+the smallest meaningful error. That labelling is in progress, so every quantity in
+Table~\ref{tab:res-pending} is \emph{[TBD pending GT labelling]}, with the metrics
+fixed in advance to keep the evaluation confirmatory. Accuracy is the heading error
+$|\theta-\theta^{\mathrm{GT}}|$ in degrees and the cross-track error
+$|e-e^{\mathrm{GT}}|$ in pixels, as a percentage of the half-image width, and in
+centimetres through the homography of Section~\ref{sec:method:platform}, each
+summarised by median, mean, and 90th percentile. The temporal-stage question of
+Section~\ref{sec:res-temporal} is tested here as the heading error against GT on
+the suppressed large raw-jump frames, raw versus fused, together with the gate's
+false-reject rate. The deployed fit is compared against a RANSAC line
+fit~\cite{fischler1981} and an equal-weight least-squares fit over the same
+Excess-Green column peaks, and the temporal stage is ablated (raw versus
+median$+$EMA$+$gate); a self-consistency or jump-count comparison would not
+separate these arms, so the discriminating axis is error against the labelled
+central row.
+
 {\renewcommand{\arraystretch}{1.3}
 \begin{table}[!ht]
   \centering
-  \caption{E0 --- Trust-score informativeness on CRDLD test, split by base
-    image, $\ge 5$ seeds. Spearman $\rho$ between each candidate score and the
-    realised heading error $|\theta-\theta^\star|$, with bootstrap 95\,\% CIs.
-    The proposed LOO-dispersion score $s$ must satisfy $\rho>0$ (CI excluding
-    zero); the DFL-variance row $\sigma^2_{\mathrm{DFL}}$ is the non-informative
-    negative control. \emph{Results to be completed.}}
-  \label{tab:e0-trustinfo}
-  \resizebox{\columnwidth}{!}{\begin{tabular}{lcccc}
+  \caption{Pre-registered accuracy and ablation evaluation against human ground
+    truth, consolidating the pending quantities into one scaffold. Every entry is
+    \emph{[TBD pending GT labelling]} until the hand-labelled subset is complete;
+    the metrics and comparison arms are fixed in advance.}
+  \label{tab:res-pending}
+  \label{tab:res-accuracy}
+  \label{tab:res-baselines}
+  \begin{tabular}{ll}
     \hline
-    \textbf{Candidate score} & \textbf{Spearman $\rho$} & \textbf{95\,\% CI} & \textbf{$\rho>0$?} & \textbf{Role} \\
+    \textbf{Quantity (versus human ground truth)} & \textbf{Status} \\
     \hline
-    $s$ = LOO heading dispersion        & -- & [--,\,--] & -- & proposed \\
-    Fit residual (median)               & -- & [--,\,--] & -- & alt.\ score \\
-    Detector confidence$^2$             & -- & [--,\,--] & -- & alt.\ score \\
-    RANSAC consensus fraction           & -- & [--,\,--] & -- & alt.\ score \\
-    $\sigma^2_{\mathrm{DFL}}$ (DFL var) & -- & [--,\,--] & -- & negative control \\
+    Heading error $|\theta-\theta^{\mathrm{GT}}|$ (median / mean / p90, $^\circ$) & [TBD pending GT labelling] \\
+    Cross-track error (px; \% half-width; cm)                                     & [TBD pending GT labelling] \\
+    Inter-annotator agreement (heading $^\circ$; cross-track px)                   & [TBD pending GT labelling] \\
+    Heading error on large raw-jump frames, raw vs.\ fused ($^\circ$)              & [TBD pending GT labelling] \\
+    False-reject rate of the max-jump gate                                        & [TBD pending GT labelling] \\
+    Fit arm: quadratic $x{=}P(y)$ vs.\ RANSAC vs.\ equal-weight LS                 & [TBD pending GT labelling] \\
+    Temporal ablation: raw vs.\ median$+$EMA$+$gate                               & [TBD pending GT labelling] \\
     \hline
-  \end{tabular}}
-  \medskip
-\end{table}}%
-}
+  \end{tabular}
+\end{table}}
 
-\IfFileExists{figures/fig_e0_scatter.pdf}{%
-\begin{figure}[!ht]\centering
-\includegraphics[width=0.72\linewidth]{figures/fig_e0_scatter.pdf}
-\caption{E0 --- Realised heading error versus candidate trust score on CRDLD
-  test: the proposed LOO-dispersion score $s$ (informative) contrasted with the
-  DFL box-edge variance $\sigma^2_{\mathrm{DFL}}$ (non-informative negative
-  control). \emph{Auto-generated from the run.}}\label{fig:e0-scatter}
-\end{figure}}{}
-
-\subsection{E1 --- Point-accuracy floor of the guidance readout}
-\label{sec:res-e1-accuracy}
-
-E1 establishes the point-heading accuracy floor: before any interval is claimed,
-the deployed Huber-IRLS readout must produce a competitive point heading.
-Table~\ref{tab:e1-accuracy} reports heading error (deg) on CRDLD test ($\ge 5$
-seeds), and line-fit RMSE (px, and cm under the calibrated homography), for six
-readout arms that all share a single stock YOLOv8n checkpoint and differ only in
-the CPU-side line fit: equal-weight least squares (\textbf{equalLS}, the
-Diao-style detect-then-fit recipe~\cite{diao_yolox}), \textbf{RANSAC} least
-squares, the deployed robust \textbf{IRLS} (Huber), the dead DFL-variance
-precision-weighted variant (\textbf{CALM}, included only as the negative control
-of E0/E3), a qualitative single-frame heuristic (\textbf{qual}), and an
-\textbf{oracle} that picks the best-of-arm per frame (an upper bound, not a
-deployable method). Because the arms are paired per frame, comparisons use the
-Wilcoxon signed-rank test with Holm correction across the confirmatory family
-and Cliff's $\delta$ as effect size. The pre-registered claims are: IRLS
-\emph{matches} RANSAC (no significant difference, or $|\delta|<0.147$) and IRLS
-\emph{far beats} equalLS (Holm-adjusted $p<0.05$ and $|\delta|\ge 0.33$), with
-median heading sub-degree. We also report cross-dataset transfer (CRDLD
-$\leftrightarrow$ CRBD~\cite{crbd,cth1,cth2}) so the floor is not a single-domain
-artefact. Figure~\ref{fig:e1-box} shows the per-arm heading-error distribution,
-and Figure~\ref{fig:qual-lines} shows qualitative fits.
-
-\IfFileExists{tables/tab_e1.tex}{\input{tables/tab_e1.tex}}{%
-{\renewcommand{\arraystretch}{1.3}
-\begin{table}[!ht]
-  \centering
-  \caption{E1 --- Point-accuracy floor on CRDLD test, mean$\pm$std over $\ge 5$
-    seeds; cm only under the calibrated homography (Section~\ref{sec:setup-homography}).
-    All arms share one stock YOLOv8n checkpoint and differ only in the post-NMS
-    line fit. Pairwise tests vs.\ the deployed IRLS arm: Wilcoxon signed-rank,
-    Holm-adjusted, Cliff's $\delta$. \texttt{calm}=DFL-variance weighting
-    (negative control); \texttt{oracle}=best-of-arm upper bound (not
-    deployable). \emph{Results to be completed.}}
-  \label{tab:e1-accuracy}
-  \resizebox{\columnwidth}{!}{\begin{tabular}{lccccc}
-    \hline
-    \textbf{Readout arm} & \textbf{Heading ($^\circ$)$\downarrow$} & \textbf{RMSE (px)$\downarrow$} & \textbf{RMSE (cm)$\downarrow$} & \textbf{Wilcoxon $p$ (Holm)} & \textbf{Cliff's $\delta$} \\
-    \hline
-    equalLS~\cite{diao_yolox}        & -- & -- & -- & -- & -- \\
-    RANSAC                           & -- & -- & -- & -- & -- \\
-    \textbf{IRLS (deployed, Huber)}  & -- & -- & -- & \emph{ref} & \emph{ref} \\
-    calm (DFL-var, neg.\ control)    & -- & -- & -- & -- & -- \\
-    qual (single-frame heuristic)    & -- & -- & -- & -- & -- \\
-    oracle (best-of-arm, upper bound)& -- & -- & -- & -- & -- \\
-    \hline
-  \end{tabular}}
-  \medskip
-\end{table}}%
-}
-
-\IfFileExists{figures/fig_e1_box.pdf}{%
-\begin{figure}[!ht]\centering
-\includegraphics[width=0.62\linewidth]{figures/fig_e1_box.pdf}
-\caption{E1 --- Per-arm heading-error distribution on CRDLD test ($\ge 5$
-  seeds). Boxes show median and IQR; the deployed IRLS arm is highlighted.
-  \emph{Auto-generated from the run.}}\label{fig:e1-box}
-\end{figure}}{}
-
-\IfFileExists{figures/fig_qualitative.pdf}{%
-\begin{figure}[!ht]\centering
-\includegraphics[width=0.92\linewidth]{figures/fig_qualitative.pdf}
-\caption{Qualitative guidance lines on CRDLD test frames: ground-truth line
-  (green) vs.\ the deployed Huber-IRLS fit (red) over detected row-segment
-  centroids, with the conformal heading interval shaded.
-  \emph{Auto-generated from the run.}}\label{fig:qual-lines}
-\end{figure}}{}
-
-\subsection{E2 --- Realised vs.\ nominal coverage}
-\label{sec:res-e2-coverage}
-
-E2 is the central validity check for the trust layer. Table~\ref{tab:e2-coverage}
-reports the realised coverage --- the empirical fraction of test frames whose
-true heading lies in $[\theta-h,\theta+h]$ --- against the nominal target
-$1-\alpha$ for $\alpha\in\{0.10,0.05\}$, with Clopper--Pearson and Wilson 95\,\%
-CIs. Calibration and test are split \emph{by base image} so that exchangeability
-is not broken by near-duplicate frames; this split is what makes the
-split-conformal coverage guarantee~\cite{vovk2005,lei2018,angelopoulos2023}
-applicable in-domain. The pass criterion is that the realised-coverage CI
-contains the nominal target on the CRDLD in-domain test (marginal coverage), and
-we additionally report coverage stratified by difficulty (near/far rows, low/high
-centroid count) to expose conditional under-coverage. Cross-dataset rows
-(CRDLD$\to$CRBD and field video~\cite{crbd,cth2}) are reported as a
-coverage-\emph{degradation} study: exchangeability does not hold across
-distributions, so any shortfall there quantifies how far the in-domain guarantee
-travels, and is \emph{not} a claimed guarantee. Figure~\ref{fig:e2-reliability}
-is the reliability diagram (realised vs.\ nominal across a sweep of $\alpha$).
-We position this as a domain instantiation of conformal prediction on a detector
-and explicitly contrast, rather than claim primacy over, prior
-conformal-on-detector work~\cite{confdet1,confdet2}.
-
-\IfFileExists{tables/tab_e2.tex}{\input{tables/tab_e2.tex}}{%
-{\renewcommand{\arraystretch}{1.3}
-\begin{table}[!ht]
-  \centering
-  \caption{E2 --- Realised vs.\ nominal heading-interval coverage, split by base
-    image, with Clopper--Pearson / Wilson 95\,\% CIs. CRDLD is the in-domain
-    guarantee (CI should contain $1-\alpha$); CRDLD$\to$CRBD and field video are
-    a coverage-\emph{degradation} study under distribution shift (not a
-    guarantee). \emph{Results to be completed.}}
-  \label{tab:e2-coverage}
-  \resizebox{\columnwidth}{!}{\begin{tabular}{llcccc}
-    \hline
-    \textbf{Eval set} & \textbf{$\alpha$} & \textbf{Nominal $1-\alpha$} & \textbf{Realised} & \textbf{Clopper--Pearson CI} & \textbf{In CI?} \\
-    \hline
-    \multirow{2}{*}{CRDLD (in-domain)}
-      & 0.10 & 0.90 & -- & [--,\,--] & -- \\
-      & 0.05 & 0.95 & -- & [--,\,--] & -- \\
-    \hline
-    \multirow{2}{*}{CRDLD$\to$CRBD (shift)}
-      & 0.10 & 0.90 & -- & [--,\,--] & -- \\
-      & 0.05 & 0.95 & -- & [--,\,--] & -- \\
-    \hline
-    \multirow{2}{*}{Field video (shift)}
-      & 0.10 & 0.90 & -- & [--,\,--] & -- \\
-      & 0.05 & 0.95 & -- & [--,\,--] & -- \\
-    \hline
-  \end{tabular}}
-  \medskip
-\end{table}}%
-}
-
-\IfFileExists{figures/fig_e2_reliability.pdf}{%
-\begin{figure}[!ht]\centering
-\includegraphics[width=0.55\linewidth]{figures/fig_e2_reliability.pdf}
-\caption{E2 --- Reliability diagram: realised vs.\ nominal heading-interval
-  coverage over a sweep of $\alpha$, CRDLD in-domain (on the diagonal under
-  exchangeability) with the distribution-shift sets shown as a degradation
-  study. \emph{Auto-generated from the run.}}\label{fig:e2-reliability}
-\end{figure}}{}
-
-\subsection{E3 --- Sharpness: which score gives the tightest valid interval?}
-\label{sec:res-e3-sharpness}
-
-A trust layer is useful only if its valid intervals are also \emph{sharp}: wide
-intervals that always cover are uninformative for steering. E3 ablates the
-nonconformity score, holding the conformal machinery and the target coverage
-fixed, and reports the mean interval half-width $h$ at matched realised coverage.
-Table~\ref{tab:e3-sharpness} compares the proposed LOO-dispersion score $s$
-against the fit residual, the squared detector confidence, the DFL box-edge
-variance $\sigma^2_{\mathrm{DFL}}$~\cite{gfl,gflv2}, and the RANSAC consensus
-fraction. Because all scores are conformalized to the same $1-\alpha$, coverage
-is (by construction) matched and the discriminating axis is width: the
-pre-registered claim is that the failure-mode-matched LOO-dispersion score yields
-the \emph{narrowest} mean half-width at matched coverage, with the
-non-informative DFL-variance score giving the widest. Figure~\ref{fig:e3-width}
-plots the half-width distribution per score.
-
-\IfFileExists{tables/tab_e3.tex}{\input{tables/tab_e3.tex}}{%
-{\renewcommand{\arraystretch}{1.3}
-\begin{table}[!ht]
-  \centering
-  \caption{E3 --- Interval sharpness (score ablation) on CRDLD test, split by
-    base image, $\ge 5$ seeds, at matched realised coverage ($\alpha=0.10$).
-    Mean conformal half-width $h$ (deg, lower is sharper); realised coverage
-    column confirms the comparison is at matched coverage. The proposed
-    LOO-dispersion score $s$ should be tightest; $\sigma^2_{\mathrm{DFL}}$
-    widest. \emph{Results to be completed.}}
-  \label{tab:e3-sharpness}
-  \resizebox{\columnwidth}{!}{\begin{tabular}{lccc}
-    \hline
-    \textbf{Nonconformity score} & \textbf{Realised coverage} & \textbf{Mean half-width $h$ ($^\circ$)$\downarrow$} & \textbf{Rank} \\
-    \hline
-    $s$ = LOO heading dispersion        & -- & -- & -- \\
-    Fit residual                        & -- & -- & -- \\
-    Detector confidence$^2$             & -- & -- & -- \\
-    $\sigma^2_{\mathrm{DFL}}$ (DFL var) & -- & -- & -- \\
-    RANSAC consensus fraction           & -- & -- & -- \\
-    \hline
-  \end{tabular}}
-  \medskip
-\end{table}}%
-}
-
-\IfFileExists{figures/fig_e3_width.pdf}{%
-\begin{figure}[!ht]\centering
-\includegraphics[width=0.62\linewidth]{figures/fig_e3_width.pdf}
-\caption{E3 --- Conformal half-width distribution per nonconformity score at
-  matched coverage on CRDLD test; narrower is sharper.
-  \emph{Auto-generated from the run.}}\label{fig:e3-width}
-\end{figure}}{}
-
-\subsection{E4 --- Selective risk: does the conformal gate beat a confidence gate?}
-\label{sec:res-e4-selrisk}
-
-E4 evaluates the steering policy as a selective predictor~\cite{geifman2017selective,angelopoulos2022rcps}:
-frames are accepted (proceed) or aborted (abstain), and we plot the heading error
-on \emph{accepted} frames against the abort rate. Table~\ref{tab:e4-selrisk}
-compares the conformal-width gate (abstain when the half-width $h$ exceeds a
-threshold) against the fixed-confidence baseline gate (abstain when detector
-confidence is below a threshold), at \emph{matched abort rate} so the comparison
-is fair. The pre-registered claim is that, at matched abort, the conformal-width
-gate yields lower heading error on accepted frames --- i.e.\ it aborts the right
-frames --- because it is driven by a failure-mode-matched score rather than by
-raw confidence. Figure~\ref{fig:e4-riskcov} is the risk--coverage curve (accepted
-error vs.\ abort rate) for both gates; a uniformly lower conformal curve is the
-visual statement of the same claim.
-
-\IfFileExists{tables/tab_e4.tex}{\input{tables/tab_e4.tex}}{%
-{\renewcommand{\arraystretch}{1.3}
-\begin{table}[!ht]
-  \centering
-  \caption{E4 --- Selective risk on CRDLD test, split by base image, $\ge 5$
-    seeds. Heading error on accepted frames at matched abort rate: conformal-width
-    gate vs.\ fixed-confidence gate. Lower accepted error at equal abort is
-    better. \emph{Results to be completed.}}
-  \label{tab:e4-selrisk}
-  \resizebox{\columnwidth}{!}{\begin{tabular}{lcccc}
-    \hline
-    \textbf{Abort rate} & \textbf{Conf-gate error ($^\circ$)$\downarrow$} & \textbf{Conformal-gate error ($^\circ$)$\downarrow$} & \textbf{$\Delta$ ($^\circ$)} & \textbf{Better} \\
-    \hline
-    0\,\% (no abstain) & -- & -- & -- & -- \\
-    5\,\%              & -- & -- & -- & -- \\
-    10\,\%             & -- & -- & -- & -- \\
-    20\,\%             & -- & -- & -- & -- \\
-    \hline
-  \end{tabular}}
-  \medskip
-\end{table}}%
-}
-
-\IfFileExists{figures/fig_e4_riskcoverage.pdf}{%
-\begin{figure}[!ht]\centering
-\includegraphics[width=0.62\linewidth]{figures/fig_e4_riskcoverage.pdf}
-\caption{E4 --- Selective risk: heading error on accepted frames vs.\ abort
-  rate, conformal-width gate vs.\ fixed-confidence gate at matched abort.
-  \emph{Auto-generated from the run.}}\label{fig:e4-riskcov}
-\end{figure}}{}
-
-\subsection{E5 --- Edge deployment: latency, throughput, and coverage under INT8}
-\label{sec:res-e5-deploy}
-
-E5 supports the deployment argument. Table~\ref{tab:e5-deploy} reports latency
-(mean$\pm$std and P95), throughput (FPS), and energy per frame on the two named
-edge stacks --- TensorRT (FP16/INT8) on the Jetson Nano~\cite{tensorrt} and RKNN
-INT8 on the Rockchip board~\cite{rknntoolkit} --- together with the post-NMS CPU
-overhead of the trust layer measured separately. Because the readout and trust
-layer add no NPU operators (CPU, post-NMS), the exported INT8 graph is a vanilla
-YOLO and the NPU latency is unchanged by the trust layer; the table makes this
-verifiable by reporting the CPU overhead as a distinct row. The table's last
-columns report the realised coverage \emph{after} INT8 post-training
-quantization~\cite{jacob2018int8} --- recomputing the conformal quantile $\hat q$
-on the quantized model's calibration scores --- to demonstrate that the coverage
-guarantee survives quantization (the realised-coverage CI should still contain
-$1-\alpha$ in-domain after the re-fit). This is a re-fit-after-INT8 result, not a
-transfer of the FP32 quantile.
-
-\IfFileExists{tables/tab_e5.tex}{\input{tables/tab_e5.tex}}{%
-{\renewcommand{\arraystretch}{1.3}
-\begin{table}[!ht]
-  \centering
-  \caption{E5 --- Edge latency, throughput, energy, and coverage-after-INT8.
-    TensorRT on Jetson Nano; RKNN INT8 on Rockchip. Input at the stated
-    resolution, batch size 1, after warm-up. The trust layer adds no NPU
-    operators; its cost is the post-NMS CPU row. Coverage-after-INT8 re-fits
-    $\hat q$ on the quantized model (CI should contain $1-\alpha$ in-domain).
-    \emph{Results to be completed.}}
-  \label{tab:e5-deploy}
-  \resizebox{\columnwidth}{!}{\begin{tabular}{llccccc}
-    \hline
-    \textbf{Device / runtime} & \textbf{Precision} & \textbf{Latency mean$\pm$std (ms)$\downarrow$} & \textbf{P95 (ms)} & \textbf{FPS$\uparrow$} & \textbf{Energy/frame (mJ)$\downarrow$} & \textbf{Coverage @$\alpha{=}0.10$} \\
-    \hline
-    Jetson Nano / TensorRT & FP16 & -- & -- & -- & -- & -- \\
-    Jetson Nano / TensorRT & INT8 & -- & -- & -- & -- & -- \\
-    Rockchip / RKNN        & INT8 & -- & -- & -- & -- & -- \\
-    \hline
-    \multicolumn{2}{l}{Trust layer (post-NMS CPU overhead)} & -- & -- & -- & -- & n/a \\
-    \hline
-  \end{tabular}}
-  \medskip
-\end{table}}%
-}
-
-\subsection{E6 --- Open-loop policy replay}
-\label{sec:res-e6-replay}
-
-E6 asks whether the abstain policy would have improved guidance in a sequential
-setting. \emph{This is an open-loop replay, not a closed-loop field run}: there
-is no odometry and no real robot in the loop. We replay a held-out video sequence
-through a kinematic bicycle model~\cite{rajamani2012}, feeding the per-frame
-heading either unconditionally (fixed-threshold baseline) or through the
-risk-controlled policy (proceed if $h\le\tau_p$; slow if $\tau_p<h\le\tau_s$;
-abstain if $h>\tau_s$), and we count how many large-heading-error frames are
-accepted under each policy. Table~\ref{tab:e6-replay} reports the fraction of
-accepted frames whose heading error exceeds a safety threshold, plus the abstain
-and slow rates; the pre-registered claim is that the conformal abstain policy
-reduces the rate of accepted large-error frames relative to the fixed threshold
-at a comparable abstain budget. Figure~\ref{fig:e6-replay} overlays the replayed
-heading trace, the conformal interval, and the policy state over time. We
-emphasise this is a replay-based plausibility result; a closed-loop field-robot
-evaluation is left to future work and is stated as a limitation.
-
-\IfFileExists{tables/tab_e6.tex}{\input{tables/tab_e6.tex}}{%
-{\renewcommand{\arraystretch}{1.3}
-\begin{table}[!ht]
-  \centering
-  \caption{E6 --- Open-loop kinematic-bicycle replay (\emph{not} closed-loop; no
-    odometry) on a held-out field-video sequence. Fraction of accepted frames
-    with heading error above the safety threshold, plus abstain/slow rates:
-    fixed-threshold baseline vs.\ the risk-controlled conformal policy at a
-    comparable abstain budget. Lower accepted large-error rate is better.
-    \emph{Results to be completed.}}
-  \label{tab:e6-replay}
-  \resizebox{\columnwidth}{!}{\begin{tabular}{lcccc}
-    \hline
-    \textbf{Policy} & \textbf{Accepted large-error rate$\downarrow$} & \textbf{Abstain rate} & \textbf{Slow rate} & \textbf{Mean accepted error ($^\circ$)$\downarrow$} \\
-    \hline
-    Fixed-threshold baseline          & -- & -- & n/a & -- \\
-    Risk-controlled conformal policy  & -- & -- & --  & -- \\
-    \hline
-  \end{tabular}}
-  \medskip
-\end{table}}%
-}
-
-\IfFileExists{figures/fig_e6_replay.pdf}{%
-\begin{figure}[!ht]\centering
-\includegraphics[width=0.78\linewidth]{figures/fig_e6_replay.pdf}
-\caption{E6 --- Open-loop replay trace: per-frame heading with its conformal
-  interval and the policy state (proceed/slow/abstain) over time, contrasted with
-  the fixed-threshold baseline. Replay only; no odometry in the loop.
-  \emph{Auto-generated from the run.}}\label{fig:e6-replay}
-\end{figure}}{}
-
-\subsection{Dataset and summary of planned findings}
-\label{sec:res-summary}
-
-Figure~\ref{fig:dataset} shows representative frames from the public field-video
-dataset (real maize video) with its hand-labelled evaluation subset (C3), which
-underpins the field-video rows of E2 and the sequence in E6. Taken together, the
-experiments answer the questions the trust layer must pass before deployment.
-\textbf{E0} establishes that the LOO-dispersion score is informative
-($\rho>0$) and that the DFL box-edge variance is not (the
-$\rho_{\mathrm{DFL}}=-0.13$ negative control), which is the empirical reason the
-readout is robust Huber-IRLS rather than variance weighting. \textbf{E1} fixes
-the point-accuracy floor (IRLS matches RANSAC, far beats equalLS, sub-degree
-median). \textbf{E2} checks that conformal coverage holds in-domain under
-exchangeability and quantifies its degradation under shift. \textbf{E3} shows
-the proposed score gives the sharpest valid interval. \textbf{E4} shows the
-conformal gate beats a fixed-confidence gate at matched abort. \textbf{E5}
-reports edge latency/throughput and that coverage survives INT8 re-fit.
-\textbf{E6} shows, in open-loop replay, that the abstain policy filters
-large-error frames. Every cell will be populated once the pre-registered runs
-complete; no dataset-level number is asserted here.
-
-\IfFileExists{figures/fig_dataset.pdf}{%
-\begin{figure}[!ht]\centering
-\includegraphics[width=0.92\linewidth]{figures/fig_dataset.pdf}
-\caption{Public crop-row field-video dataset (real maize video) with the
-  hand-labelled evaluation subset used in E2 (field-video coverage) and E6
-  (replay sequence). \emph{Auto-generated from the run.}}\label{fig:dataset}
-\end{figure}}{}
+The two runs establish that the front end is reliable in the self-consistency
+sense, with a line emitted in $100\%$ of $2067$ frames including the
+low-vegetation tertile, and they give descriptive context on how often the raw
+per-frame heading would have jumped. Accuracy is not yet established. Every
+correctness quantity remains \emph{[TBD pending GT labelling]}: heading and
+cross-track error against human GT, inter-annotator agreement, error against GT on
+the gate-suppressed large raw-jump frames, the false-reject rate, and the baseline and
+temporal-ablation comparisons of Table~\ref{tab:res-pending}. Completing the
+hand-labelled subset is the one remaining step that turns this from a
+self-consistency report into the accuracy validation the deployment claim requires.

@@ -28,6 +28,9 @@ datasets/CRDLD_yolo.local.yaml
 # paper is compiled on Windows, so these must travel via git. Only the raw
 # per-frame overlays are ignored (the montage fig_qualitative.pdf is kept).
 paper/figures/qualitative/
+# raw field-media dumps (GBs): keep only the specific figures we force-add
+paper/figures/Video/
+paper/figures/IMG/
 
 # ---- python ----
 __pycache__/

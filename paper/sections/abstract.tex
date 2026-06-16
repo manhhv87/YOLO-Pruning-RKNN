@@ -1,12 +1,28 @@
 %!TEX root = ../main.tex
-% TITLE: Know-When-to-Trust Crop-Row Guidance: Conformal Heading Intervals and a Risk-Controlled Steering Policy on a Stock Edge Detector
 
 \vspace{2em}
 
 \begin{abstract}
-    \noindent Vision-only crop-row navigation on low-cost edge hardware must produce a guidance line---a heading and a cross-track offset---and, in the absence of RTK-GPS, also know \emph{when not to trust it}; yet crop-row systems are typically reported in detection terms (mAP), fit the line with equal or heuristic weights, and emit a point heading guarded at best by a hand-tuned confidence threshold, with no coverage guarantee. We address this with a trust layer on a stock detector rather than a new architecture. First, we give a navigation-native, detector-agnostic guidance readout: a stock lightweight detector (YOLOv8n)~\cite{ct4} followed by a robust Huber-IRLS fit of the line $x = a y + b$ over detected row centroids, which in our experiments attains sub-degree median heading ($\theta = \arctan a$) at no added NPU operations because the readout is CPU post-NMS, matches a RANSAC baseline, and improves on equal-weight least squares, while the detector's native box-distribution variance from the DFL head~\cite{gfl} is non-informative for heading error here (Spearman $\rho = -0.13$), so robustness, not variance weighting, is what works. Second, we build a label-free, failure-mode-matched trust score---leave-one-out heading dispersion $s$---and pass it through a split-conformal layer~\cite{lei2018,vovk2005} producing finite-sample-valid heading intervals of half-width $h = \hat{q}\,s$ at nominal miscoverage $\alpha$, together with a risk-controlled abstain/slow/proceed steering policy that, at a matched abort rate, lowers the rate of large-heading-error accepted frames relative to a fixed-confidence gate; we position this as a domain instantiation of conformal prediction on a detector, contrasting rather than claiming primacy over prior conformal-on-detector work~\cite{confdet1,confdet2}. Third, we provide a navigation-grounded evaluation and a diverse public crop-row field-video dataset (real maize video) with a hand-labelled subset, including cross-dataset transfer (CRDLD~$\leftrightarrow$~CRBD)~\cite{cth1,crbd} and edge deployment (Jetson Nano with TensorRT; RKNN INT8) with latency, throughput, and a test of whether conformal coverage survives INT8 quantization. The contribution is applied rather than a methods breakthrough: the policy is evaluated by open-loop kinematic-bicycle replay, not a closed-loop field run; cross-track is in cm only where the camera is calibrated (robot/CRDLD) and field video stays in px and degrees; and the coverage guarantee is finite-sample-valid under exchangeability within one distribution, with CRBD and field video reported as a coverage-degradation study, not a guarantee. Headline results (CRDLD test): median heading error [TODO: x.x]$^\circ$ (Huber-IRLS) versus [TODO: x.x]$^\circ$ (equal-weight least squares); realised coverage [TODO: xx]\% at $1-\alpha = 0.90$; full quantitative results, including the deployment numbers, are reported in the experiments.
+    \noindent Vision-only crop-row guidance lets a low-cost field robot steer without RTK-GPS, but for
+    every frame it must produce the heading and cross-track offset that drive the steering controller. Most
+    field systems obtain these quantities from a trained row detector, which needs field-specific
+    labelling and tends to degrade when the canopy or growth stage drifts away from the training
+    distribution. We ask whether a detector-free and training-free pipeline built from classical
+    components can meet the same interface, and we evaluate one in the field on a cabbage robot. A
+    forward-view camera feeds an Excess-Green central-row tracker, and a robust quadratic fit models
+    the row as a curve. The heading is taken as the look-ahead tangent and the cross-track as the lateral
+    offset of that curve, and a temporal stage of a median filter, an exponential moving average, and a
+    physical jump gate stabilises both signals. Because no component is trained, the field runs form a
+    leakage-free test set, and the tracker emits a guidance line on every frame across a wide range of
+    vegetation density. The evaluation is reported in navigation units, with cross-track also expressed in
+    centimetres through a reused camera-to-ground calibration; accuracy against human ground truth and a
+    temporal-stage ablation are the subject of ongoing annotation. The contributions are a public
+    forward-view cabbage-robot guidance dataset, a leakage-free in-field evaluation of a deliberately
+    simple pipeline, and the hypothesis, which the evaluation is designed to test, that the temporal stage
+    rather than the perception front end is the dominant contributor to heading stability. The study is
+    bounded to one robot, one crop, one camera pose, and open-loop operation.
 \end{abstract}
 
 \vspace{1em}
-\noindent \keywords{crop-row navigation, guidance-line estimation, conformal prediction, prediction intervals, selective prediction, robust line fitting, edge deployment, YOLO.}
+\noindent \keywords{crop-row guidance, vision-based navigation, vegetation index, robust line fitting, temporal filtering, agricultural robot, cabbage.}
 \vspace{1em}

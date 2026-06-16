@@ -3,173 +3,187 @@
 \section{Discussion}
 \label{sec:discussion}
 
-\noindent We organise the discussion around the three contributions, then state the
-boundaries of the evidence explicitly. The throughline is a deliberately narrow claim: on a
-\emph{stock} edge detector, the right thing to add for vision-only crop-row navigation is not a
-new architecture but a trust layer --- a robust guidance readout, a calibrated heading
-interval, and a steering policy that knows when not to act on the line.
+This work is an applied contribution: an in-field validation of a detector-free
+and training-free crop-row guidance pipeline on a cabbage robot, rather than a
+methods breakthrough. Every component is a stock part. The front end uses the
+Excess-Green index for vegetation
+contrast~\cite{woebbecke1995,meyer2008}, a robust quadratic fit $x=P(y)$ by
+Huber IRLS~\cite{huber1964,fischler1981}, and a look-ahead heading that is taken
+as the tangent to the fitted guidance line; the temporal stage is a sliding-window
+median, an EMA, and a max-jump gate~\cite{kalman1960}. All components are
+established. The
+contribution is that, assembled in this order and validated on real forward-view
+cabbage video, the combination yields a deployable vision-only guidance signal,
+and that the temporal stage, rather than the perception front end, is the primary
+source of robustness. The discussion is organised around that thesis: the conditions
+under which it holds, and the limits of the evidence behind it. Throughout, the
+quantities that the two runs already measure are kept separate from those that
+remain pending ground-truth (GT) labelling.
 
-\subsection{What the trust gate buys for navigation safety}
-\label{sec:disc-trust}
-\noindent A point heading, however accurate on average, is the wrong interface to a steering
-controller in a safety-critical setting: it cannot distinguish a frame in which the rows are
-clearly resolved from one in which the detector has latched onto the wrong row, a headland, or
-a gap, and the controller integrates whichever heading it is handed. The contribution of the
-trust layer (C2) is to make that distinction \emph{operational}. The leave-one-out heading
-dispersion $s$ is constructed to fire on exactly the failure that hurts navigation --- a single
-contaminating centroid (a wrong-row or spurious detection) that swings the slope $a$ and hence
-$\theta=\arctan(a)$ --- because removing that centroid and refitting moves the heading far more
-than removing any in-row centroid does. Passing $s$ through a split-conformal layer turns this
-raw, label-free signal into a heading interval $[\theta-h,\theta+h]$ with
-$h=\hat{q}\,s$, whose width is locally adaptive: it is narrow when the refits agree and wide when
-they do not, and the multiplier $\hat{q}$ is fixed once on a calibration set so the nominal
-miscoverage $\alpha$ has a finite-sample meaning rather than being a hand-tuned knob
-\cite{vovk2005,lei2018,angelopoulos2023,romano2019cqr}.
+\subsection{Large-error suppression as the safety-relevant quantity}
+\label{sec:disc-safety}
+The heading $\theta$, defined as the look-ahead tangent to the fitted
+guidance line $x=P(y)$, is the wrong interface to a steering controller if it is
+reported as a bare number, however accurate that number is on average. A
+controller integrates whatever heading it is handed, so the quantity that decides
+whether the robot stays between the rows or drives into a stand of cabbage is not
+the \emph{mean} heading error but the rate of \emph{large} heading errors that
+reach the actuator. A single frame in which the Excess-Green front end latches
+onto a weed, a gap, or the wrong row can swing the look-ahead tangent by tens of
+degrees, and one such residual spike, if acted on, can damage plants and force a
+human intervention. Whereas a typical heading error produces a slightly
+off-centre pass, a single large residual error can cause the robot to damage
+plants and require human intervention. Suppressing large-heading-error frames therefore matters more
+than shaving the mean, and that is exactly what a temporal stage with a physical
+max-jump gate is built to remove.
 
-The downstream payoff is the risk-controlled \emph{proceed / slow / abstain} policy
-(E4, Section~\ref{sec:res-e4-selrisk}; E6, Section~\ref{sec:res-e6-replay}). Thresholding the
-interval half-width $h$ against $\tau_p$ and $\tau_s$ converts a coverage guarantee into a
-control decision: keep steering when the heading is sharply bracketed, reduce speed when it is
-uncertain, and stop rather than commit to a line the system itself flags as untrustworthy.
-The relevant safety quantity is not mean heading error but the rate of \emph{large-error
-accepted} frames --- the cases where the robot acts confidently on a wrong heading --- and the
-selective-risk curves (E4) are designed to show that, at a matched abort rate, a width gate
-suppresses these large-error accepted frames more than a fixed-confidence gate does. This is the practical sense in
-which "knowing when not to trust" is worth more for navigation than a marginal reduction in
-average heading error: the residual large errors, not the typical ones, are what cause crop
-damage and interventions, and they are precisely what the abstain branch removes. We frame
-this as a domain instantiation of selective and risk-controlled prediction
-\cite{geifman2017selective,angelopoulos2022rcps}, and of conformal prediction on a detector
-\cite{confdet1,confdet2}, rather than as a new method.
+The per-frame jump counts of Section~\ref{sec:results} provide context rather
+than a headline result. As reported in Table~\ref{tab:res-temporal}, raw headings
+show frequent $>10^\circ$ frame-to-frame jumps on both runs, and these are largely
+eliminated after fusion. Because the max-jump gate rejects large frame-to-frame swings as a
+direct consequence of its threshold, the post-fusion count of large jumps is an
+arithmetic property of the gate rather than independent evidence that the emitted
+heading is correct. The safety claim that matters concerns error against human GT
+on exactly those spike frames, that is, whether the fused heading the robot would
+have steered on is close to a human's intended heading when the raw front end
+spiked. That number is \emph{[TBD pending GT labelling]}. Until those labels
+exist, the jump counts establish only that the front end is jumpy and the
+temporal stage is smooth, which is necessary but not sufficient for safety.
 
-\subsection{The negative DFL-variance finding, and why robustness plus conformal is the right call}
-\label{sec:disc-negative}
-\noindent A natural and tempting design --- the one an earlier version of this work pursued ---
-is to weight the line fit by the detector's own localisation uncertainty. Modern YOLO heads
-regress each box edge as a Distribution Focal Loss (DFL) distribution \cite{gfl}, and the
-variance of that distribution, $\sigma^2_{\mathrm{DFL}}$, is a free per-edge sharpness signal
-that GFLv2 already repurposes as a quality score \cite{gflv2}. It is reasonable to expect that
-down-weighting high-variance far boxes inside a generalised-least-squares fit would reduce
-heading error, since the far field is where the rows blur and where heading is most sensitive.
+\subsection{The hypothesised role of the temporal stage}
+\label{sec:disc-backend}
+The working hypothesis is that the front end perception choice is secondary, and
+that the temporal stage is the dominant robustness lever. The labelled
+evaluation below is built to test that proposition; the argument here states why
+the hypothesis is expected to hold, not that the runs have already shown it, and
+it follows the same failure mode as above. The Excess-Green column-peak tracker
+is a single-frame estimator. It commits, per frame, to whichever column of
+vegetation contrast is strongest, with no memory and no sense of how plausible
+that commitment is given the last few seconds of driving. Swapping it for a
+different stock front end (a segmentation scan, a row-anchor estimator, or another
+vegetation index) should not change the underlying problem, because the
+single-frame estimate will still occasionally lock onto a weed patch, a canopy
+gap, or an adjacent row. Such errors arise from scene content rather than from
+the estimator, and persist under any single-frame front end. The temporal stage is what is expected to convert an
+occasionally-wrong per-frame estimate into a heading a controller can integrate.
+The sliding-window median rejects isolated contaminated frames, the EMA limits
+how fast the steering target can move, and the max-jump gate enforces that the
+look-ahead heading cannot change faster than the vehicle kinematically can. If
+the dominant errors are sparse-in-time spikes, a median-plus-gate should remove
+them regardless of which front end produced them, which is why the lever is
+expected to be temporal.
 
-Our trust-informativeness experiment (E0, Section~\ref{sec:res-e0-trustinfo}) reports that this
-expectation does not hold here: the rank correlation between $\sigma^2_{\mathrm{DFL}}$ and the
-realised heading error is slightly negative (Spearman $\rho=-0.13$), i.e.\ the DFL box-edge
-variance is non-informative for the navigation-level quantity we care about. We therefore
-report it only as a negative control, never as a component of the deployed system. The most
-plausible reason is a mismatch of failure modes: $\sigma^2_{\mathrm{DFL}}$ measures the
-sharpness of an \emph{individual, correctly matched} box edge, whereas heading error in this
-pipeline is dominated by \emph{which rows are detected at all} --- a single confidently
-localised box on the wrong row (small $\sigma^2_{\mathrm{DFL}}$, large heading impact) is the
-opposite of what edge-sharpness would flag. The same logic explains the two design choices we
-do deploy. First, the line is fit with robust Huber-IRLS rather than variance-weighted GLS:
-the contamination that drives heading error is an outlier-rejection problem, not a
-heteroscedastic-weighting problem, which is why Huber-IRLS matches a RANSAC baseline and far
-exceeds equal-weight least squares while variance weighting does not help
-(E1, Section~\ref{sec:res-e1-accuracy}). Second, the trust score is the LOO heading
-dispersion $s$, not $\sigma^2_{\mathrm{DFL}}$: $s$ is computed at the level of the heading and
-is sensitive to exactly the wrong-row contamination that the per-edge variance misses. The
-score ablation (E3, Section~\ref{sec:res-e3-sharpness}) makes this concrete by comparing
-interval width at matched coverage across candidate scores --- residual magnitude, squared
-confidence, $\sigma^2_{\mathrm{DFL}}$, and RANSAC consensus --- with $s$ expected to give the
-tightest intervals because it is the score whose failure mode matches the task. The honest
-reading is that the elegant uncertainty signal the detector hands us for free is the wrong
-signal for this problem, and that robustness in the fit plus a failure-mode-matched conformal
-score is what works.
+The measurements needed to test the hypothesis remain to be collected. Proper evidence is
+a temporal ablation measured against human GT (front end alone versus front end
+plus fusion, scored as heading error and, above all, as the rate of large-error
+frames that survive to the output), together with a comparison against
+detect-then-fit and RANSAC / equal-least-squares baselines under the same
+temporal stage. Those comparisons are \emph{[TBD pending GT labelling]}. The
+descriptive jump statistics are consistent with the hypothesis but cannot stand
+in for it (see Section~\ref{sec:disc-safety}): a temporal stage that suppresses
+jumps by also suppressing \emph{correct} large corrections would smooth the trace
+while raising error against GT, and only the labelled comparison can separate the
+two cases.
 
-\subsection{Deployment implications}
-\label{sec:disc-deploy}
-\noindent The trust layer is designed to cost nothing on the accelerator. The detector runs
-unmodified and the entire readout --- the Huber-IRLS fit, the LOO refits that produce $s$, and
-the conformal interval $h=\hat{q}\,s$ --- is post-NMS CPU arithmetic over the handful of
-detected centroids. There are no added NPU operators because the readout is CPU post-NMS; the
-exported INT8 graph, whether targeting a Rockchip NPU via RKNN \cite{rknntoolkit} or a Jetson
-Nano via TensorRT \cite{tensorrt}, is a vanilla YOLO. This is stated as a plain property, not a
-selling point: it means the latency and throughput reported in E5
-(Section~\ref{sec:res-e5-deploy}) are essentially those of the stock detector, and that the
-trust layer can be retrofitted onto any deployed detect-then-fit stack without re-export.
+\subsection{Safety conditions for the max-jump gate}
+\label{sec:disc-gate}
+The max-jump gate is the safety component of the pipeline only under a condition
+that remains unmeasured, namely that its \emph{false-reject rate} is low. The
+gate's job is to veto a proposed heading update that is physically implausible.
+It is genuinely protective when the vetoed updates are the contaminated ones, the
+weed-lock and wrong-row spikes, because it then holds the last trustworthy
+heading through a transient and resumes when the front end recovers. The same
+gate, with the same threshold, will also veto a \emph{real} sharp correction: at
+a true headland, at a sharp bend in the rows, or after the robot has genuinely
+drifted and the front end is now reporting the correct large heading needed to
+recover. Rejecting those updates does not add safety; it suppresses the very
+correction that keeps the robot in the lane, and it does so silently. The
+distinguishing measurement is the false-reject rate: among the frames the gate
+vetoes, what fraction were actually correct large headings (against human GT)
+rather than contamination. That rate is \emph{[TBD pending GT labelling]}, and
+the gate can be called a safety mechanism only once it is shown to be low. As
+noted in Section~\ref{sec:disc-safety}, suppressing large jumps is an arithmetic
+property of the gate, so only the false-reject number tells us whether it is
+rejecting the right ones.
 
-The deployment concern that does require evidence is whether the conformal coverage survives
-post-training INT8 quantisation \cite{jacob2018int8}, since quantisation perturbs the box
-distribution and hence both the heading and the score $s$. Because the conformal multiplier
-$\hat{q}$ is recalibrated on a held-out set, the recommended and tested practice is to re-fit
-$\hat{q}$ on the quantised graph; E5 reports realised coverage before versus after INT8 to show
-that, with this re-fit, the target coverage $1-\alpha$ is recovered on the deployed model. We
-present this as a demonstration on our data, not as a guarantee that quantisation is innocuous
-in general.
+\subsection{Failure modes of the Excess-Green front end}
+\label{sec:disc-exg}
+Because the temporal stage can only stabilise what the front end gives it, the
+failure modes of the Excess-Green tracker bound the system. They are the familiar
+limits of vegetation-index row
+sensing~\cite{woebbecke1995,meyer2008,marchant1995}, and they bear on cabbage
+forward-view imagery in specific ways.
+\emph{Low vegetation contrast:} the Excess-Green index separates green canopy
+from soil by colour, so at early growth stages, over wet or dark soil that is
+itself greenish, or under flat overcast light, the column-peak signal is weak and
+the tracked centre wanders. Reporting that a row was found in $100\%$ of frames
+(Section~\ref{sec:results}) does not contradict this. ``Found'' means a line was
+emitted, not that the emitted line is the correct row; a low-contrast frame still
+yields a column peak, just a less reliable one, and whether that peak sits on the
+right row is a question only GT can answer.
+\emph{Weeds:} inter-row weeds are also green and also produce Excess-Green
+columns, so a weed band between rows can out-peak the crop row and pull the
+tracker off-centre, a content failure that no amount of robust fitting on a
+single frame can detect.
+\emph{Canopy closure:} as cabbage matures and neighbouring rows touch, the
+inter-row soil gap that defines the column structure closes, the peaks merge, and
+the central-row column becomes ambiguous; the tracker may then follow the seam
+between two rows rather than a row centre.
+\emph{Gaps and missing plants:} a stretch of missing plants removes vegetation
+contrast locally, so the look-ahead portion of the curve is fit on little or no
+support and the tangent becomes unstable exactly where heading is most sensitive.
+In all four cases the front end produces a confident-looking but wrong per-frame
+line, which is why the temporal stage matters. It is also why the temporal
+stage's protection is bounded by its false-reject rate: a sustained content
+failure such as a long weed band or a closed-canopy stretch is not a transient
+spike, and a median-plus-gate designed for spikes will eventually track it.
 
 \subsection{Limitations}
 \label{sec:limitations}
-\noindent This is an applied contribution --- a trust layer on a stock detector --- not a
-methods breakthrough, and several boundaries bound how far the conclusions generalise.
+Several boundaries limit how far these conclusions generalise. The evaluation is
+open-loop: recorded forward-view runs are processed offline, with no robot in the
+loop, no wheel odometry, and no actuation. A closed-loop intervention rate and
+realised tracking error are therefore out of reach, and the smoothness of the
+fused heading trace is not the same thing as closed-loop stability. The temporal
+parameters (window length, EMA factor, jump threshold) interact with controller
+and vehicle dynamics that an offline replay does not capture. A closed-loop field
+trial with odometry is the clear next step.
 
-\paragraph{No real closed-loop run; the policy is evaluated by open-loop replay.}
-We have no field-robot deployment and no wheel odometry, so we cannot report a closed-loop
-intervention rate. The steering policy is therefore evaluated by an \emph{open-loop}
-kinematic-bicycle replay \cite{rajamani2012} (E6, Section~\ref{sec:res-e6-replay}): per-frame
-headings and policy decisions are played through the kinematic model to estimate how the
-abstain branch would have reduced large-heading-error accepted frames relative to a fixed
-threshold. This is an honest replay, not a closed-loop result; it omits controller dynamics,
-perception latency under feedback, and the temporal correlation of real driving. A
-closed-loop field validation with odometry is the clear next step and is left to future work.
+The metric figures rest on a reused-calibration assumption. The heading $\theta$
+is reported in degrees, which is controller-relevant and scale-free, and the
+cross-track offset $e$ is reported in pixels, as a fraction of half the image
+width, and in centimetres. The centimetre conversion uses an image-to-ground
+homography reused from the shared robot's camera calibration rather than a
+calibration performed for these specific runs. The exact camera height and tilt
+during the cabbage runs were not re-measured, so the metric figures hold only
+under the assumption that the shared, previously-calibrated camera configuration
+was preserved. A flat-ground homography also inflates metric error most at the
+far look-ahead distance, precisely where guidance is most sensitive, so the
+centimetre figures are indicative. A calibration captured on the cabbage robot
+itself would remove the assumption and is the clean next step.
 
-\paragraph{Centimetre units only where the camera is calibrated.}
-Cross-track offset $e_{ct}$ is reported in centimetres only on the robot platform and on CRDLD,
-where an image-to-ground homography is available under a flat-ground assumption; on the field
-video we report pixels and degrees and do not invent a metric scale. Heading $\theta$ in
-degrees is the primary, controller-independent and homography-free navigation quantity for this
-reason. Where centimetres are given, the flat-ground assumption is itself a limitation: a
-non-zero camera pitch inflates the metric error most at the far look-ahead distance, exactly
-where navigation is most sensitive, so the centimetre figures should not be over-read.
+The scope is narrow: two runs, one crop, one camera pose. The evidence is two
+real cabbage runs ($\sim 20$ and $\sim 14$ minutes, $2067$ frames at $1$\,fps,
+$640\times 480$), from one robot, one crop, and one forward-view camera pose.
+This is a pure test set, since there is no training stage anywhere in the
+pipeline and nothing can leak from these frames into the method, but it is also a
+small, single-condition sample. With $n=2$ runs the across-field, across-season,
+and across-platform variability cannot be characterised, and the descriptive
+front end statistics already differ markedly between the two runs (raw
+$>10^\circ$ jumps in $13.9\%$ versus $31.8\%$ of frames), which is itself a
+caution against generalising from two clips.
 
-\paragraph{The coverage guarantee is conditional on exchangeability within one distribution.}
-The split-conformal interval is finite-sample-valid only \emph{under exchangeability within a
-single distribution}. We calibrate and test in-domain on CRDLD, splitting the calibration and
-test sets \emph{by base image} so that augmented variants of one scene cannot leak across the
-split and inflate coverage (E2, Section~\ref{sec:res-e2-coverage}). Field video violates
-exchangeability twice over: frames within a clip are strongly temporally correlated, and the
-cross-dataset CRDLD~$\leftrightarrow$~CRBD transfer is an explicit distribution shift. We
-therefore treat CRBD and the field video as a \emph{coverage-degradation study}, not as a
-setting where the guarantee holds: E2 reports realised versus nominal coverage (with
-Clopper--Pearson / Wilson intervals) and quantifies how far coverage falls under shift, rather
-than claiming the target $1-\alpha$ is met off-distribution. Every coverage claim in the paper
-is qualified this way.
-
-\paragraph{Detector-bounded performance and score dependence.}
-The trust layer inherits the stock detector's failure modes: if the detector misses every row
-in a frame there is nothing for the readout to fit, and the policy can only abstain. The score
-$s$ presumes that a contaminating detection moves the heading under LOO refitting; a
-\emph{systematic} bias affecting all centroids equally (for example a consistently mislabelled
-row family) is not visible to a leave-one-out perturbation and would not be flagged. These are
-properties of the construction, stated so the abstain branch is not over-trusted.
-
-\subsection{Threats to validity}
-\label{sec:disc-threats}
-\noindent \textbf{Construct validity.} The evaluation depends on a ground-truth guidance line,
-whose definition is a modelling choice. We use a mask/annotation-derived centreline that is
-\emph{independent of the detector}, avoiding the circularity of scoring a detector-fit line
-against a target built from the same detections, and we cross-check it against a hand-labelled
-subset, reporting inter-annotator agreement in degrees (and centimetres where calibrated). The
-resolution of any line-level benchmark is bounded by this annotation agreement: differences
-smaller than it should not be read as real.
-
-\noindent \textbf{Internal validity.} The accuracy comparison (E1) is paired per frame across
-readouts on a shared detector checkpoint, so equal-weight LS, RANSAC, and the deployed
-Huber-IRLS differ only in the CPU-side fit, with no training-induced variance between them; we
-report $\geq 5$ seeds and test with the paired Wilcoxon signed-rank test under Holm correction
-with Cliff's $\delta$ effect sizes, so a claimed accuracy gain must be both significant and
-non-trivial. The conformal multiplier $\hat{q}$ is fixed on calibration data and never tuned on
-the test set.
-
-\noindent \textbf{External validity.} In-domain results are on CRDLD \cite{cth1}; generalisation
-is probed by cross-dataset transfer to CRBD \cite{crbd} (a different camera, crop, and
-resolution) and by the released maize field video, the latter two as the coverage-degradation
-study described above. We make no claim beyond row-crop scenes resembling these sources, and no
-mAP-superiority claim over crop-row detection systems with different output paradigms
-\cite{cth2,diao_yolox,rowdetr,alnet,rowcolattn,cth11,cth12}: the contribution is the trust
-readout on a stock detector, evaluated in navigation units, not a better detector.
-
-\noindent \textbf{Statistical-conclusion validity.} Coverage is reported with exact
-(Clopper--Pearson) or Wilson confidence intervals rather than point estimates, and any heading
-difference smaller than its across-seed standard deviation is downgraded in wording so that
-the conclusions track the resolution the data actually support.
+Self-consistency is not correctness, and the headline numbers are still pending.
+The two facts that can be stated without labels (a line emitted in $100\%$ of
+frames, in every vegetation tertile, and the collapse of large frame-to-frame
+jumps after fusion) are \emph{self-consistency} properties of the pipeline, not
+\emph{correctness} properties. ``Row found'' means the tracker emitted a line, not
+that the line is on the correct row. ``Jumps suppressed'' means the gate did its
+arithmetic job, not that the surviving heading is right
+(Section~\ref{sec:disc-safety}). The quantities that would make this a
+correctness result are heading error against human GT, cross-track error, error
+against GT on the spike frames, the gate's false-reject rate, inter-annotator
+agreement, and the temporal-ablation and baseline comparisons, all of which are
+\emph{[TBD pending GT labelling]}. The current results stand as a leakage-free
+in-field validation of feasibility and of front end / temporal behaviour, and
+every accuracy and safety claim is deferred to the labelled evaluation.

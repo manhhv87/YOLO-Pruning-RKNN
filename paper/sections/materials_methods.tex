@@ -1,398 +1,377 @@
 %!TEX root = ../main.tex
 % =====================================================================
 % MATERIALS AND METHODS
-% "Know-When-to-Trust Crop-Row Guidance: Conformal Heading Intervals
-%  and a Risk-Controlled Steering Policy on a Stock Edge Detector"
+% "Detector-free, training-free crop-row guidance for a cabbage field
+%  robot: an in-field validation study"
 %
-% Honest positioning: the contribution is the TRUST LAYER (conformal
-% heading intervals + risk-controlled steering policy) on a STOCK
-% detector. The deployed line fit is robust Huber-IRLS. The DFL-variance
-% precision-weighting / calibration thesis (old "CALM-Row") is
-% empirically dead (rho = -0.13) and appears ONLY as a negative control
-% (E0/E3). No new architecture, no new NPU operator as a headline claim.
+% Honest positioning: APPLIED in-field VALIDATION paper. The CV pipeline
+% is well-engineered STOCK parts (Excess-Green column-peak tracker ->
+% robust Huber IRLS quadratic fit x=P(y) -> look-ahead tangent heading +
+% cross-track -> median/EMA/physical jump-gate temporal fusion). NO
+% neural detector, NO training, NO method-novelty claim. The temporal
+% back-end is positioned as the dominant robustness lever, but the
+% robustness claim is error-vs-GT + false-reject (NOT a jump count),
+% and those numbers are [TBD pending GT labelling].
 %
-% Equations / protocol match conformal.py, eval_guidance.py,
-% eval_conformal.py. No experimental numbers are stated here.
+% Only real numbers stated: 100% row-emission (2067/2067), tertile
+% emission, and DESCRIPTIVE raw-vs-fused jump counts as labelled context.
+% Everything else = "[TBD pending GT labelling]".
 % =====================================================================
 
 \section{Materials and methods}
 \label{sec:method}
 
-\noindent We do \emph{not} propose a new backbone, neck, or detection head, and we do not propose a
-new line estimator. The detector is a stock, unmodified, edge-deployable lightweight YOLOv8n~\cite{ct4}
-(with YOLOv10n~\cite{yolov10} used as a secondary detector where noted), and the guidance line is fit
-with a standard robust Huber iteratively-reweighted-least-squares (IRLS) procedure. The contribution of
-this paper is a \emph{trust layer} that sits on top of this stock readout: a label-free nonconformity
-score, a split-conformal calibration that turns it into finite-sample-valid heading prediction
-intervals, and a risk-controlled abstain/slow/proceed steering policy. We position the conformal layer
-as a \emph{domain instantiation} of conformal prediction~\cite{vovk2005,lei2018,angelopoulos2023} on a
-detector and explicitly contrast it against prior conformal-on-detector
-work~\cite{confdet1,confdet2}; we do not claim primacy.
+\noindent This work is a validation and deployment contribution rather than a new method. No new perception
+architecture, line estimator, or controller is proposed. The guidance pipeline is assembled entirely from
+established, stock computer-vision components: an Excess-Green index for vegetation segmentation, a robust
+quadratic line fit, a look-ahead tangent heading, and temporal smoothing by a median filter, an exponential
+moving average, and a jump gate. The whole pipeline runs in plain \texttt{cv2}/\texttt{numpy} with no neural
+detector and no training of any kind. The contribution is an in-field validation of this detector-free and
+training-free pipeline on a working cabbage-field robot. Three results follow from that validation. The first
+is a public real forward-view cabbage robot dataset. A leakage-free evaluation tied to human ground truth
+and expressed in navigation units forms the second. The third is the empirical finding that the temporal
+stage, and not the perception front end, is the primary source of robustness, demonstrated as error
+against ground truth and as a false-reject rate rather than as a jump-count reduction that follows by
+construction from the gate threshold. Since the pipeline never trains on any frame, no data can leak from a
+training set into the evaluation, and every frame is a test frame.
 
-The trust layer runs entirely on the host CPU over post-NMS detections, so it adds no operators to the
-detector graph exported to the NPU/accelerator. We state this once, plainly, as a deployment property
-rather than a selling point: because the readout is CPU post-NMS arithmetic over quantities the detector
-already produces, the exported INT8/RKNN~\cite{rknntoolkit} or TensorRT~\cite{tensorrt} graph remains a
-vanilla YOLO. Figure~\ref{fig:pipeline} summarises the pipeline. Because no experiments have been run
-yet, every quantitative cell in this paper is a placeholder (``\texttt{-{}-}'' in tables, ``[TODO]'' in
-prose); the table and figure scaffolds in Section~\ref{sec:results} are wrapped so that the document
-compiles before the numbers exist.
+Several quantitative results require human-labelled ground truth that is still being produced. To keep the
+manuscript auditable, any quantity that cannot yet be reported from data is written explicitly as ``[TBD
+pending GT labelling]''. The quantities reported as measured in this paper are the row-emission
+rates and the descriptive jump counts of Section~\ref{sec:method:fusion}, which are labelled as such; the
+remaining quantities are pending.
 
-\input{figures/pipeline.tex}
+
 
 % =====================================================================
-\subsection{Notation}
-\label{sec:method:notation}
+\subsection{Robot platform and field data}
+\label{sec:method:platform}
 % =====================================================================
 
-\noindent We use the following symbols throughout (single source of truth; no synonyms). The guidance
-line is parameterised as
+\noindent The data were collected from a single ground robot (Figure~\ref{fig:robot}), a four-wheel straddle
+platform that drives along a crop row with a forward-view camera mounted to look down the inter-row corridor.
+The robot was driven between cabbage rows under manual/teleoperated control at a nominal forward speed of
+approximately $0.14$\,m\,s$^{-1}$. The platform pairs an embedded CPU-only computer and a forward-view USB
+webcam at $640\times480$, here a Logitech HD~C270 webcam and an embedded board of the NVIDIA Jetson Nano /
+Raspberry Pi~4 class. The detector-free pipeline of this paper runs on its CPU with no neural accelerator
+(Figure~\ref{fig:camera}). This
+robot shares its platform and camera mounting with a sibling robot whose camera was calibrated from a
+standard checkerboard procedure, and a four-point image-to-ground homography established on the shared
+platform (world origin on the robot centreline at the near row) recovered ground positions to a mean error
+of $1.55$\,mm. Because the two
+robots share the same camera arrangement, this homography is reused to express the near-row cross-track in
+centimetres (Section~\ref{sec:method:lookahead}). The assumption behind that reuse is direct: the camera
+height and tilt of the present cabbage runs were not re-measured, so the centimetre figures hold only if the
+shared, previously calibrated configuration was preserved. For this reason the cross-track is reported in
+pixels and as a fraction of the half-image width in addition to centimetres. The scope is fixed to one robot,
+one crop (cabbage), and one camera pose. The validation reported here is narrow by design, open-loop, and at a
+single low frame rate, with no claim of generalisation beyond this configuration. Closed-loop autonomous
+steering on this platform is future work and was not exercised.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.8\linewidth]{IMG/IMG_20251201_162642.jpg}
+  \caption{The cabbage-field robot during a field-test session: a four-wheel straddle platform carrying a
+  forward-view camera, operated between cabbage rows under manual/teleoperated
+  control. All data in this study were recorded this way; closed-loop autonomous guidance from the
+  proposed pipeline is left to future work.}
+  \label{fig:robot}
+\end{figure}
+
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.74\linewidth]{IMG/IMG_5035.jpg}
+  \caption{Onboard camera and compute. The forward-view camera and the embedded computer are carried on
+  the four-wheel straddle frame that spans the crop
+  bed. The bed shown here is mixed, with cabbage interplanted among other leafy greens, as also
+  reflected in the field runs (Section~\ref{sec:res-dataset}).}
+  \label{fig:camera}
+\end{figure}
+
+\noindent The full sensing-to-actuation hardware path appears in Figure~\ref{fig:hardware}. The
+forward-view camera streams over USB to the onboard computer, which runs the detector-free guidance
+pipeline and emits a heading and a cross-track offset. A microcontroller and stepper drives turn the
+wheels. In the present study only the perception path was run and logged, from camera to guidance output;
+the steering controller and the closed loop to the drive were not exercised, and they are marked as future
+work.
+
+\begin{figure}[t]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[font=\footnotesize, >={Latex[length=2mm]},
+  blk/.style={draw,rounded corners,align=center,text width=21mm,minimum height=11mm,inner sep=2pt,fill=blue!5},
+  stg/.style={draw,rounded corners,align=center,text width=21mm,minimum height=11mm,inner sep=2pt,fill=green!8},
+  fut/.style={draw,dashed,rounded corners,align=center,text width=20mm,minimum height=11mm,inner sep=2pt,fill=black!4},
+  node distance=8mm and 7mm]
+  \node[blk] (cam) {Forward-view camera (C270, $640{\times}480$)};
+  \node[stg, right=of cam] (exg) {Excess-Green row tracker};
+  \node[stg, right=of exg] (fit) {Huber IRLS fit $x{=}P(y)$};
+  \node[stg, right=of fit] (tmp) {Temporal stage (median, EMA, gate)};
+  \node[blk, right=of tmp] (out) {Guidance output $\theta,\ e$};
+  \draw[->] (cam)--(exg) node[midway,above,font=\scriptsize]{USB};
+  \draw[->] (exg)--(fit); \draw[->] (fit)--(tmp); \draw[->] (tmp)--(out);
+  \begin{scope}[on background layer]
+    \node[draw,rounded corners,fill=green!4,fit=(exg)(tmp),inner sep=5mm] (cbox) {};
+  \end{scope}
+  \node[anchor=south,font=\scriptsize] at (cbox.north) {Onboard computer (Jetson Nano or Raspberry Pi~4)};
+  \node[fut, below=24mm of cam] (ctrl) {Steering controller};
+  \node[fut, right=of ctrl] (ard) {Microcontroller};
+  \node[fut, right=of ard] (drv) {Motor drivers};
+  \node[fut, right=of drv] (mot) {Drive motors and wheels};
+  \draw[->,dashed] (ctrl)--(ard); \draw[->,dashed] (ard)--(drv); \draw[->,dashed] (drv)--(mot);
+  \draw[->,dashed] (out.south) -- ++(0,-9mm) -| (ctrl.north);
+  \begin{scope}[on background layer]
+    \node[draw,dashed,rounded corners,fill=black!2,fit=(ctrl)(mot),inner sep=4mm] (fbox) {};
+  \end{scope}
+\end{tikzpicture}}
+\caption{Hardware and data path of the cabbage robot. The solid blocks, sensing and the onboard
+detector-free guidance pipeline, were run and logged in this study; the dashed group (steering
+controller, microcontroller, stepper drivers, and motors) was not exercised here and shows the intended
+closed loop.}
+\label{fig:hardware}
+\end{figure}
+
+\noindent Two real robot runs recorded on cabbage plots form the frame set: run~1 (approximately 20 minutes)
+and run~2 (approximately 14 minutes). Frames are sampled at 1\,frame per second (1\,fps), giving 2067 frames
+in total ($1218$ from run~1 and $847$ from run~2), all at $640\times480$. The full set is treated as a pure
+test set. Because the pipeline is training-free there is no training/validation split and no possibility of
+memorisation. To probe robustness to crop growth stage and canopy density the frames are stratified into
+vegetation tertiles (low, mid, and high Excess-Green coverage), giving three roughly equal strata of $683$,
+$681$, and $703$ frames. The dataset will be released publicly as the first real forward-view cabbage robot
+crop-row corpus, and a Data and Code Availability statement accompanies the manuscript.
+
+% =====================================================================
+\subsection{Central-row tracking via the Excess-Green index}
+\label{sec:method:exg}
+% =====================================================================
+
+\noindent Each frame is reduced to a single-channel vegetation map using the Excess-Green index of Woebbecke
+\textit{et~al.}~\cite{woebbecke1995}. From the normalised RGB channels $(r,g,b)$ the index is
 \begin{equation}
-\label{eq:line}
-x = a\,y + b ,
+\label{eq:exg}
+\mathrm{ExG} = 2g - r - b ,
 \end{equation}
-i.e.\ image column $x$ as a function of image row $y$. This orientation is deliberate: crop rows viewed
-head-on are near-vertical, so a conventional $y=mx+c$ fit becomes ill-conditioned as the slope diverges;
-expressing $x$ as a function of $y$ removes this vertical-line degeneracy~\cite{sogaard}. The heading is
+which emphasises live green canopy against soil and residue and is a standard, illumination-tolerant
+choice for in-field crop/soil separation~\cite{meyer2008}. The map is thresholded into a binary
+vegetation mask by Otsu's method~\cite{otsu1979}, which selects the foreground/background split
+automatically for each frame and so adapts to changing lighting and canopy density without a hand-tuned
+constant.
+
+Crop rows viewed head-on appear as near-vertical green bands, and the central navigation row is the band the
+robot straddles. Tracking it without a detector relies on a per-row column profile. For each image row $y$ the
+pipeline sums (or smooth-and-sums) the masked ExG response across columns within a central corridor of the
+image, and takes the column of peak vegetation density as the candidate row centre $x^{\ast}(y)$ at that
+height. Scanning $y$ from the image bottom upward yields a set of central-row anchor points
+$\{(x^{\ast}(y),y)\}$ that follow the near-vertical green band. Restricting the column search to a central
+corridor, and seeding it at the bottom-centre of the frame where the navigation row is closest to the robot,
+biases the tracker toward the row the robot is actually in rather than an adjacent row. The output of this
+stage is the ordered set of central-row anchors passed to the line fit. Emitting an anchor set is a
+self-consistency property and not a correctness guarantee: a peak is found in essentially every frame, but
+whether the chosen column corresponds to the true central row is precisely what the ground-truth evaluation of
+Section~\ref{sec:setup-metrics} is designed to measure.
+
+% =====================================================================
+\subsection{Robust quadratic guidance-curve fitting}
+\label{sec:method:fit}
+% =====================================================================
+
+\noindent The guidance line is parameterised as image column $x$ as a function of image row $y$,
+\begin{equation}
+\label{eq:curve}
+x = P(y) = c_2\,y^2 + c_1\,y + c_0 ,
+\end{equation}
+a quadratic in $y$. This orientation is chosen for a reason. Crop rows viewed head-on are near-vertical,
+so a conventional $y=mx+c$ fit becomes ill-conditioned as the slope diverges; expressing $x$ as a function
+of $y$ removes this vertical-line degeneracy~\cite{sogaard}. The quadratic term $c_2$ captures the gentle
+far-field bowing of a row under perspective and mild row curvature, and reduces to the
+straight-line case $x = c_1\,y + c_0$ in the limit $c_2\!\to\!0$. The instantaneous local heading at any height
+follows from the slope $P'(y)=2c_2 y + c_1$,
 \begin{equation}
 \label{eq:heading}
-\theta = \arctan(a),
+\theta(y) = \arctan\!\bigl(P'(y)\bigr),
 \end{equation}
-reported in degrees from the vertical as the controller-independent navigation quantity, and the
-cross-track offset $e_{ct}$ follows from $(a,b)$ evaluated at a look-ahead row (px; cm only under a
-calibrated homography, Section~\ref{sec:setup-homography}). The detected row centroids are
-$\{(x_i,y_i)\}_{i=1}^{n}$ (post-NMS box centres on the selected row). The robust line fit uses
-Huber-IRLS weights $w_i$ from the Huber influence function. The nonconformity (trust) score is
-$s$ = leave-one-out (LOO) heading dispersion in degrees. The held-out calibration scores are
-$\{s_1,\dots,s_m\}$, split \emph{by base image}; $\hat{q}$ is the split-conformal quantile, the
-$\lceil (m+1)(1-\alpha)\rceil$-th smallest of the calibration nonconformity values; the interval
-half-width is $h=\hat{q}\,s$; the heading interval is $[\theta-h,\theta+h]$; $\alpha$ is the nominal
-miscoverage (we report $\alpha\in\{0.10,0.05\}$); the target coverage is $1-\alpha$ and the realised
-coverage is the empirical fraction of test frames whose true heading lies in the interval. The policy
-thresholds are $\tau_p$ (proceed) and $\tau_s$ (slow), with abstain otherwise. The symbol
-$\sigma^2_{\mathrm{DFL}}$ denotes the detector's distribution-focal-loss (DFL)~\cite{gfl} box-edge
-distribution variance; it appears \emph{only} as the non-informative negative-control score in E0/E3 and
-is never part of the deployed method.
+reported in degrees from the vertical as the controller-independent navigation quantity; its evaluation at
+a look-ahead height is detailed in Section~\ref{sec:method:lookahead}.
 
-% =====================================================================
-\subsection{Datasets and ground truth}
-\label{sec:setup-data}
-% =====================================================================
-
-\noindent\textbf{Detection labels from line ground truth.} Neither public benchmark provides bounding
-boxes. CRDLD~\cite{cth1} ground truth is a binary mask of crop-row \emph{centrelines}; CRBD~\cite{crbd}
-provides parametric (per-scanline) row annotations. As the detector is a stock DFL box detector, we
-synthesise detection labels from the line ground truth by placing boxes on \emph{all} visible crop rows
-(a single \texttt{crop\_row} segment class) at successive image rows, perspective-scaled in size.
-Labelling all rows rather than only the central one avoids contradictory supervision (the rows are
-visually identical), which yields a consistent, learnable target; the central navigation row is then
-selected from the detections at \emph{evaluation} time (Section~\ref{sec:method:pipeline}). The box
-labels are clean, so the detector still learns image difficulty rather than label noise.
-
-\noindent\textbf{In-domain training and test: CRDLD.} The Crop Row Detection dataset of De~Silva
-\textit{et~al.}~\cite{cth1} ($512\times512$; train/validation/test $=1250/250/430$) trains the detector
-and serves as the in-domain test set on which the conformal coverage guarantee is evaluated under
-exchangeability (E1--E4). It carries no per-field metadata, so a within-CRDLD leave-one-field-out
-protocol is unavailable.
-
-\noindent\textbf{Cross-dataset transfer: CRBD.} The Crop Row Benchmark Dataset~\cite{crbd}
-($320\times240$; a different camera, crop and resolution; no training split) is a held-out
-cross-dataset transfer test: the CRDLD-trained detector is evaluated on CRBD without retraining. Because
-the two distributions differ, CRBD is used as a coverage-\emph{degradation} study, \emph{not} as a
-setting in which the finite-sample coverage guarantee holds (Section~\ref{sec:method:conformal}).
-
-\noindent\textbf{Field video and labelling protocol (C3).} We additionally collect and release a
-diverse public crop-row \emph{field-video} dataset of real maize (forward-facing video; clips spanning
-field conditions), with a hand-labelled evaluation subset of at least 100 frames. For each labelled
-frame an annotator marks the central navigation row, from which the central-row line is fit in the same
-$x=a\,y+b$ parameterisation~\eqref{eq:line}; inter-annotator agreement is reported in degrees
-(Section~\ref{sec:setup-gtline}). The field video is uncalibrated, so its errors are reported in pixels
-and degrees only, never cm; it is used as a second cross-distribution coverage-degradation probe (E2,
-E5) and as the ordered frame sequence for the open-loop policy replay (E6). Frames from the same clip
-are kept together when splitting, to respect the exchangeability assumption as far as the data allow.
-
-\noindent The CRDLD train/validation/test splits are disjoint, CRBD is an entirely separate dataset, and
-the field video is recorded independently, so memorisation cannot inflate any transfer or coverage
-result. Table~\ref{tab:setup-datasets} summarises the role of each dataset. A Data and Code Availability
-statement accompanies the manuscript.
-
-\begin{table}[!ht]
-\centering
-\caption{Datasets and their role. Boxes are synthesised from the line ground truth
-(Section~\ref{sec:setup-data}); the evaluation ground-truth line is annotation/mask-derived and
-detector-independent. cm units are reported only where the camera is calibrated. \emph{Results to be
-completed.}}
-\label{tab:setup-datasets}
-\resizebox{\columnwidth}{!}{\begin{tabular}{lllc}
-\hline
-\textbf{Dataset} & \textbf{Role} & \textbf{GT guidance line} & \textbf{cm scale?} \\
-\hline
-CRDLD~\cite{cth1} ($512^2$; 1250/250/430) & Train detector $+$ in-domain coverage & line-mask $\rightarrow$ central row & calibrated \\
-CRBD~\cite{crbd} ($320{\times}240$) & Cross-dataset coverage-degradation & annotation $\rightarrow$ central row & px/deg \\
-Field video (maize; $\geq$100 labelled) & Coverage-degradation $+$ E6 replay & hand-labelled central row & px/deg \\
-\hline
-\end{tabular}}
-\end{table}
-
-% =====================================================================
-\subsection{Pixel-to-centimetre calibration}
-\label{sec:setup-homography}
-% =====================================================================
-
-\noindent Because ``cm'' is meaningless without a metric anchor, we report centimetres only where the
-camera is calibrated (the robot platform and the CRDLD homography), and pixels/degrees everywhere else.
-Where camera intrinsics and extrinsics (or a checkerboard reference) are available, we recover the
-image-to-ground homography $H$ under an explicit \emph{flat-ground assumption} and report it; the
-projection $H$ is applied to line samples to obtain cross-track in cm. Otherwise --- including the field
-video --- we report errors in pixels and in pixels normalised by image width, and do not invent a
-centimetre value. Flat ground is stated as an explicit limitation with an error budget: a camera-pitch
-perturbation propagates to a look-ahead-distance error that grows with range, so we tabulate the induced
-centimetre error at the look-ahead row as a function of pitch, making the conditions under which the
-centimetre numbers are trustworthy auditable.
-
-% =====================================================================
-\subsection{Frozen ground-truth guidance-line extraction}
-\label{sec:setup-gtline}
-% =====================================================================
-
-\noindent The ground-truth (GT) guidance line used for \emph{evaluation} is derived from the
-segmentation mask / annotation and is therefore detector-independent. The extraction is frozen as
-follows (\texttt{gt\_line\_from\_mask}). For each crop-row mask we compute, per image row $y$, the
-median column $x$ of foreground pixels, then fit a robust Huber-IRLS regression to those per-row
-medians, selecting as the navigation row the one nearest the image-centre-bottom; gap and occlusion
-handling are part of the frozen procedure. The resulting line is expressed in the same $x=a\,y+b$
-parameterisation~\eqref{eq:line}, with heading $\theta=\arctan(a)$~\eqref{eq:heading}. To validate the
-auto-extracted GT we cross-check it against a human-annotated subset of at least 100 frames and report
-inter-annotator agreement in degrees (and cm where the homography permits), in
-Table~\ref{tab:setup-gtline}. The GT line is mask/annotation-derived, not a least-squares fit through GT
-box centroids, so it is independent of the box-synthesis step of Section~\ref{sec:setup-data}.
-
-\begin{table}[!ht]
-\centering
-\caption{Frozen GT-line extraction: agreement between the automatic mask-derived line and human
-annotation on the cross-check subset ($\geq$100 frames). cm reported only on the calibrated platform.
-\emph{Results to be completed.}}
-\label{tab:setup-gtline}
-\begin{tabular}{lcc}
-\hline
-\textbf{Quantity} & \textbf{Heading ($^\circ$)} & \textbf{Cross-track (cm)} \\
-\hline
-Auto vs.\ human (median $|\Delta|$) & -- & -- \\
-Inter-annotator (median $|\Delta|$) & -- & -- \\
-\hline
-\end{tabular}
-\end{table}
-
-% =====================================================================
-\subsection{The guidance pipeline: detect, select, robust fit}
-\label{sec:method:pipeline}
-% =====================================================================
-
-\noindent\textbf{Detect.} Given a forward-facing field image, the stock detector returns crop-row
-segment boxes after non-maximum suppression (NMS). For box $i$ we take its centroid $(x_i,y_i)$ in
-pixels (\texttt{detect\_with\_logits} $\rightarrow$ \texttt{guidance\_line} in \texttt{eval\_guidance.py}).
-The detector fires on \emph{all} rows by design.
-
-\noindent\textbf{Select the central row.} A single guidance line is fit through the centroids of the
-\emph{central} navigation row. We seed at the bottom-centre detection, estimate a local slope from the
-bottom-most boxes near the seed, and keep detections within a fixed image-fraction corridor of the
-\emph{predicted} central-row line $a_{\mathrm{seed}}\,y + b_{\mathrm{seed}}$ (\texttt{select\_central}).
-Selecting against the predicted line rather than walking from box to box prevents the reference from
-drifting onto an adjacent row, which would leak wrong-row outliers into the fit --- the dominant failure
-mode this paper's trust score is designed to catch.
-
-\noindent\textbf{Robust Huber-IRLS line fit (deployed).} Given the $n$ selected centroids, the deployed
-guidance line solves a Huber robust regression of $x$ on $y$,
+Given the $n$ central-row anchors $\{(x_i,y_i)\}$ from Section~\ref{sec:method:exg}, the coefficients
+$\mathbf{c}=(c_2,c_1,c_0)$ are obtained by a standard robust quadratic fit $x=P(y)$ by Huber
+iteratively-reweighted-least-squares (IRLS) regression of $x$ on $y$~\cite{huber1964}, minimising
 \begin{equation}
 \label{eq:irls_obj}
-(\hat a,\hat b) = \arg\min_{a,b}\; \sum_{i=1}^{n} \rho_\delta\!\bigl(x_i - a\,y_i - b\bigr),
+\hat{\mathbf{c}} = \arg\min_{\mathbf{c}}\; \sum_{i=1}^{n} \rho_\delta\!\bigl(x_i - P(y_i)\bigr),
 \qquad
 \rho_\delta(r) =
 \begin{cases}
 \tfrac{1}{2}r^2, & |r|\le\delta,\\[2pt]
-\delta\bigl(|r|-\tfrac{1}{2}\delta\bigr), & |r|>\delta,
+\delta\bigl(|r|-\tfrac{1}{2}\delta\bigr), & |r|>\delta.
 \end{cases}
 \end{equation}
-solved by iteratively reweighted least squares (IRLS): at each iteration the residuals
-$r_i = x_i-\hat a\,y_i-\hat b$ are rescaled by a robust scale $\hat\sigma = 1.4826\,\mathrm{median}_i|r_i|$
-and the Huber influence weights
+The coefficients are estimated by standard Huber IRLS with $\delta = 1.345$ and a MAD scale
+$\hat\sigma = 1.4826\,\operatorname{median}_i|r_i|$, with a small ridge for conditioning, giving the Huber
+influence weights
 \begin{equation}
 \label{eq:huber_w}
 w_i = \min\!\left(1,\ \frac{\delta\,\hat\sigma}{|r_i|}\right),
-\qquad \delta = 1.345,
+\qquad \delta = 1.345.
 \end{equation}
-are applied in a weighted least-squares solve of $x=a\,y+b$; a small per-diagonal ridge keeps the
-normal equations well-conditioned (the intercept and slope entries differ by orders of magnitude). The
-weights $w_i$ are the \emph{Huber} weights of Equation~\eqref{eq:huber_w} --- robustness to wrong-row
-contamination --- and are \emph{not} DFL precision weights. We verified that the detector's native DFL
-box-distribution variance $\sigma^2_{\mathrm{DFL}}$ is non-informative for heading error in this setting
-(Spearman $\rho=-0.13$; reported as the E0 negative control, Section~\ref{sec:res-e0-trustinfo}), so
-robustness, not variance weighting, is what works. This robust readout matches a RANSAC baseline and far
-exceeds equal-weight least squares (C1, E1).
+The constant $\delta=1.345$ is the conventional Huber tuning that retains
+$\approx95\%$ efficiency under Gaussian noise while bounding the influence of outliers, which here are
+spurious anchors from gaps, weeds, or an adjacent row.
 
-\noindent\textbf{Baseline and ablation readouts.} The harness exposes six readouts sharing one stock
-checkpoint, so they are compared paired per frame: \texttt{equalLS} (non-robust equal-weight LS, the
-detect-then-fit recipe of~\cite{diao_yolox}); \texttt{ransac} (robust consensus LS, a strong baseline);
-\texttt{irls} (the deployed Huber-IRLS, equal data weights); \texttt{calm} (the dead DFL-precision
-$\times$ Huber-IRLS variant, retained only as a negative control --- it is \emph{not} the
-contribution); \texttt{qual} (detector-confidence-squared weights); and \texttt{oracle} (weights from
-the true residual to the GT line, an upper bound). Heading error is
-$|\arctan(\hat a)-\arctan(a_{\mathrm{gt}})|$ and line-fit RMSE is sampled over $y$ \emph{including} the
-far look-ahead row (\texttt{heading\_err\_deg}, \texttt{line\_rmse\_px}).
+Two standard alternatives serve as comparison fits over the same anchor set, evaluated against the deployed
+Huber IRLS fit: equal-weight least squares (the non-robust polynomial fit) and RANSAC consensus
+fitting~\cite{fischler1981}, a strong robust baseline. The accuracy of the deployed fit relative to these
+baselines against human ground truth is reported in Section~\ref{sec:results}, and those comparison numbers
+are [TBD pending GT labelling].
 
 % =====================================================================
-\subsection{Label-free trust score: leave-one-out heading dispersion}
-\label{sec:method:score}
+\subsection{Heading and cross-track geometry}
+\label{sec:method:lookahead}
 % =====================================================================
 
-\noindent The trust score must be \emph{label-free} (computable at run time without ground truth) and
-\emph{matched to the failure mode} (wrong-row contamination, which inflates heading error). We use
-leave-one-out (LOO) heading dispersion (\texttt{loo\_heading\_dispersion}). For each of the $n$ central
-centroids, we refit the guidance line with that centroid removed and record the resulting heading
-$\theta^{(-i)}=\arctan(\hat a^{(-i)})$; the nonconformity score is the dispersion of these LOO headings,
+\noindent A controller steers not to the row directly beneath the robot but to where the row is heading some
+distance ahead. The guidance geometry is therefore evaluated at a fixed look-ahead image row
+$y_{\mathrm{la}}$ in the upper portion of the frame, mirroring the look-ahead point of pure-pursuit and
+Stanley-type path trackers~\cite{coulter1992,stanley2006,rajamani2012}. Because the curve $P(y)$ bows in the
+far field, the relevant heading is the tangent to the curve at the look-ahead height, not a chord to the image
+bottom. The reported heading is therefore the look-ahead tangent
 \begin{equation}
-\label{eq:loo_score}
-s = \operatorname{std}_{i=1,\dots,n}\!\bigl(\theta^{(-i)}\bigr)\ \ (\text{deg}).
+\label{eq:heading_la}
+\theta = \arctan\!\bigl(P'(y_{\mathrm{la}})\bigr)
+       = \arctan\!\bigl(2c_2\,y_{\mathrm{la}} + c_1\bigr),
 \end{equation}
-A high $s$ means the heading hinges on a single detection --- a wrong-row outlier, or too few /
-ill-conditioned points --- and should not be trusted; a low $s$ means the heading is geometrically
-stable. This score directly targets the measured failure mode, unlike $\sigma^2_{\mathrm{DFL}}$. As
-candidate alternatives for the sharpness ablation (E3) the harness also logs: the robust residual scale
-of the fit, $1-$inlier-fraction, $1-$mean detection confidence, the mean DFL centroid sigma
-($\sigma_{\mathrm{DFL}}$, the dead control), and $1/\sqrt{n}$ (\texttt{s\_resid}, \texttt{s\_inv\_inlier},
-\texttt{s\_conf}, \texttt{s\_dfl}, \texttt{s\_ninv}). The mean detection confidence is also retained as
-the score for the fixed-confidence baseline gate (E4).
+the slope of Equation~\eqref{eq:heading} evaluated at $y_{\mathrm{la}}$, in degrees from the vertical.
+Using the tangent rather than a global slope aligns the reported heading with the far-field row direction
+the robot must follow, and avoids the bias a straight-line fit would incur on a bowed row.
 
-% =====================================================================
-\subsection{Split-conformal heading intervals}
-\label{sec:method:conformal}
-% =====================================================================
-
-\noindent We turn the score $s$ into a finite-sample-valid heading prediction interval via
-\emph{normalised (score-scaled) split conformal}~\cite{vovk2005,lei2018,romano2019cqr} (\texttt{conformal.py}).
-On a held-out calibration set of $m$ frames we form the normalised residuals
+The lateral cross-track offset $e$ is the signed horizontal distance between the robot's reference column,
+taken as the image vertical centreline $x_c = W/2$ for a forward-view camera with $W=640$, and the guidance
+line evaluated at the look-ahead row,
 \begin{equation}
-\label{eq:conf_R}
-R_j = \frac{|\theta_j - \theta_j^{\mathrm{gt}}|}{s_j}, \qquad j=1,\dots,m,
+\label{eq:crosstrack}
+e = P(y_{\mathrm{la}}) - x_c ,
 \end{equation}
-and take the split-conformal quantile
+in pixels. The offset $e$ is additionally reported normalised by the half-image width $W/2$ (that is, as a
+fraction of the half-frame), so that it is dimensionless and comparable across mountings. Conversion to
+centimetres requires a metric ground anchor, namely an image-to-ground homography under a flat-ground
+assumption. This anchor comes from reusing the shared-platform homography under the
+configuration-preserved assumption stated in Section~\ref{sec:method:platform}; where that assumption cannot
+be supported the centimetre figure is [TBD], and in all cases $e$ is reported in pixels and in \% of
+half-image width with no invented centimetre value.
+
+% =====================================================================
+\subsection{Temporal filtering}
+\label{sec:method:fusion}
+% =====================================================================
+
+\noindent The per-frame heading $\theta$ and offset $e$ are smoothed over time by three stock,
+lightweight operators applied in sequence. Together they form the temporal stage, which is the primary
+source of robustness. The chain is far simpler than a full state estimator such as a Kalman
+filter~\cite{kalman1960}; its complexity is matched to the 1\,fps, open-loop operating regime.
+
+The first operator passes the raw heading stream through a short sliding-window median filter. The median is
+robust to isolated single-frame outliers, such as a momentary wrong-row peak or a gap-induced bad fit,
+without the lag or overshoot of a mean filter. The median-filtered heading is then low-pass filtered by an
+exponential moving average,
 \begin{equation}
-\label{eq:conf_qhat}
-\hat q = R_{(k)},\qquad k = \bigl\lceil (m+1)(1-\alpha)\bigr\rceil,
+\label{eq:ema}
+\hat\theta_t = \beta\,\hat\theta_{t-1} + (1-\beta)\,\tilde\theta_t ,
 \end{equation}
-the $k$-th smallest of $\{R_j\}$ (\texttt{calibrate}). For a test frame with heading $\theta$ and score
-$s$ the interval is $[\theta-h,\theta+h]$ with half-width
+where $\tilde\theta_t$ is the median-filtered heading at frame $t$ and $\beta\in[0,1)$ sets the smoothing
+horizon. The exponential moving average suppresses high-frequency jitter while remaining causal and $O(1)$ in
+memory. The offset $e$ is fused with the identical median$\rightarrow$EMA chain.
+
+A frame-to-frame jump gate completes the chain, rejecting any update whose heading change exceeds a physical
+bound $\Delta\theta_{\max}$. When $|\tilde\theta_t - \hat\theta_{t-1}| > \Delta\theta_{\max}$ the update is
+gated and the last fused heading is held rather than applied. The bound $\Delta\theta_{\max}$ is set from the
+robot's physical heading-rate limit, independently of any evaluation threshold. A ground robot driving a row
+cannot reorient faster than some maximum yaw rate $\dot\psi_{\max}$ (deg\,s$^{-1}$), so over one inter-frame
+interval $\Delta t$ the largest kinematically plausible heading change is
 \begin{equation}
-\label{eq:conf_hw}
-h = \hat q\,s
+\label{eq:jumpgate}
+\Delta\theta_{\max} = \dot\psi_{\max}\,\Delta t ,
+\qquad \Delta t = \tfrac{1}{\text{1\,fps}} = 1\,\text{s}.
 \end{equation}
-(\texttt{half\_width}). The constant-width conformal baseline sets $s\equiv 1$.
+Any apparent inter-frame heading change larger than $\Delta\theta_{\max}$ cannot be the vehicle physically
+turning; it has to be a perception artefact, such as a jump onto an adjacent row, and is gated. The value
+$\dot\psi_{\max}$ is fixed from the platform's turning specification, and hence $\Delta\theta_{\max}$, before
+any error metric is examined, so the gate threshold is not tuned to the evaluation. The same physical
+reasoning bounds the per-frame change in $e$.
 
-\noindent\textbf{Coverage statement and exchangeability (honest).} Under \emph{exchangeability of the
-calibration and test scores within one distribution}, split conformal guarantees the finite-sample
-bound $\Pr\!\bigl(|\theta-\theta^{\mathrm{gt}}|\le \hat q\,s\bigr)\ge 1-\alpha$, i.e.\ realised coverage
-$\ge 1-\alpha$ in expectation over the calibration draw~\cite{vovk2005,lei2018}. This guarantee holds
-on the in-domain CRDLD test (E2), where we split \emph{by base image} to keep frames from the same scene
-out of both calibration and test. It does \emph{not} transfer to CRBD or the field video, whose
-distributions differ; for those we report realised coverage as a \emph{coverage-degradation study},
-explicitly not a guarantee, and we state this every time coverage is claimed. Realised coverage is
-reported with Clopper--Pearson (and Wilson) confidence intervals (\texttt{clopper\_pearson},
-\texttt{wilson\_ci}), marginally and stratified by difficulty.
+A reduction in large per-frame jumps is not the measure of the gate's effect, since the gate rejects large
+jumps by definition and any ``before/after'' jump count is therefore arithmetic rather than evidence of
+correctness. Raw-versus-fused jump counts are reported descriptively in Section~\ref{sec:results}, labelled
+as such, and are excluded from the robustness results. The substantive robustness claim, that fusion lowers
+heading and cross-track error against human ground truth (including on the large raw-jump frames) at an
+acceptable false-reject (gate) rate, is evaluated in Section~\ref{sec:results} and is
+[TBD pending GT labelling].
 
-% =====================================================================
-\subsection{Risk-controlled steering policy and open-loop replay}
-\label{sec:method:policy}
-% =====================================================================
+\noindent Figure~\ref{fig:method} shows the complete pipeline applied to a single forward-view cabbage frame, from the Excess-Green track through the robust curve to the look-ahead tangent and the reported heading and cross-track.
 
-\noindent\textbf{Abstain/slow/proceed.} The certified half-width $h=\hat q\,s$ drives a three-way
-steering policy: \emph{proceed} if $h\le\tau_p$, \emph{slow} if $\tau_p<h\le\tau_s$, and \emph{abstain}
-(stop / hold the last trusted heading) if $h>\tau_s$. Sweeping the threshold traces a selective-risk
-curve --- heading error on \emph{accepted} frames versus abort (abstain) rate
-(\texttt{selective\_risk}). We compare it against the fixed-confidence baseline gate that accepts a frame
-iff the mean detection confidence exceeds a threshold (\texttt{selective\_risk\_fixed}), at matched abort
-rate, and we frame the policy as risk-controlled in the sense of distribution-free risk
-control~\cite{angelopoulos2022rcps} and selective prediction with a reject option~\cite{geifman2017selective}.
-
-\noindent\textbf{Open-loop kinematic-bicycle replay (honest, E6).} We have no field-robot odometry, so
-E6 is explicitly an \emph{open-loop policy replay}, not a closed-loop field result. Over an ordered
-frame sequence we feed the per-frame heading command through one kinematic-bicycle / pure-pursuit
-step~\cite{rajamani2012} and accumulate a lateral-deviation surrogate (\texttt{bicycle\_replay} /
-\texttt{simulate\_cross\_track}); under the abstain policy the controller holds the last trusted heading
-instead of acting on an untrusted (possibly wrong-row) estimate. We report the integrated lateral
-deviation and the count of large-heading-error accepted commands for the conformal policy versus a fixed
-threshold; the claim is only that the abstain rule reduces large-error commands, stated as an open-loop
-replay.
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{fig_cabbage_method.png}
+  \caption{Detector-free guidance on a real forward-view cabbage frame. \emph{Left}: input frame
+  ($640\times480$). \emph{Right}: the Excess-Green column-peak track (orange points), the robust
+  Huber IRLS quadratic guidance curve $x=P(y)$ (green), the look-ahead tangent that defines the steering
+  heading $\theta$ (red), and the near-row cross-track offset $e$ from the image centre (blue); the
+  reported $\theta$ and $e$ are overlaid. No detector and no training are involved.}
+  \label{fig:method}
+\end{figure}
 
 % =====================================================================
-\subsection{Edge deployment}
-\label{sec:setup-edge}
+\subsection{Ground-truth annotation protocol}
+\label{sec:setup-gtline}
 % =====================================================================
 
-\noindent The detector is deployed on two edge platforms (Table~\ref{tab:setup-edge}): TensorRT
-(FP16 and INT8) on an NVIDIA Jetson Nano~\cite{tensorrt}, and RKNN INT8 on a Rockchip
-NPU~\cite{rknntoolkit}, with post-training INT8 quantization following standard integer-arithmetic
-inference~\cite{jacob2018int8}. For each we report latency (mean\,$\pm$\,std and P95), throughput (FPS),
-and input resolution. Because the trust layer is CPU post-NMS arithmetic over quantities the detector
-already outputs, it adds no operators to the exported NPU graph, so the exported detector is a vanilla
-YOLO and the on-device cost is the detector's alone; structural pruning~\cite{cth14,ct17} and efficient
-backbones~\cite{ct16,ct19} are optional efficiency levers reported on the same axes if applied.
-Critically, we re-fit the conformal quantile $\hat q$ \emph{after} INT8 conversion on a small
-calibration set and verify that realised coverage survives quantization (E5), since INT8 perturbs the
-detected centroids and hence the scores.
+\noindent The ground-truth (GT) guidance line used for evaluation is human-annotated and is therefore
+independent of the perception pipeline under test. For each labelled cabbage frame an annotator marks the
+central navigation row directly, following \emph{convention~A}: the line is labelled along the row the
+robot is driving, traced through the cabbage canopy from the image bottom-centre up the inter-row
+corridor. The marked points are fit in the same $x=P(y)$ parameterisation of Equation~\eqref{eq:curve}, and
+the GT heading is the look-ahead tangent of Equation~\eqref{eq:heading_la} evaluated at the same
+$y_{\mathrm{la}}$ as the system output, so that predicted and GT headings are directly comparable. A subset of
+frames is double-labelled to quantify the reliability of this protocol, with inter-annotator agreement
+reported as the median absolute heading difference in degrees and cross-track in pixels; these agreement
+figures are [TBD pending GT labelling]. Because the GT line is marked by hand on the image rather than derived
+from the tracker's anchors, it is independent of the Excess-Green front end and provides a fair external
+reference. The labelling effort is in progress, so the agreement figures are reported as pending.
 
-\begin{table}[!ht]
-\centering
-\caption{Edge deployment on the two named platforms. The trust layer adds no NPU operators; the
-exported graph is a vanilla YOLO. \emph{Results to be completed.}}
-\label{tab:setup-edge}
-\resizebox{\columnwidth}{!}{\begin{tabular}{llcccc}
-\hline
-\textbf{Platform} & \textbf{Precision} & \textbf{Latency mean$\pm$std (ms)} & \textbf{P95 (ms)} & \textbf{FPS} & \textbf{Coverage post-INT8} \\
-\hline
-Jetson Nano (TensorRT) & FP16 & -- & -- & -- & -- \\
-Jetson Nano (TensorRT) & INT8 & -- & -- & -- & -- \\
-Rockchip (RKNN) & INT8 & -- & -- & -- & -- \\
-\hline
-\end{tabular}}
-\end{table}
 
 % =====================================================================
-\subsection{Evaluation protocol, metrics, and statistics}
+\subsection{Evaluation metrics and statistics}
 \label{sec:setup-metrics}
 % =====================================================================
 
-\noindent\textbf{Metrics.} The primary metric is heading error in degrees (controller-independent).
-Line-fit RMSE is reported in pixels (and cm where the homography of Section~\ref{sec:setup-homography}
-permits), evaluated \emph{including} the look-ahead row. Cross-track is a static geometric proxy: the
-lateral offset between the predicted and GT lines at the look-ahead row (px, and cm where calibrated).
-For the conformal layer we report realised vs.\ nominal coverage at $\alpha\in\{0.10,0.05\}$ and interval
-\emph{width} (sharpness, deg) at matched coverage. For the policy we report heading error on accepted
-frames and the large-heading-error rate ($>5^\circ$) versus abort rate. Detection mAP@50 and mAP@50--95
-are secondary diagnostics; edge latency/throughput are reported on the named devices
-(Section~\ref{sec:setup-edge}).
+\noindent The primary metric is heading error in degrees, the absolute difference between the system's
+look-ahead tangent heading and the human-GT heading, $|\theta - \theta^{\mathrm{gt}}|$, which is
+controller-independent. The secondary metric is cross-track error in pixels (and in \% of half-image width),
+the lateral offset between the predicted and GT guidance lines at the look-ahead row $y_{\mathrm{la}}$
+(Equation~\eqref{eq:crosstrack}). Centimetre units are reported only under a calibrated image-to-ground
+homography. The reused shared-platform calibration of Section~\ref{sec:method:platform} serves this purpose under the
+configuration-preserved assumption; where that assumption does not hold,
+cm-scale errors are [TBD], and in all cases the errors are reported in degrees and pixels.
 
-\noindent\textbf{Statistical protocol.} The evaluation script (\texttt{eval\_guidance.py}) writes one
-CSV row per frame so that the shared-checkpoint readout arms are compared \emph{paired}, and
-\texttt{eval\_conformal.py} runs the conformal experiments on those CSVs. Point-accuracy comparisons
-(E1) use $\geq 5$ seeds; because $n$ is small for normality, significance uses the paired
-\emph{Wilcoxon signed-rank} test with \emph{Holm--Bonferroni} correction across the confirmatory family,
-and we report \emph{Cliff's $\delta$} effect sizes with 95\% bootstrap confidence intervals, not merely
-$p<0.05$. Coverage proportions are reported with \emph{Clopper--Pearson} (and Wilson) confidence
-intervals. The calibration/test split is by base image on CRDLD and by clip on the field video to
-respect exchangeability; any claim whose $\Delta$ is smaller than its standard deviation is downgraded in
-wording.
+As a basic sanity check the fraction of frames for which the tracker emits a guidance line at all is reported
+as a self-consistency measure, both overall and broken down by vegetation tertile; the measured value is
+reported in Section~\ref{sec:results}. Here ``row
+found'' means a line was emitted, not that the emitted line is the correct central row. Whether the emitted
+line is correct is measured by the heading and cross-track error against human GT above, which is [TBD pending
+GT labelling].
 
-\noindent\textbf{Experiment map (E0--E6).} The protocol is organised into seven experiments, reported in
-Section~\ref{sec:results}: \textbf{E0} trust-score informativeness --- Spearman $\rho(s,\text{realised
-heading error})>0$, with $\sigma^2_{\mathrm{DFL}}$ ($\rho=-0.13$) as the negative control
-(Section~\ref{sec:res-e0-trustinfo}); \textbf{E1} point-accuracy floor --- heading error for
-equalLS/ransac/irls(deployed)/calm/qual/oracle on CRDLD test, $\geq 5$ seeds, paired Wilcoxon $+$ Holm
-$+$ Cliff's $\delta$ (Section~\ref{sec:res-e1-accuracy}); \textbf{E2} coverage --- realised vs.\ nominal
-at $\alpha\in\{0.10,0.05\}$, Clopper--Pearson CIs, marginal and by difficulty, split by base image
-(Section~\ref{sec:res-e2-coverage}); \textbf{E3} sharpness / score-ablation --- interval width at matched
-coverage for $s$ vs.\ residual vs.\ $\mathrm{conf}^2$ vs.\ $\sigma_{\mathrm{DFL}}$ vs.\
-RANSAC-consensus, where the proposed score should be tightest (Section~\ref{sec:res-e3-sharpness});
-\textbf{E4} selective-risk --- error on accepted frames vs.\ abort rate, conformal-width gate vs.\ the
-fixed-confidence gate at matched abort (Section~\ref{sec:res-e4-selrisk}); \textbf{E5} deployment ---
-Jetson/TensorRT and RKNN INT8 latency/FPS and coverage-survives-INT8 (Section~\ref{sec:res-e5-deploy});
-and \textbf{E6} open-loop kinematic-bicycle policy replay (Section~\ref{sec:res-e6-replay}).
+Consistent with Section~\ref{sec:method:fusion}, the robustness of the temporal stage is reported as (i)
+heading and cross-track error versus human GT stratified by raw front end difficulty, in particular on the
+large raw-jump frames, and (ii) the false-reject (gate) rate, that is, the fraction of frames
+the physical jump gate holds. The raw-versus-fused jump count is excluded from the robustness results. Both
+(i) and (ii), together with the deployed-fit-versus-baseline (equal-LS, RANSAC) and temporal-ablation
+comparisons, are [TBD pending GT labelling].
+
+Per-frame errors are written to one CSV row per frame so that the deployed pipeline and its baselines and
+ablations are compared paired on identical frames. Because per-frame errors are not normally distributed and
+frames within a run are temporally correlated, significance is assessed with paired non-parametric tests,
+specifically the Wilcoxon signed-rank test on paired per-frame differences, with Holm--Bonferroni correction
+across the confirmatory comparison family. Effect sizes (Cliff's $\delta$) are reported with bootstrap
+confidence intervals rather than relying on $p$-values alone. Any comparison whose median difference is
+smaller than its dispersion is downgraded in wording. All confirmatory accuracy numbers are [TBD pending GT
+labelling].

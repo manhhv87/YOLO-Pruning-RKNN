@@ -1,222 +1,153 @@
 %!TEX root = ../main.tex
 % =====================================================================
-% Related work for "Know-When-to-Trust Crop-Row Guidance".
-% Honest framing: the contribution is a TRUST LAYER (conformal heading
-% intervals + risk-controlled steering policy) on a STOCK detector with a
-% robust Huber-IRLS line fit. We organise prior art into five threads and
-% end each with the explicit gap this paper fills:
-%   (a) vision crop-row guidance (detect-then-fit, equal/heuristic weights);
-%   (b) lane / row-anchor detection (the row-line paradigm we borrow);
-%   (c) conformal + selective prediction, INCLUDING conformal-on-detector
-%       prior art we CONTRAST so we never claim "first conformal";
-%   (d) detection box-uncertainty (DFL/GFL) -- the NEGATIVE control here;
-%   (e) edge / INT8 deployment.
-% No "first/novel" hype. The DFL-variance precision-weighting thesis is the
-% dead negative control, never a contribution.
+% Related work for the in-field cabbage crop-row guidance VALIDATION paper.
+% Honest framing: this is an APPLIED deployment/validation contribution.
+% The pipeline is built from well-engineered STOCK CV parts (Excess-Green
+% column-peak tracker, robust Huber IRLS quadratic fit, look-ahead tangent
+% heading, median/EMA/jump-gate temporal fusion). There is NO learned
+% detector and NO training, so no novel-method claim is made.
+% Four areas bound the contribution, each ending with the gap we fill:
+%   (1) vision crop-row guidance, classical vs learned;
+%   (2) classical/handcrafted row extraction (veg-index + threshold + Hough);
+%   (3) the navigation-units (not mAP) evaluation argument;
+%   (4) temporal filtering and path-tracking for row/lane tracking.
+% Positioning: detector-free + temporally-robust + in-field cabbage validation.
 % =====================================================================
 
 \section{Related work}
 \label{sec:related}
 
-\noindent We organise prior art around five threads that bound our
-contribution. The first two cover the application and the line-detection
-paradigm we reuse: vision-based crop-row guidance and the lane/row-anchor
-formulation it descends from. The third is the statistical machinery our
-trust layer instantiates---conformal and selective prediction---including the
-recent conformal-on-detector work we explicitly contrast against, so that we
-make no claim of being first to apply conformal prediction to a detector. The
-fourth is detection box-uncertainty (DFL/GFL), which we examine and report as a
-\emph{non-informative} signal for heading error here. The fifth is edge and
-integer-quantised deployment, the setting in which the guidance must run. After
-each thread we state explicitly what it leaves open, so that the gap this paper
-fills is unambiguous.
+Four areas bound the present study. The first surveys vision-based crop-row
+guidance and the shift from classical pipelines to learned ones, and concludes
+that learned methods currently achieve the highest reported accuracy yet still
+depend on labelled data and remain exposed to domain shift. The second isolates
+the classical, handcrafted row-extraction recipe of vegetation index,
+thresholding, then a Hough or projection search, the family to which a
+training-free pipeline belongs. The third takes up an argument made with growing
+frequency in this literature, that crop-row methods ought to be measured in
+\emph{navigation units} rather than detection mAP. Temporal filtering and
+path-tracking form the fourth, the back-end machinery that converts noisy
+per-frame geometry into a usable heading. Against this background sits a
+detector-free, temporally-robust pipeline validated on in-field cabbage video.
 
-\subsection{Vision-based crop-row guidance}
-\label{subsec:rw_nav}
-\noindent Guiding a robot or tractor down a crop row from a forward-facing
-camera is a long-standing task; early vision-guided tractor systems date back
-decades~\cite{cth6}, and classical pipelines recover row geometry without
-learned segmentation, e.g.\ intensity-based crop-row determination by image
+\subsection{Vision-based crop-row guidance: classical versus learned}
+\label{subsec:rw_guidance}
+Steering a robot or tractor along a crop row from a forward-view camera is a
+long-standing task, and vision-guided field machinery goes back several
+decades~\cite{cth6,english2014}. Early systems recover row geometry without any
+learned segmentation. Intensity-based crop-row determination by image
 analysis~\cite{sogaard} and global energy minimisation over candidate row
-models~\cite{crbd}. Modern systems converge on a small number of output
-paradigms grouped by how the guidance line is produced.
+models~\cite{crbd} are representative of the classical, hand-engineered line of
+work.
 
-\paragraph{Detect-then-fit.}
-The de-facto recipe localises row segments or plant clusters with an object
-detector and fits a single guidance line through the box centroids. The
-YOLOX-based maize-row system of Gong et al.~\cite{diao_yolox} is
-representative: it detects row patches, takes their centroids, and fits a
-centreline by least squares, reporting angular error. This detect-then-fit
-recipe with equal or heuristic point weights is the lineage of our equal-weight
-least-squares baseline (E1), and it is the family our stock detector belongs
-to. Real-time computer-vision crop-row detection on robots follows the same
-template~\cite{cth3}.
+Perception in this area has since moved decisively toward learned models. The de
+Silva et al.\ line of work segments the crop/soil mask with a network and
+recovers a centreline through a geometric scan, validated across many field
+conditions and growth stages~\cite{cth1,cth2}. Detect-then-fit systems instead
+localise row patches or plant clusters with an object detector and fit a
+guidance line through the centroids, as in the YOLOX-based maize-row system of
+Gong et al.~\cite{diao_yolox}. A further group regresses the row directly:
+RowDetr predicts each row as a polynomial~\cite{rowdetr}, while a row--column
+attention model recasts the whole pipeline as end-to-end
+attention~\cite{rowcolattn}. The row-line formulation itself descends from lane
+detection. There, Ultra-Fast structure-aware lane detection casts the problem as
+row-anchor classification~\cite{ufld}, LaneATT performs anchor-based real-time
+detection~\cite{laneatt}, and Van Gansbeke et al.\ fit a lane as a
+differentiable least-squares line through detected points~\cite{vangansbeke}.
 
-\paragraph{Segmentation plus geometric scan.}
-A second paradigm segments the crop/soil mask and recovers the row geometry by a
-scan-line or triangle search over the mask. The de Silva et al.\ line of
-work~\cite{cth1,cth2} validates this across many field conditions and,
-importantly, reports results in navigation units (cross-track and heading
-error) on the CRDLD benchmark~\cite{cth1}; we adopt its mask-derived centreline
-as the detector-independent ground-truth line for in-domain evaluation. The
-geometric scan itself is a hard, non-differentiable search and carries no
-per-frame reliability estimate.
+Learned methods currently achieve the highest reported accuracy, but at the cost
+of supervision. Each requires pixel- or row-level labels for the target crop,
+growth stage, and camera geometry, and its accuracy is assured only on
+distributions that resemble the training set. Degradation under changes of
+field, crop, and acquisition condition recurs across this family. For a single
+robot, a single crop, and a fixed camera pose, a training-free pipeline that
+needs no labels and has no parameters to overfit or leak is a label-free
+alternative warranting in-field validation against navigation-unit ground truth.
+The classical family that supplies such a pipeline is examined in the following
+subsection, and its robustness across a long real run remains unaddressed by the
+learned literature.
 
-\paragraph{End-to-end row regression.}
-A third paradigm regresses the row directly. CCRDNet extracts the central crop
-row for universal in-row navigation~\cite{cth11}; E2CropDet offers an efficient
-end-to-end solution~\cite{cth12}; RowDetr regresses the row as a per-row
-polynomial with INT8 edge deployment~\cite{rowdetr}; and row--column attention
-recasts the pipeline as an end-to-end attention model~\cite{rowcolattn}. These
-methods produce the curve parameters directly, but with no per-frame uncertainty
-on the recovered line.
+\subsection{Classical, handcrafted row extraction}
+\label{subsec:rw_classical}
+The pipeline deployed here belongs to the classical family that predates learned
+segmentation, and its components serve as stock parts rather than new
+contributions. Three stages make up the standard recipe. A vegetation index
+first separates plant from soil in colour space; the Excess-Green index and
+related colour indices for plant/weed discrimination under varied soil, residue,
+and lighting were established by Woebbecke et al.~\cite{woebbecke1995} and
+verified for automated crop imaging by Meyer and Neto~\cite{meyer2008}. The
+index image is then binarised, classically with Otsu's histogram
+threshold~\cite{otsu1979}. Row geometry is finally recovered from the resulting
+mask by a global search, either a Hough transform for real-time plant-row
+tracking~\cite{marchant1995} or the column projection and scan-line peaks used
+in vision-based row-following and row-detection systems for field machinery and
+sugar beet~\cite{astrand2005,bakker2008}.
 
-\paragraph{What this thread leaves open.}
-Two observations recur and motivate our work. First, the literature increasingly
-evaluates in \emph{navigation units}---heading error in degrees and cross-track
-error---rather than detection mAP, because a detector that scores well on mAP
-can still yield a poor guidance line~\cite{cth1,cth2,diao_yolox}; a method that
-aims to improve navigation must be measured there. Second, and central to us:
-across all paradigms the guidance line is emitted as a \emph{point} estimate.
-The line is fit with equal or heuristic weights, and the system reports a single
-heading---at best gated by a hand-tuned detection-confidence threshold---with no
-\emph{coverage guarantee} and no principled signal for \emph{when not to trust
-it}. Vision-only field navigation without RTK-GPS needs exactly that: a guidance
-line \emph{and} a calibrated decision of when to abstain. This is the gap our
-trust layer (C2) fills, on top of a robust point readout (C1) that uses Huber-IRLS rather than equal-weight least squares.
+Maturity, speed, and the absence of labels make these components a natural
+choice. The present pipeline instantiates the recipe with an Excess-Green
+column-peak central-row tracker. A robust quadratic fit $x=P(y)$ by Huber IRLS
+($\delta=1.345$, scale $1.4826\,\mathrm{MAD}$~\cite{huber1964};
+RANSAC~\cite{fischler1981} is the standard robust alternative) replaces the
+single straight-line Hough or projection model, so that the guidance line can
+bow in the far field, and heading $\theta$ follows as the look-ahead tangent at a
+chosen row position, with cross-track offset $e$ taken at the same point. The
+classical literature does not settle how such a single-frame extractor behaves
+over a long, real, forward-view field run across varying vegetation density, nor
+how its per-frame output should be stabilised in time. Both questions are
+addressed in the following subsection and in the experiments reported here.
 
-\subsection{Lane and row-anchor detection}
-\label{subsec:rw_lane}
-\noindent The row-line formulation used in agriculture descends from lane
-detection. Ultra-Fast structure-aware lane detection casts the problem as
-row-anchor classification---selecting a horizontal location per image
-row~\cite{ufld}---and LaneATT performs anchor-based real-time lane
-detection~\cite{laneatt}. These ideas have been ported to agricultural rows,
-e.g.\ the anchor-line network ALNet~\cite{alnet} and row--column
-attention~\cite{rowcolattn}. Closest to our point-readout stage, Van Gansbeke et
-al.\ fit a lane as a differentiable least-squares line over points emitted by a
-detector~\cite{vangansbeke}---the detect-then-fit-a-line precedent we build on.
+\subsection{Evaluation in navigation units}
+\label{subsec:rw_eval}
+A recurring theme in recent crop-row work holds that detection mAP is the wrong
+yardstick for a guidance system. A detector can score well on mAP and still
+yield a poor guidance line, because what matters downstream is the geometry of
+the recovered row rather than the quality of individual boxes. The de Silva et
+al.\ benchmarks therefore report cross-track and heading error in degrees and
+pixels~\cite{cth1,cth2}, and the maize-row detect-then-fit system reports the
+angular error of the fitted centreline rather than box mAP~\cite{diao_yolox}.
+Heading error and cross-track error, measured against a human-labelled guidance
+line, are the quantities that matter for guidance.
 
-\paragraph{What this thread leaves open.}
-These methods are accurate but the per-anchor or per-point confidence, where
-present, is a classification score, not a calibrated statement about the error
-of the recovered line. The differentiable least-squares fit of~\cite{vangansbeke}
-weights points but provides no finite-sample interval on the resulting heading.
-None of these methods emit a heading prediction \emph{interval} with a target
-coverage, nor a reject option tied to that interval---which is what downstream
-steering on low-cost hardware requires.
+Navigation-unit evaluation needs a ground-truth line, which in turn needs human
+labelling and a study of inter-annotator agreement. Absent that line, an
+extractor can report how often it emitted a line but cannot report whether the
+emitted line was correct. The accuracy claim against a human ground truth and
+the inter-annotator agreement are therefore deferred [TBD pending GT labelling].
+The camera calibration that expresses cross-track in centimetres is already
+available (Section~\ref{sec:method:platform}).
 
-\subsection{Conformal prediction, selective prediction, and conformal on detectors}
-\label{subsec:rw_conformal}
-\noindent Our trust layer is an instantiation of conformal prediction. Conformal
-methods produce prediction sets with finite-sample, distribution-free coverage
-under exchangeability~\cite{vovk2005}; split (inductive) conformal prediction
-makes this practical for regression by calibrating a nonconformity score on a
-held-out set and reading off a quantile to form intervals~\cite{lei2018}, as
-summarised in recent tutorials~\cite{angelopoulos2023}. Conformalized quantile
-regression yields \emph{locally adaptive} interval widths by scaling the
-conformal quantile with a per-input scale~\cite{romano2019cqr}; our score-scaled
-half-width $h=\hat{q}\,s$ (Section~\ref{sec:related} notation; the
-nonconformity score $s$ is a leave-one-out heading dispersion) is in this
-locally adaptive family. The accompanying abstain/slow/proceed policy is a
-selective-prediction mechanism: prediction with a reject
-option~\cite{geifman2017selective}, made distribution-free by conformal risk
-control~\cite{angelopoulos2022rcps}, which is the formal basis of our
-risk-controlled gate (E4, E6).
+\subsection{Temporal filtering and path tracking}
+\label{subsec:rw_temporal}
+Per-frame row geometry from any single-frame extractor is noisy, so practical
+guidance systems stabilise it over time. The canonical tool is the Kalman
+filter, which fuses a motion model with noisy measurements for recursive state
+estimation~\cite{kalman1960} and underpins much lane- and row-tracking work.
+Once a stabilised heading and offset are available, classical path-tracking
+controllers convert them into steering. Pure pursuit follows a look-ahead point
+on the path~\cite{coulter1992}, the Stanley controller couples heading and
+cross-track error for autonomous ground vehicles~\cite{stanley2006}, and the
+kinematic bicycle model supplies the standard vehicle abstraction these
+controllers assume~\cite{rajamani2012}.
 
-\paragraph{Conformal applied to object detectors (prior art we contrast).}
-Conformal prediction has recently been applied directly to object-detection
-outputs, producing coverage-controlled boxes or detection
-uncertainty~\cite{confdet1,confdet2}. We therefore do \emph{not} claim primacy
-in pairing conformal prediction with a detector. The distinction we draw is in
-\emph{what} is made conformal and \emph{for what task}: prior
-conformal-on-detector work calibrates the detector's own outputs (e.g.\
-box coordinates or class/objectness) for the detection task, whereas we calibrate
-a \emph{navigation-native, geometric} quantity---the heading of a robustly fit
-guidance line---using a label-free, failure-mode-matched score (leave-one-out
-heading dispersion) that targets wrong-row contamination, the dominant guidance
-failure. We position our method as a \emph{domain instantiation} of these ideas
-for crop-row steering, not as a new conformal method.
+In the crop-row literature this back end is often treated as an implementation
+detail behind a learned front end, even though it is the dominant contributor to
+the per-frame stability of a guidance system. A transparent temporal stage, kept
+in front of a simple stock extractor, occupies the role that learned pipelines
+fill implicitly. The substantive robustness questions, namely heading error
+against a human ground truth on the frames where the raw extractor diverges, and
+the false-reject rate of the gate, require labels and are deferred [TBD pending
+GT labelling], together with baseline comparisons against RANSAC and equal-weight
+least-squares fits and an ablation of the temporal stages.
 
-\paragraph{What this thread leaves open.}
-The coverage guarantee of split conformal is finite-sample-valid only under
-exchangeability \emph{within one distribution}~\cite{vovk2005,lei2018}. Crop-row
-guidance must run across fields, crops, and acquisition conditions, where
-exchangeability is violated; we therefore treat cross-dataset (CRDLD$\leftrightarrow$CRBD)
-and field-video transfer as a coverage-\emph{degradation} study (E2), not as a
-guarantee. Bringing a label-free conformal heading interval and a
-risk-controlled steering policy to a stock edge detector---and quantifying how
-its coverage degrades off-distribution and after integer quantisation---is the
-contribution this thread sets up.
-
-\subsection{Box-distribution uncertainty in detectors (the negative control)}
-\label{subsec:rw_unc}
-\noindent Modern stock YOLO detectors~\cite{ct4,yolov10} regress each box edge
-with a Distribution Focal Loss (DFL) head from Generalized Focal
-Loss~\cite{gfl}: instead of a single value, each edge $e$ predicts a softmax
-distribution $p_e(k)$ over bins, whose mean is the edge offset and whose
-variance $\sigma^2_{\mathrm{DFL}}=\sum_k (k-\mu_e)^2\,p_e(k)$ encodes the
-network's spread. GFLv2 reads the \emph{shape} of this distribution into a
-scalar localisation-quality score used \emph{inside} the detector for ranking
-and NMS~\cite{gflv2}. A parallel line attaches explicit localisation
-uncertainty: KL-Loss predicts per-coordinate variance for variance-voting
-NMS~\cite{klloss}, Gaussian-YOLOv3 attaches a localisation-uncertainty output to
-each box~\cite{gaussianyolo}, and Bayesian deep learning separates aleatoric and
-epistemic uncertainty more generally~\cite{kendallgal}.
-
-\paragraph{What this thread leaves open---and why it fails here.}
-It is tempting to read $\sigma^2_{\mathrm{DFL}}$, already produced for free by
-the stock head, as a per-detection reliability and to precision-weight the line
-fit by its inverse. We tested exactly this hypothesis and report it as a
-negative control (E0): the DFL box-distribution variance is \emph{not}
-informative of realised heading error in our setting (Spearman
-$\rho=-0.13$). The dominant guidance failure is not a slightly blurry box but a
-detection on the \emph{wrong} row, which the per-box DFL spread does not flag.
-Consequently we do \emph{not} use $\sigma^2_{\mathrm{DFL}}$ (nor a KL-Loss or
-Gaussian-YOLO branch~\cite{klloss,gaussianyolo}) as the weight or the trust
-signal. Robustness, not variance weighting, is what works for the point fit
-(Huber-IRLS; C1, E1), and a failure-mode-matched leave-one-out dispersion, not
-$\sigma^2_{\mathrm{DFL}}$, is what carries the trust signal (C2, E0/E3). This
-negative result is what motivates the rest of the paper.
-
-\subsection{Edge and integer-quantised deployment}
-\label{subsec:rw_edge}
-\noindent Vision-only guidance for low-cost robots must run on embedded
-accelerators. The efficiency lineage includes compact backbones
-(MobileNet/MobileNetV2~\cite{ct16,ct19}, EfficientNet~\cite{ct20}), knowledge
-distillation~\cite{ct18}, and structural pruning (pruning filters for efficient
-convnets~\cite{ct17}, DepGraph~\cite{cth14}). Deployment on the target hardware
-relies on integer-arithmetic inference: post-training INT8 quantisation in the
-sense of Jacob et al.~\cite{jacob2018int8}, NVIDIA TensorRT for Jetson-class
-FP16/INT8 inference~\cite{tensorrt}, and the Rockchip RKNN toolkit for INT8 NPU
-deployment~\cite{rknntoolkit}.
-
-\paragraph{What this thread leaves open.}
-This literature optimises detector latency, footprint, and detection accuracy
-under quantisation, but does not ask what happens to a \emph{statistical coverage
-guarantee} when the detector is quantised to INT8. Because our trust layer is
-CPU-side and post-NMS, it adds no operator to the feature maps or NPU---we state
-this plainly, not as a selling point: the heading readout and conformal interval
-run after detection on the CPU. The open question we answer (E5) is empirical:
-does the realised coverage of the heading interval survive INT8 quantisation on
-Jetson Nano (TensorRT) and on an RKNN NPU, and at what latency and throughput?
-
-\subsection{Positioning}
+\subsection{Positioning of the present study}
 \label{subsec:rw_position}
-\noindent In summary, this paper is an \emph{applied} contribution, not a methods
-breakthrough and not a new detector. On top of a stock detector~\cite{ct4} with a
-robust Huber-IRLS line fit (C1)---which in our experiments matches a RANSAC baseline and improves on
-equal-weight least squares, and on which the native DFL
-variance~\cite{gfl} is shown to be non-informative (E0)---we add a label-free,
-failure-mode-matched conformal heading interval and a risk-controlled steering
-policy (C2), positioned as a domain instantiation of conformal and selective
-prediction~\cite{vovk2005,lei2018,romano2019cqr,geifman2017selective,angelopoulos2022rcps}
-and contrasted against, rather than claiming primacy over, prior
-conformal-on-detector work~\cite{confdet1,confdet2}. We evaluate it in navigation
-units, across datasets (CRDLD$\leftrightarrow$CRBD~\cite{cth1,crbd}) and on real
-maize field video, and on edge hardware with INT8
-quantisation~\cite{tensorrt,rknntoolkit,jacob2018int8} (C3). Coverage claims are
-finite-sample-valid only under exchangeability within one distribution; off-distribution
-behaviour is reported as a degradation study, and the policy replay (E6) is
-open-loop over a kinematic bicycle model~\cite{rajamani2012}, not a closed-loop
-field run.
+Where the literature trends toward learned perception that needs labels and is
+exposed to domain shift, the gap left open is a detector-free and training-free
+pipeline assembled from stock classical parts: an Excess-Green column-peak
+tracker~\cite{woebbecke1995,meyer2008,otsu1979}, a robust quadratic fit $x=P(y)$
+by Huber IRLS~\cite{huber1964}, a look-ahead tangent heading, and a
+median/EMA/jump-gate temporal stage~\cite{kalman1960}. All components are
+established. Positioned against prior art, the open question is whether
+such a pipeline holds up on real forward-view cabbage field video and can be
+validated in navigation units against a human ground truth [TBD pending GT
+labelling], a question the remaining sections take up.
