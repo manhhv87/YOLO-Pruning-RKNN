@@ -31,7 +31,8 @@ try:
 except Exception:
     guidance_line_periodic = None
 
-DISP_W = 1100   # frames are downscaled to this width for display; clicks are mapped back to image px
+WIN_W, WIN_H = 1280, 960   # default window size; the window is resizable/maximizable and the frame is
+                           # fitted to it live, with clicks mapped back to image px via the running scale
 
 
 def fit_pts(pts, H, W=None):
@@ -48,27 +49,29 @@ def propose(img):
     return np.array([gl["a"], gl["b"]]) if gl else None
 
 
-def draw(img, coeffs, pts, idx, n, mine, scale, saved=False):
+def draw(img, coeffs, pts, idx, n, mine, scale, off, win_w, win_h, saved=False):
     H, W = img.shape[:2]
-    vis = cv2.resize(img, (int(W * scale), int(H * scale)))
+    ox, oy = off
+    dw, dh = max(1, int(W * scale)), max(1, int(H * scale))
+    canvas = np.zeros((win_h, win_w, 3), np.uint8)           # window-sized canvas (no imshow re-stretch)
+    canvas[oy:oy + dh, ox:ox + dw] = cv2.resize(img, (dw, dh))   # fitted frame, letterboxed
     color = (0, 230, 0) if mine else (0, 0, 255)
     if coeffs is not None:
         for y in range(int(gc.Y_FIT_LO * H), H, 4):
             x = gc.x_at(coeffs, y)
             if 0 <= x < W:
-                cv2.circle(vis, (int(x * scale), int(y * scale)), 3, color, -1)
+                cv2.circle(canvas, (int(ox + x * scale), int(oy + y * scale)), 3, color, -1)
         yla = gc.Y_LOOKAHEAD * H; xla = gc.x_at(coeffs, yla); sl = gc.slope_at(coeffs, yla)
-        cv2.line(vis, (int((xla - sl * 100) * scale), int((yla - 100) * scale)),
-                 (int((xla + sl * 100) * scale), int((yla + 100) * scale)), (255, 0, 255), 2)
+        cv2.line(canvas, (int(ox + (xla - sl * 100) * scale), int(oy + (yla - 100) * scale)),
+                 (int(ox + (xla + sl * 100) * scale), int(oy + (yla + 100) * scale)), (255, 0, 255), 2)
     for p in pts:
-        cv2.circle(vis, (int(p[0] * scale), int(p[1] * scale)), 6, (0, 255, 255), -1)
-    Wd = vis.shape[1]
-    cv2.rectangle(vis, (0, 0), (Wd, 56), (0, 0, 0), -1)
-    cv2.putText(vis, f"[{idx+1}/{n}]{'  [SAVED]' if saved else ''}  points: {len(pts)}   line: {'YOURS' if mine else ('proposal' if coeffs is not None else 'NONE - click >=2 pts')}",
+        cv2.circle(canvas, (int(ox + p[0] * scale), int(oy + p[1] * scale)), 6, (0, 255, 255), -1)
+    cv2.rectangle(canvas, (0, 0), (win_w, 56), (0, 0, 0), -1)   # status/help bar spans the full window
+    cv2.putText(canvas, f"[{idx+1}/{n}]{'  [SAVED]' if saved else ''}  points: {len(pts)}   line: {'YOURS' if mine else ('proposal' if coeffs is not None else 'NONE - click >=2 pts')}",
                 (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-    cv2.putText(vis, "SPACE/s = SAVE+next   b = back   a = proposal   c = clear   n = skip   q = quit",
+    cv2.putText(canvas, "SPACE/s = SAVE+next   b = back   a = proposal   c = clear   n = skip   q = quit",
                 (8, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
-    return vis
+    return canvas
 
 
 def main():
@@ -128,26 +131,36 @@ def main():
     labels = json.load(open(out)) if out.exists() else {}
     print(f"[annotate] {len(names)} frames | already labelled: {len(labels)} | saving to: {out.resolve()}")
     print("[annotate] click points on the row, then SPACE/s to SAVE; b = go back to re-edit a previous frame.")
-    st = {"pts": [], "scale": 1.0}
+    st = {"pts": [], "scale": 1.0, "off": (0, 0), "W": 1, "H": 1}
 
     def on_mouse(ev, x, y, flags, param):
         if ev == cv2.EVENT_LBUTTONDOWN:
-            st["pts"].append((x / st["scale"], y / st["scale"]))   # map display -> image px
+            ox, oy = st["off"]; sc = st["scale"] or 1.0
+            ix, iy = (x - ox) / sc, (y - oy) / sc            # window px -> image px
+            if 0 <= ix < st["W"] and 0 <= iy < st["H"]:      # ignore clicks in the letterbox margin
+                st["pts"].append((ix, iy))
 
-    cv2.namedWindow("annotate", cv2.WINDOW_AUTOSIZE); cv2.setMouseCallback("annotate", on_mouse)
+    cv2.namedWindow("annotate", cv2.WINDOW_NORMAL); cv2.setMouseCallback("annotate", on_mouse)
+    cv2.resizeWindow("annotate", WIN_W, WIN_H)               # resizable: drag/maximize and the frame follows
     i = 0
     while i < len(names):
         nm = names[i]; img = cv2.imread(str(fdir / nm))
         if img is None:
             i += 1; continue
-        H, W = img.shape[:2]; st["scale"] = min(1.0, DISP_W / W)
+        H, W = img.shape[:2]; st["W"], st["H"] = W, H
         prev = labels.get(nm)                                # re-load a previous label so it can be edited
         st["pts"] = [tuple(p) for p in prev["pts"]] if (prev and prev.get("pts")) else []
         prop = propose(img)
         while True:
+            rect = cv2.getWindowImageRect("annotate")        # live (x, y, w, h) of the window content
+            win_w, win_h = (rect[2], rect[3]) if rect[2] > 0 and rect[3] > 0 else (WIN_W, WIN_H)
+            scale = min(win_w / W, win_h / H)                # fit the frame to the window, keep aspect
+            dw, dh = int(W * scale), int(H * scale)
+            off = ((win_w - dw) // 2, (win_h - dh) // 2)
+            st["scale"], st["off"] = scale, off
             user = fit_pts(st["pts"], H, W)
             coeffs = user if user is not None else prop
-            cv2.imshow("annotate", draw(img, coeffs, st["pts"], i, len(names), user is not None, st["scale"], nm in labels))
+            cv2.imshow("annotate", draw(img, coeffs, st["pts"], i, len(names), user is not None, scale, off, win_w, win_h, nm in labels))
             k = cv2.waitKey(20) & 0xFF
             if k == ord("c"):
                 st["pts"] = []
