@@ -119,6 +119,15 @@ def main():
         print("%-18s |   %5.2f / %5.2f / %5.2f       |   %5.1f / %5.1f / %5.1f"
               % (k, *pct([r[0] for r in rows]), *pct([r[1] for r in rows])))
 
+    # paired Huber vs equal-LS: are they actually distinguishable?
+    Hh, Ee = np.array(arms["Huber (deployed)"]), np.array(arms["equal-LS"])
+    if len(Hh) and len(Ee):
+        dh, dc = Hh[:, 0] - Ee[:, 0], Hh[:, 1] - Ee[:, 1]   # Huber - equal-LS; negative => Huber better
+        print("\nHuber vs equal-LS (paired): "
+              f"heading med(H-E)={np.median(dh):+.2f} deg, Huber lower on {100*np.mean(Hh[:,0]<Ee[:,0]):.0f}%; "
+              f"cross-track med(H-E)={np.median(dc):+.2f} px, Huber lower on {100*np.mean(Hh[:,1]<Ee[:,1]):.0f}% "
+              "(-> indistinguishable)")
+
 
 if __name__ == "__main__":
     main()

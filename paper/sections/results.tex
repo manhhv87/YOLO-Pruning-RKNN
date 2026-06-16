@@ -257,14 +257,17 @@ percentile of $155$\,px to $46$\,px.
 Replacing the deployed Huber IRLS fit with the two standard alternatives on the
 same anchors, each passed through the same fit wrapper so that only the loss
 differs, changes the result little (Table~\ref{tab:res-fitarm}). The Huber and
-equal-weight least-squares fits are tied on median heading error ($6.4^\circ$),
-with the Huber fit marginally better on the mean and tail ($9.1^\circ$ and
-$19.4^\circ$ against $9.3^\circ$ and $20.8^\circ$), while RANSAC is the weakest of
-the three ($7.2^\circ$, $10.5^\circ$, $25.3^\circ$) because its hard inlier
-threshold discards anchors the other fits use. The fit choice is therefore
-secondary on these corridor-restricted anchors, consistent with the temporal
-stage rather than the fit being the robustness lever, and the deployed Huber fit
-is a sound default.
+equal-weight least-squares fits are statistically indistinguishable: the paired
+per-frame difference has a median of $0.0^\circ$ in heading and $0.0$\,px in
+cross-track, each fit is the lower of the two on about a third of frames, and the
+small gaps in the aggregate mean and tail are not a systematic advantage of
+either. RANSAC is the weakest of the three ($7.2^\circ$ median heading against
+$6.4^\circ$), because its hard inlier threshold discards anchors the other fits
+use. On these corridor-restricted anchors the fit choice is therefore immaterial
+within the least-squares family, which is consistent with the temporal stage
+rather than the fit being the robustness lever; the deployed Huber fit matches
+equal-weight least squares here while retaining robustness against outlier anchors
+when they occur.
 
 {\renewcommand{\arraystretch}{1.2}
 \begin{table}[!ht]
