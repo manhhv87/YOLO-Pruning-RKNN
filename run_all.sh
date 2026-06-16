@@ -17,8 +17,7 @@ FRAMES="${FRAMES:-datasets/CabbageNav/frames}"   # extracted frames + manifest.c
 LABELS="${LABELS:-$FRAMES/labels.json}"          # human GT from annotate_rows (optional)
 FPS="${FPS:-1}"                                  # frame sampling rate for extraction
 MAXW="${MAXW:-640}"                              # cap frame width (robot cam is 640)
-SAMPLES="${SAMPLES:-400}"                        # frames sampled per video for stability
-echo "[cfg] VIDEOS=$VIDEOS FRAMES=$FRAMES SAMPLES=$SAMPLES"
+echo "[cfg] VIDEOS=$VIDEOS FRAMES=$FRAMES"
 
 # ---- 1. extract frames from the robot videos (idempotent; FORCE_PREP=1 to redo) ----
 if [ "${FORCE_PREP:-0}" = "1" ] || [ ! -d "$FRAMES" ] || [ -z "$(ls -A "$FRAMES" 2>/dev/null || true)" ]; then
@@ -39,6 +38,6 @@ if [ -f "$LABELS" ]; then
 else
   echo "[eval] no labels yet -> stability only (run step 2 to get the accuracy numbers)"
 fi
-python eval_cabbage.py --frames "$FRAMES" $LBL --videos "$VIDEOS/*.avi" --samples "$SAMPLES"
+python eval_cabbage.py --frames "$FRAMES" $LBL
 
 echo "[done] frames in $FRAMES ; eval printed above."
