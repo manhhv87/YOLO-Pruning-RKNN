@@ -106,19 +106,20 @@ def main():
                 gated = False
                 tg.update_heading(None, present=False)
                 fused = None
+            fused_ct = tg.update_crosstrack(ct, present=ct is not None)["crosstrack"]  # stabilise e too
             gt_deg = gt_ct = None
             if nm in labels:
                 gt_deg, gt_ct = gt_of(labels[nm]["coeffs"], labels[nm].get("H", H), labels[nm].get("W", W))
             mm = man.get(nm, {})
             rows.append({"video": video, "frame": nm, "t_sec": mm.get("t_sec", 0), "veg": mm.get("veg", 0),
                          "raw_deg": raw, "fused_deg": fused, "gated": int(gated), "ct_px": ct,
-                         "gt_deg": gt_deg, "gt_ct_px": gt_ct})
+                         "fused_ct_px": fused_ct, "gt_deg": gt_deg, "gt_ct_px": gt_ct})
 
     # ---- write auditable CSV ----
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     with open(args.out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["video", "frame", "t_sec", "veg", "raw_deg", "fused_deg",
-                                          "gated", "ct_px", "gt_deg", "gt_ct_px"])
+                                          "gated", "ct_px", "fused_ct_px", "gt_deg", "gt_ct_px"])
         w.writeheader()
         w.writerows(rows)
     print(f"[csv] {len(rows)} frames -> {args.out}\n")
@@ -136,7 +137,7 @@ def main():
             print(f"    {lab:9s}: {fnd}/{len(idx)} found ({100*fnd/max(1,len(idx)):.0f}%)")
 
     # ---- CROSS-TRACK MAGNITUDE (cm via shared-robot homography; no GT needed) ----
-    cmag = [abs(calib.px_cross_to_cm(r["ct_px"], 480, 640)) for r in found if r["ct_px"] is not None]
+    cmag = [abs(calib.px_cross_to_cm(r["fused_ct_px"], 480, 640)) for r in found if r["fused_ct_px"] is not None]
     if cmag:
         print(f"\n# CROSS-TRACK MAGNITUDE (|offset of the row from centre|, cm via calib homography)")
         print("  |cross-track| cm: median={:.1f} mean={:.1f} p90={:.1f}".format(*pct(cmag)))
@@ -147,13 +148,15 @@ def main():
     if lab:
         eh_raw = [abs(r["raw_deg"] - r["gt_deg"]) for r in lab]
         eh_fus = [abs(r["fused_deg"] - r["gt_deg"]) for r in lab if r["fused_deg"] is not None]
-        ect = [abs(r["ct_px"] - r["gt_ct_px"]) for r in lab if r["ct_px"] is not None and r["gt_ct_px"] is not None]
-        ecm = [abs(calib.px_cross_to_cm(r["ct_px"], 480, 640) - calib.px_cross_to_cm(r["gt_ct_px"], 480, 640))
-               for r in lab if r["ct_px"] is not None and r["gt_ct_px"] is not None]
-        print("  heading err deg  raw : median={:.2f} mean={:.2f} p90={:.2f}".format(*pct(eh_raw)))
-        print("  heading err deg  fused: median={:.2f} mean={:.2f} p90={:.2f}".format(*pct(eh_fus)))
-        print("  cross-track err px    : median={:.1f} mean={:.1f} p90={:.1f}".format(*pct(ect)))
-        print("  cross-track err cm    : median={:.2f} mean={:.2f} p90={:.2f}".format(*pct(ecm)))
+        ect_raw = [abs(r["ct_px"] - r["gt_ct_px"]) for r in lab if r["ct_px"] is not None and r["gt_ct_px"] is not None]
+        ect_fus = [abs(r["fused_ct_px"] - r["gt_ct_px"]) for r in lab if r["fused_ct_px"] is not None and r["gt_ct_px"] is not None]
+        ecm_fus = [abs(calib.px_cross_to_cm(r["fused_ct_px"], 480, 640) - calib.px_cross_to_cm(r["gt_ct_px"], 480, 640))
+                   for r in lab if r["fused_ct_px"] is not None and r["gt_ct_px"] is not None]
+        print("  heading err deg     raw  : median={:.2f} mean={:.2f} p90={:.2f}".format(*pct(eh_raw)))
+        print("  heading err deg     fused: median={:.2f} mean={:.2f} p90={:.2f}".format(*pct(eh_fus)))
+        print("  cross-track err px  raw  : median={:.1f} mean={:.1f} p90={:.1f}".format(*pct(ect_raw)))
+        print("  cross-track err px  fused: median={:.1f} mean={:.1f} p90={:.1f}".format(*pct(ect_fus)))
+        print("  cross-track err cm  fused: median={:.2f} mean={:.2f} p90={:.2f}".format(*pct(ecm_fus)))
     else:
         print("  (none yet -> label ~120-150 frames with annotate_rows.py; this is the GO/NO-GO number)")
 

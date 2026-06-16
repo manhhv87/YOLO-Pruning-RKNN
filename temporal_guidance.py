@@ -24,11 +24,28 @@ class TemporalGuidance:
     median (the physical-plausibility gate). Otherwise the last good estimate is HELD and the frame is
     marked gated (the controller should slow/abstain). Accepted headings are EMA-smoothed."""
 
-    def __init__(self, win=15, max_jump_deg=8.0, ema=0.4, min_trust=0.0, warmup=3):
+    def __init__(self, win=15, max_jump_deg=8.0, ema=0.4, min_trust=0.0, warmup=3, max_jump_px=130.0):
         self.win = win; self.max_jump = max_jump_deg; self.ema = ema
         self.min_trust = min_trust; self.warmup = warmup
         self.hist = deque(maxlen=win)        # accepted headings (deg)
         self.a = None; self.b = None; self.heading = None; self.n = 0
+        self.max_jump_px = max_jump_px       # cross-track plausibility gate (px/frame)
+        self.ct_hist = deque(maxlen=win)     # accepted cross-track offsets (px)
+        self.ct = None
+
+    def update_crosstrack(self, ct, present=True):
+        """Same physical-plausibility gate + EMA as update_heading, applied to the cross-track offset (px),
+        so a single-frame wrong-row jump in e is rejected/held instead of passed straight through. The
+        cross-track had no temporal stage before, which is why its error tail was dominated by wrong-row
+        frames. Returns {crosstrack, gated}."""
+        ref = float(np.median(self.ct_hist)) if self.ct_hist else None
+        accept = present and ct is not None and math.isfinite(ct)
+        if accept and ref is not None and len(self.ct_hist) >= self.warmup and abs(ct - ref) > self.max_jump_px:
+            accept = False
+        if accept:
+            self.ct_hist.append(ct)
+            self.ct = ct if self.ct is None else (1 - self.ema) * self.ct + self.ema * ct
+        return {"crosstrack": self.ct, "gated": not accept}
 
     def update_heading(self, heading, present=True, trust=1.0):
         """Fuse a precomputed steering heading (deg, e.g. the look-ahead tangent of a curved fit).
