@@ -26,8 +26,8 @@ def _peaks(p, thr):
     return [i for i in range(3, len(p) - 3) if p[i] >= p[i - 1] and p[i] >= p[i + 1] and p[i] > thr]
 
 
-def guidance_coeffs(img, n_bands=9, corridor=0.18, smooth=21, safe_mm=220.0, gate="seed"):
-    """Track the central cabbage row bottom->top via Excess-Green column peaks; robust quadratic fit.
+def row_anchors(img, n_bands=9, corridor=0.18, smooth=21, safe_mm=220.0, gate="seed"):
+    """Track the central cabbage row bottom->top via Excess-Green column peaks; return the anchor points.
 
     safe_mm/gate: the ground 'virtual safety corridor' (+/-safe_mm around the robot centreline) that drops
     side-row peaks. gate='seed' applies it only when choosing the FIRST (near-row) anchor -- this stops the
@@ -58,9 +58,15 @@ def guidance_coeffs(img, n_bands=9, corridor=0.18, smooth=21, safe_mm=220.0, gat
             cand = [x for x in pk if abs(x - cur) < corridor * W]
             cur = min(cand or [cur], key=lambda x: abs(x - cur))  # track without jumping rows
         pts.append((cur, 0.5 * (y0 + y1)))
-    if len(pts) < 3:
+    return np.array(pts, float) if len(pts) >= 3 else None
+
+
+def guidance_coeffs(img, **kw):
+    """Robust Huber quadratic fit x=P(y) to the central-row anchors of row_anchors()."""
+    pts = row_anchors(img, **kw)
+    if pts is None:
         return None
-    pts = np.array(pts, float)
+    H, W = img.shape[:2]
     return gc.fit_band(pts[:, 1], pts[:, 0], H, W=W, degree=2)
 
 
