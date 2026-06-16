@@ -79,6 +79,26 @@ def crosstrack_cm(coeffs, H, W):
     return (xr - xc) / 10.0
 
 
+# Virtual safety corridor (platform thesis): the straddle robot spans one bed, so the central row lies
+# within the chassis safe width Wsafe=440 mm (+/-220 mm) of the centreline; the two neighbour rows fall
+# outside it. Projecting that ground corridor to image pixels per row gives a perspective-correct band that
+# excludes the side rows -- the fix for wrong-row lock-on.
+WSAFE_MM = 440.0
+
+
+def corridor_px(y, W, half_mm=WSAFE_MM / 2.0):
+    """Image-pixel x-bounds (x_lo, x_hi) of the +/-half_mm ground corridor around the robot centreline at
+    image row y, or None if degenerate. Wide near the robot, narrow far away (perspective)."""
+    x0, _ = px_to_ground_mm(W / 2.0, y)
+    x1, _ = px_to_ground_mm(W / 2.0 + 1.0, y)
+    mm_per_px = x1 - x0
+    if abs(mm_per_px) < 1e-6:
+        return None
+    x_center = W / 2.0 - x0 / mm_per_px            # image column where ground X = 0 (the centreline)
+    half_px = abs(half_mm / mm_per_px)
+    return x_center - half_px, x_center + half_px
+
+
 if __name__ == "__main__":
     print(f"install: height {CAM_HEIGHT_MM/10:.0f} cm, tilt {CAM_TILT_FROM_VERTICAL_DEG:.0f} deg "
           f"from vertical (= {PITCH_BELOW_HORIZON_DEG:.0f} deg below horizontal)")

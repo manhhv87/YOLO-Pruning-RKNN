@@ -16,13 +16,24 @@ import numpy as np
 from periodic_row import exg
 import guidance_curve as gc
 
+try:
+    import calib as _calib                     # for the ground-corridor gate; optional
+except Exception:
+    _calib = None
+
 
 def _peaks(p, thr):
     return [i for i in range(3, len(p) - 3) if p[i] >= p[i - 1] and p[i] >= p[i + 1] and p[i] > thr]
 
 
-def guidance_coeffs(img, n_bands=9, corridor=0.18, smooth=21):
-    """Track the central cabbage row bottom->top via Excess-Green column peaks; robust quadratic fit."""
+def guidance_coeffs(img, n_bands=9, corridor=0.18, smooth=21, safe_mm=220.0, gate="seed"):
+    """Track the central cabbage row bottom->top via Excess-Green column peaks; robust quadratic fit.
+
+    safe_mm/gate: the ground 'virtual safety corridor' (+/-safe_mm around the robot centreline) that drops
+    side-row peaks. gate='seed' applies it only when choosing the FIRST (near-row) anchor -- this stops the
+    track from starting on a neighbour row without clipping the far look-ahead anchors (a narrow far-field
+    corridor otherwise hurts heading). gate='all' applies it to every band; gate=None or safe_mm=None
+    disables it. Needs calib."""
     H, W = img.shape[:2]
     V = exg(img)
     pts, cur = [], None
@@ -35,6 +46,10 @@ def guidance_coeffs(img, n_bands=9, corridor=0.18, smooth=21):
             continue
         thr = prof.mean() + 0.3 * prof.std()
         pk = _peaks(prof, thr)
+        if safe_mm and gate and _calib is not None and (gate == "all" or cur is None):
+            cb = _calib.corridor_px(0.5 * (y0 + y1), W, half_mm=safe_mm)   # drop out-of-corridor side rows
+            if cb is not None:
+                pk = [x for x in pk if cb[0] <= x <= cb[1]]
         if not pk:
             continue
         if cur is None:
