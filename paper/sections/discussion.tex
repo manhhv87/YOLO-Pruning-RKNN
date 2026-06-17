@@ -76,7 +76,12 @@ pipeline are therefore out of reach, and the smoothness of its fused heading tra
 is not the same thing as closed-loop stability. The temporal
 parameters (window length, EMA factor, jump threshold) interact with controller
 and vehicle dynamics that an offline replay does not capture. A closed-loop field
-trial with odometry is the clear next step.
+trial with odometry is the clear next step. Because the runs were logged under the platform's own
+detector-based centring, the labelled frames are biased towards a centred row; stratifying every
+trained-detector comparison by how far off-centre the ground-truth row sits shows the
+pipeline-versus-detector parity persists into the most off-centre tercile
+(Section~\ref{sec:res-accuracy}), so it is not merely an artifact of the easy centred frames, but a
+closed-loop trial remains the only way to remove the confound entirely.
 
 The metric figures rest on a measured camera pose and a flat-ground assumption. The heading $\theta$
 is reported in degrees, which is controller-relevant and scale-free, and the
@@ -103,4 +108,7 @@ $194/669$), which is itself a caution against generalising from two clips.
 
 Finally, accuracy is measured against a single annotator, so an inter-annotator
 agreement floor on the smallest meaningful error is not established; a second
-annotator is left to future work.
+annotator is left to future work. To avoid over-reading differences that may sit
+within label noise, comparisons whose paired bootstrap interval spans zero -- including the sub-degree
+gap between the detector-free pipeline and the trained detector, and the Huber-versus-least-squares fit
+difference -- are reported as statistically indistinguishable rather than ranked.

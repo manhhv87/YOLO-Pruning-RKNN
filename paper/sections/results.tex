@@ -123,7 +123,7 @@ Section~\ref{sec:res-accuracy}.
   \label{fig:gallery}
 \end{figure}
 
-Mapping the deployed near-row pixel offset through the image-to-ground homography
+Mapping the fused near-row pixel offset through the image-to-ground homography
 (Section~\ref{sec:method:platform}) describes the magnitude of the lateral offset
 in metric units. After the temporal stage the central row sat a median of
 $1.7$\,cm from the image centre across the runs (mean $3.4$\,cm, 90th percentile
@@ -202,22 +202,22 @@ below are therefore read against a single human reference.
 \paragraph{Accuracy against ground truth.}
 Table~\ref{tab:res-accuracy} reports the heading and cross-track error of the
 estimator against the labelled subset, for the raw per-frame output and for the
-deployed output after the temporal stage. The deployed heading error has a median
+fused output after the temporal stage. The fused heading error has a median
 of $5.0^\circ$ (mean $6.5^\circ$, 90th percentile $14.5^\circ$), and three
-quarters of the labelled frames fall within $10^\circ$. The deployed cross-track
-error has a median of $10$\,px, which is $1.1$\,cm through the calibrated
+quarters of the labelled frames fall within $10^\circ$. The fused cross-track
+error has a median of $10$\,px, which is about $1$\,cm through the calibrated
 homography. The error distribution has a heavy tail: a minority of frames in which
 the Excess-Green front end locks onto a neighbouring row rather than the central
 one raise the cross-track mean to $19$\,px and the 90th percentile to $46$\,px
-($5.0$\,cm). These are the cases in which a vegetation index, which has no notion
-of which plants belong to the crop, is least reliable, and the deployed-detector
+($\approx5$\,cm). These are the cases in which a vegetation index, which has no notion
+of which plants belong to the crop, is least reliable, and the trained-detector
 baseline below confirms they are where a learned detector helps most.
 
 {\renewcommand{\arraystretch}{1.3}
 \begin{table}[!ht]
   \centering
   \caption{Accuracy against the $150$-frame human-labelled subset (one annotator),
-    for the raw per-frame estimate and the deployed estimate after the temporal
+    for the raw per-frame estimate and the fused estimate after the temporal
     stage. Errors are absolute differences from ground truth, summarised by median,
     mean, and 90th percentile.}
   \label{tab:res-accuracy}
@@ -226,11 +226,11 @@ baseline below confirms they are where a learned detector helps most.
     \textbf{Error vs.\ GT} & \textbf{Median} & \textbf{Mean} & \textbf{p90} \\
     \hline
     Heading, raw ($^\circ$)            & 6.4  & 9.1  & 19.4 \\
-    Heading, deployed ($^\circ$)       & 5.0  & 6.5  & 14.5 \\
+    Heading, fused ($^\circ$)          & 5.0  & 6.5  & 14.5 \\
     \hline
     Cross-track, raw (px)              & 11   & 42   & 155  \\
-    Cross-track, deployed (px)         & 10   & 19   & 46   \\
-    Cross-track, deployed (cm)         & 1.1  & 2.0  & 5.0  \\
+    Cross-track, fused (px)            & 10   & 19   & 46   \\
+    Cross-track, fused (cm)            & 1.1  & 2.0  & 5.0  \\
     \hline
   \end{tabular}
 \end{table}}
@@ -239,7 +239,9 @@ baseline below confirms they are where a learned detector helps most.
 The temporal stage improves accuracy, and not only smoothness. On the $61$
 labelled frames on which the max-jump gate fired, the raw heading error has a
 median of $12.0^\circ$ against ground truth, which the temporal stage reduces to
-$7.9^\circ$; the gate is also selective, in that the mean raw heading error is
+$7.9^\circ$; the effect replicates across both field runs taken separately (gated
+heading error $14.2^\circ\!\to\!7.9^\circ$ and $11.8^\circ\!\to\!7.7^\circ$). The
+gate is also selective, in that the mean raw heading error is
 $14.3^\circ$ on the gated frames against $5.5^\circ$ on the rest, so the gate fires
 on genuinely poor frames rather than rejecting good ones. This is the
 non-circular form of the temporal result: unlike the jump counts of
@@ -249,11 +251,11 @@ that target the wrong-row tail are consistent with this picture. Restricting the
 Excess-Green search to the ground safety corridor reduced the number of
 large cross-track errors ($>100$\,px) on the labelled subset from $23$ to $18$,
 and stabilising the cross-track signal through the temporal stage, rather than
-reporting it per frame, reduced the deployed cross-track error from a 90th
+reporting it per frame, reduced the fused cross-track error from a 90th
 percentile of $155$\,px to $46$\,px.
 
 \paragraph{Fit-arm comparison.}
-Replacing the deployed Huber IRLS fit with the two standard alternatives on the
+Replacing the pipeline's Huber IRLS fit with the two standard alternatives on the
 same anchors, each passed through the same fit wrapper so that only the loss
 differs, changes the result little (Table~\ref{tab:res-fitarm}). The Huber and
 equal-weight least-squares fits are statistically indistinguishable: the paired
@@ -264,7 +266,7 @@ either. RANSAC is the weakest of the three ($7.2^\circ$ median heading against
 $6.4^\circ$), because its hard inlier threshold discards anchors the other fits
 use. On these corridor-restricted anchors the fit choice is therefore immaterial
 within the least-squares family, which is consistent with the temporal stage
-rather than the fit being the robustness lever; the deployed Huber fit matches
+rather than the fit being the robustness lever; the Huber fit matches
 equal-weight least squares here while retaining robustness against outlier anchors
 when they occur.
 
@@ -272,7 +274,7 @@ when they occur.
 \begin{table}[!ht]
   \centering
   \caption{Fit-arm comparison on the labelled subset: per-frame error of the
-    deployed Huber IRLS fit and the two standard alternatives, on identical
+    pipeline's Huber IRLS fit and the two standard alternatives, on identical
     anchors through the same fit wrapper, so that only the loss differs.}
   \label{tab:res-fitarm}
   \begin{tabular}{lccc@{\hskip 1.2em}ccc}
@@ -280,47 +282,49 @@ when they occur.
     & \multicolumn{3}{c}{\textbf{Heading err ($^\circ$)}} & \multicolumn{3}{c}{\textbf{Cross-track err (px)}} \\
     \textbf{Fit} & med & mean & p90 & med & mean & p90 \\
     \hline
-    Huber IRLS (deployed) & 6.4 & 9.1  & 19.4 & 11 & 42 & 155 \\
+    Huber IRLS (proposed) & 6.4 & 9.1  & 19.4 & 11 & 42 & 155 \\
     Equal-weight LS       & 6.4 & 9.3  & 20.8 & 10 & 41 & 154 \\
     RANSAC                & 7.2 & 10.5 & 25.3 & 12 & 42 & 143 \\
     \hline
   \end{tabular}
 \end{table}}
 
-\paragraph{Deployed-detector baseline.}
-The platform's own controller follows the row with a trained YOLOv5 cabbage
-detector. Running that detector on the same frames, keeping the detections inside
-the same $\pm220$\,mm safety corridor, and fitting the same curve gives a
-deployed-detector guidance signal scored against the labelled subset
-(Table~\ref{tab:res-detector}). The trained detector is the more accurate front
-end: even without a temporal stage its per-frame heading error has a median of
-$4.2^\circ$ against the $5.0^\circ$ of the deployed detector-free pipeline, and its
-cross-track error a 90th percentile of $32$\,px against $46$\,px. The gap is widest
-exactly where the vegetation index fails: on the $18$ frames where the
-Excess-Green tracker locks onto a neighbouring row the detector localises the
-central row with a median cross-track error of $10$\,px against the $214$\,px of
-the raw tracker, and it is the more accurate of the two on every one of those
-frames. The trained detector therefore retains a clear advantage, concentrated on
-the wrong-row frames, which is the cost of removing the learned model; in return
-the detector-free pipeline comes within about a degree of median heading and a
-comparable median cross-track with no labelled data and no GPU.
+\paragraph{Trained-detector baseline.}
+The platform's controller follows the row with a trained YOLOv5 cabbage detector. That detector front end is
+reconstructed here by taking its detections inside the same $\pm220$\,mm safety corridor and fitting the
+same curve, and scored through the same temporal stage as the detector-free pipeline
+(Table~\ref{tab:res-detector}); this is a reconstruction of the detector \emph{front end}, not the
+platform's row-selection and PID logic. With the temporal stage applied to both, the trained detector
+reaches a median heading error of $4.1^\circ$ against the $5.0^\circ$ of the detector-free pipeline, but the
+difference is not statistically resolvable on this subset: the paired per-frame heading difference has a
+median of $0.7^\circ$ with a $95\%$ bootstrap interval of $[-0.3, 1.2]^\circ$, and the cross-track
+difference is likewise indistinguishable ($1.3$\,px, $[-0.3, 3.3]$). The detector's advantage instead lies
+in the error tail and, decisively, in the wrong-row regime: on the $18$ frames where the Excess-Green
+tracker locks onto a neighbouring row it localises the central row to a median cross-track error of
+$10$\,px against the raw tracker's $214$\,px, better on every one of those frames. Stratifying by how far
+the ground-truth row sits off-centre confirms that this parity is not an artifact of the centred frames the
+closed-loop logging produced: even in the most off-centre tercile ($|e^{\mathrm{GT}}|>39$\,px) the two
+remain close ($6.9^\circ$ detector-free against $5.6^\circ$ detector). The detector-free pipeline is thus on
+par with the trained detector in the typical case, at no labelling or GPU cost, and behind it mainly on the
+worst-case wrong-row frames.
 
 {\renewcommand{\arraystretch}{1.2}
 \begin{table}[!ht]
   \centering
-  \caption{Deployed-detector baseline: the platform's trained YOLOv5 detector (its
-    detections inside the same safety corridor, the same curve fit) against the
-    detector-free pipeline, scored on the labelled subset. The detector is
-    per-frame, with no temporal stage.}
+  \caption{Trained-detector baseline: a reconstructed YOLOv5 detector front end (its detections inside the
+    same safety corridor, the same curve fit) against the detector-free pipeline, both scored raw and after
+    the same temporal stage on the labelled subset. It reconstructs the detector front end, not the
+    platform's deployed row-and-PID logic.}
   \label{tab:res-detector}
   \begin{tabular}{lccc@{\hskip 1.2em}ccc}
     \hline
     & \multicolumn{3}{c}{\textbf{Heading err ($^\circ$)}} & \multicolumn{3}{c}{\textbf{Cross-track err (px)}} \\
     \textbf{Method} & med & mean & p90 & med & mean & p90 \\
     \hline
-    ExG raw                    & 6.4 & 9.1 & 19.4 & 11 & 42 & 155 \\
-    ExG + temporal (deployed)  & 5.0 & 6.5 & 14.5 & 10 & 19 & 46 \\
-    Trained YOLOv5 (per-frame) & 4.2 & 6.1 & 11.9 & 9  & 15 & 32 \\
+    ExG, raw                  & 6.4 & 9.1 & 19.4 & 11 & 42 & 155 \\
+    ExG $+$ temporal          & 5.0 & 6.5 & 14.5 & 10 & 19 & 46 \\
+    YOLOv5, raw               & 4.2 & 6.1 & 11.9 & 9  & 15 & 32 \\
+    YOLOv5 $+$ temporal       & 4.1 & 5.4 & 11.7 & 9  & 14 & 32 \\
     \hline
   \end{tabular}
 \end{table}}
@@ -340,7 +344,9 @@ CIVE from $6.0^\circ$ to $5.0^\circ$, and the centroid-per-band tracker from
 $7.8^\circ$ to $5.2^\circ$, so the improvement is a property of the temporal stage
 rather than of any one front end. Second, the column-peak trackers cluster at a
 fused median of $4$--$5^\circ$ whichever standard index feeds them, so the index
-choice is immaterial, with ExGR marginally ahead of the deployed ExG. The two
+choice is immaterial: the sub-degree differences among the standard indices (ExGR
+nominally lowest at $4.2^\circ$, ExG and CIVE at $5.0^\circ$) sit within the paired
+bootstrap interval and are not ranked. The two
 genuinely different front ends fare worse: the periodic-row tracker reaches
 $8.4^\circ$, and the Hough-line detector is the clear outlier, emitting a guidance
 line on only $59\%$ of frames and reaching $23.9^\circ$, because the discrete,
@@ -356,15 +362,15 @@ choice is secondary.
   \centering
   \caption{Front-end and vegetation-index baselines, each run through the same fit
     and temporal stage and scored on the labelled subset: emission rate and
-    deployed (fused) heading error. The first block swaps the vegetation index in
-    the deployed column-peak tracker; the second swaps the front end itself.}
+    fused heading error. The first block swaps the vegetation index in
+    the proposed column-peak tracker; the second swaps the front end itself.}
   \label{tab:res-frontend}
   \begin{tabular}{lcccc}
     \hline
     \textbf{Method} & \textbf{Emit} & \multicolumn{3}{c}{\textbf{Fused heading err ($^\circ$)}} \\
                     &               & med & mean & p90 \\
     \hline
-    ExG column-peak (deployed) & 100\% & 5.0 & 6.5  & 14.5 \\
+    ExG column-peak (proposed) & 100\% & 5.0 & 6.5  & 14.5 \\
     \quad index ExGR           & 100\% & 4.2 & 5.7  & 13.6 \\
     \quad index CIVE           & 100\% & 5.0 & 6.7  & 14.9 \\
     \quad index NDI            & 100\% & 7.3 & 7.5  & 12.3 \\
@@ -377,9 +383,9 @@ choice is secondary.
 \end{table}}
 
 The temporal stage is also preferable to a more elaborate filter. Replacing the
-deployed median, exponential moving average, and jump gate with a
+proposed median, exponential moving average, and jump gate with a
 constant-velocity Kalman filter on the same raw ExG heading stream gives a fused
-median heading error of $6.0^\circ$, between the raw $6.4^\circ$ and the deployed
+median heading error of $6.0^\circ$, between the raw $6.4^\circ$ and the proposed
 $5.0^\circ$; the simple stage, whose complexity is matched to the $1$\,fps regime,
 is therefore sufficient and marginally better here.
 

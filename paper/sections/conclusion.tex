@@ -19,14 +19,16 @@ smooths both signals~\cite{kalman1960}. All components are established. The stud
 an in-field validation of what this stock composition does on a real cabbage robot,
 rather than a new method.
 
-Against a $150$-frame human-labelled subset the deployed pipeline reaches a median heading error of
-$5.0^{\circ}$ and a cross-track of $1.1$\,cm, with a guidance line emitted on every frame. Two findings
+Against a $150$-frame human-labelled subset the detector-free pipeline reaches a median heading error of
+$5.0^{\circ}$ and a cross-track of about $1$\,cm, with a guidance line emitted on every frame. Two findings
 stand out. The temporal stage, not the perception front end, carries the robustness: it lowers heading
-error on the gate-suppressed frames, fires selectively on genuinely poor frames, and improves every front
-end and index tried, while the fit choice is secondary (Section~\ref{sec:results}). And against the
-platform's own trained YOLOv5 detector the detector-free pipeline comes within about a degree of median
-heading at no labelling or GPU cost, the detector remaining more accurate chiefly on the wrong-row frames
-where a vegetation index cannot separate crop from weed -- the measured cost of going detector-free.
+error on the gate-suppressed frames in both runs, fires selectively on genuinely poor frames, and improves
+every front end and index tried, while the fit choice is secondary (Section~\ref{sec:results}). And against
+a reconstructed front end from the platform's trained YOLOv5 detector, scored through the same temporal
+stage, the detector-free pipeline is statistically indistinguishable in median heading and cross-track (the
+paired bootstrap intervals span zero) at no labelling or GPU cost; the detector is ahead only in the error
+tail and on the wrong-row frames where a vegetation index cannot separate crop from weed -- the measured
+cost of going detector-free.
 
 The scope is one robot, one crop, one camera pose, and an open-loop evaluation at $1$\,fps; the claims
 extend no further. The dataset and code will be made publicly available upon publication.

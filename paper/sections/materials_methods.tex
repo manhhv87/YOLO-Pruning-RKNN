@@ -55,7 +55,10 @@ intrinsics and measured extrinsics an image-to-ground homography is constructed 
 assumption (world origin on the centreline beneath the camera) and used to express the near-row cross-track in
 centimetres (Section~\ref{sec:method:lookahead}). The residual assumptions are the planar ground and the
 reuse of the camera intrinsics, so the cross-track is also reported in pixels and as a fraction of the
-half-image width. The scope is fixed to one robot,
+half-image width. The centimetre scale is sensitive to the measured pose: perturbing the height by
+$\pm5$\,cm and the tilt by $\pm5^{\circ}$ moves the near-row pixel-to-centimetre factor enough to shift the
+reported median cross-track over roughly $[0.9,1.3]$\,cm, so the centimetre figures are indicative and the
+pixel error is treated as the primary cross-track metric. The scope is fixed to one robot,
 one crop (cabbage), and one camera pose. The validation reported here is narrow by design and at a single low
 frame rate, with no claim of generalisation beyond this configuration. It is open-loop with respect to the
 proposed pipeline: the robot was steered during logging by its existing detector-based controller, whereas
@@ -216,9 +219,9 @@ The constant $\delta=1.345$ is the conventional Huber tuning that retains
 $\approx95\%$ efficiency under Gaussian noise while bounding the influence of outliers, which here are
 spurious anchors from gaps, weeds, or an adjacent row.
 
-Two standard alternatives serve as comparison fits over the same anchor set, evaluated against the deployed
-Huber IRLS fit: equal-weight least squares (the non-robust polynomial fit) and RANSAC consensus
-fitting~\cite{fischler1981}, a strong robust baseline. The accuracy of the deployed fit relative to these
+Two standard alternatives serve as comparison fits over the same anchor set, evaluated against the
+pipeline's Huber IRLS fit: equal-weight least squares (the non-robust polynomial fit) and RANSAC consensus
+fitting~\cite{fischler1981}, a strong robust baseline. The accuracy of the Huber fit relative to these
 baselines against human ground truth is reported in Section~\ref{sec:res-accuracy}: the Huber and
 equal-weight least-squares fits are statistically indistinguishable and both ahead of RANSAC, so the fit
 choice is secondary on the corridor-restricted anchors.
@@ -360,13 +363,16 @@ Consistent with Section~\ref{sec:method:fusion}, the robustness of the temporal 
 heading error versus human GT on the gate-suppressed frames, raw versus fused, and (ii) the selectivity of
 the gate, that is, whether the frames it holds carry larger raw errors than the frames it passes; both are
 reported in Section~\ref{sec:res-accuracy}. The raw-versus-fused jump count is excluded from the robustness
-results. The deployed-fit-versus-baseline comparison (equal-LS, RANSAC) is reported in
+results. The Huber-fit-versus-baseline comparison (equal-LS, RANSAC) is reported in
 Section~\ref{sec:res-accuracy}; the trained-detector baseline is reported there too.
 
-Per-frame errors are written to one CSV row per frame so that the deployed pipeline and its baselines and
-ablations are compared paired on identical frames. Because per-frame errors are not normally distributed and
-frames within a run are temporally correlated, comparisons are reported as error distributions (median, mean,
-and 90th percentile) and as paired per-frame differences rather than as $p$-values. Where a difference is
-small relative to its dispersion, as for the deployed Huber fit against equal-weight least squares, whose
-paired per-frame difference has a median of zero with a bootstrap interval covering zero, it is reported as
-indistinguishable rather than as a ranking.
+Per-frame errors are written to one CSV row per frame so that the detector-free pipeline and its baselines
+and ablations are compared paired on identical frames. Because per-frame errors are not normally distributed,
+comparisons are reported as error distributions (median, mean, and 90th percentile) and as paired per-frame
+differences rather than as $p$-values. For the load-bearing comparisons the median paired difference is
+accompanied by a $95\%$ confidence interval obtained by bootstrap ($10{,}000$ resamples of the paired
+per-frame differences); the labelled frames are a sparse stratified sample drawn across both runs, so they
+are resampled at the frame level. Where that interval covers zero the difference is reported as
+statistically indistinguishable rather than as a ranking. This is the case for the Huber fit against
+equal-weight least squares (median paired difference $0^\circ$) and, notably, for the detector-free pipeline
+against the reconstructed trained detector (median $0.7^\circ$, interval $[-0.3,1.2]^\circ$).
