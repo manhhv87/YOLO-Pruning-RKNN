@@ -24,8 +24,8 @@ than from the estimator. The temporal stage -- a median that rejects isolated co
 that limits how fast the target moves, and a jump gate at the vehicle's kinematic limit -- is what converts
 an occasionally-wrong per-frame estimate into a heading a controller can integrate. The labelled ablation
 bears this out: on the gate-suppressed frames it lowers the median heading error against GT from
-$12.0^{\circ}$ to $7.9^{\circ}$, and the gate fires selectively, with a mean raw error of $14.3^{\circ}$ on
-the frames it holds against $5.5^{\circ}$ on the rest (Section~\ref{sec:res-accuracy}). The fit-arm and
+$11.8^{\circ}$ to $8.1^{\circ}$, and the gate fires selectively, with a mean raw error of $14.4^{\circ}$ on
+the frames it holds against $5.1^{\circ}$ on the rest (Section~\ref{sec:res-accuracy}). The fit-arm and
 front-end/index baselines point the same way: the fit choice is secondary and the temporal stage improves
 every front end and index tried, so within the set we tested the temporal stage, not the perception choice,
 is the lever, although generality beyond that set is unproven. One caveat is unmeasured: the gate's
@@ -99,8 +99,8 @@ pipeline and nothing can leak from these frames into the method, but it is also 
 small, single-condition sample. With $n=2$ runs the across-field, across-season,
 and across-platform variability cannot be characterised, and the descriptive
 front end statistics already differ markedly between the two runs (raw
-$>10^\circ$ jumps in $12.6\%$ versus $29.0\%$ of transitions, that is $102/811$ and
-$194/669$), which is itself a caution against generalising from two clips.
+$>10^\circ$ jumps in $14.1\%$ versus $28.3\%$ of transitions, that is $114/810$ and
+$189/669$), which is itself a caution against generalising from two clips.
 
 Finally, accuracy is measured against a single annotator, so an inter-annotator
 agreement floor on the smallest meaningful error is not established; a second

@@ -12,7 +12,7 @@
 % back-end is positioned as the dominant robustness lever, but the
 % robustness claim is error-vs-GT + gate selectivity (NOT a jump count).
 %
-% Measured: 100% row-emission (1482/1482), tertile emission, cross-track
+% Measured: 99.9% row-emission (1481/1482), tertile emission, cross-track
 % magnitude (cm), heading and cross-track error vs a 150-frame human-labelled
 % subset, the temporal ablation, and the fit-arm / front-end / trained-detector
 % (YOLOv5) baselines. Single annotator; inter-annotator agreement = future work.
@@ -156,12 +156,15 @@ pipeline sums (or smooth-and-sums) the masked ExG response across columns and ta
 vegetation density as the candidate row centre $x^{\ast}(y)$ at that height. Scanning $y$ from the image
 bottom upward yields a set of central-row anchor points $\{(x^{\ast}(y),y)\}$ that follow the near-vertical
 green band. To bias the tracker toward the row the robot is actually in rather than an adjacent one, the
-column search is restricted to a \emph{virtual safety corridor}: a fixed lateral band of half-width $220$\,mm
-about the robot centreline on the ground, projected into the image per row through the calibration of
-Section~\ref{sec:method:platform}. This mirrors the corridor the platform's own controller uses to discard
-neighbour-row plants, and because the straddle robot spans a single bed the adjacent rows fall outside it. The
-corridor is applied when seeding the track at the near row, where the rows are most separated in the image, so
-that the track starts on the central row and follows it upward. The output of this
+column search is restricted to a \emph{virtual safety corridor}: a lateral band about the robot centreline on
+the ground, projected into the image per row through the calibration of Section~\ref{sec:method:platform}.
+The platform's straddle chassis spans a single bed of half-width $220$\,mm, so the neighbour rows sit near or
+just inside that width. Because a vegetation index cannot tell the central crop from a neighbouring crop, the
+seed band is set slightly tighter, at half-width $\pm180$\,mm: when the central row is momentarily gapped, a
+$\pm220$\,mm band would still admit the neighbour at the chassis edge and the (memoryless) front end would
+re-seed onto it every frame of the gap, whereas the $\pm180$\,mm band excludes it while still admitting the
+central row's lateral wander. The corridor is applied when seeding the track at the near row, where the rows
+are most separated in the image, so that the track starts on the central row and follows it upward. The output of this
 stage is the ordered set of central-row anchors passed to the line fit. Emitting an anchor set is a
 self-consistency property and not a correctness guarantee: a peak is found in essentially every frame, but
 whether the chosen column corresponds to the true central row is precisely what the ground-truth evaluation of
@@ -371,5 +374,5 @@ per-frame differences); the labelled frames are a sparse stratified sample drawn
 are resampled at the frame level. Where that interval covers zero the difference is reported as
 statistically indistinguishable rather than as a ranking. This is the case for the Huber fit against
 equal-weight least squares (median paired difference $0^\circ$) and, notably, for the proposed pipeline
-against the trained YOLOv5 detector baseline (median $0.2^\circ$, interval $[-0.5,1.1]^\circ$; still
-covering zero when the detector is also given the temporal stage, $0.7^\circ$, $[-0.2,1.2]^\circ$).
+against the trained YOLOv5 detector baseline (median $0.2^\circ$, interval $[-0.5,1.2]^\circ$; still
+covering zero when the detector is also given the temporal stage, $0.5^\circ$, $[-0.4,1.2]^\circ$).
