@@ -82,13 +82,14 @@ def main():
     panel = np.hstack([img, np.full((img.shape[0], 12, 3), 255, np.uint8), vis])
     cv2.imwrite(str(OUT / "fig_cabbage_method.png"), panel)
     print("wrote fig_cabbage_method.png from", nm)
-    # gallery: 4 frames across veg levels (both runs)
-    # hand-picked CLEAR cabbage frames (verified on a contact sheet; avoids the mixed
-    # leafy-green / people stretches in run 1)
-    picks = ["videos__rec_20251130_030636__f002700.jpg",
-             "videos__rec_20251130_124123__f001880.jpg",
-             "videos__rec_20251130_124123__f007520.jpg",
-             "videos__rec_20251130_124123__f013160.jpg"]
+    # gallery: 4 frames across vegetation-density levels, all from run 2.
+    # Hand-picked CLEAR mid-row frames (verified frame-by-frame): people gather at the
+    # headlands where each pass starts, so only the mid-row stretches are free of legs
+    # and feet; these four are people-free with a clearly trackable central row.
+    picks = ["videos__rec_20251130_124123__f003960.jpg",
+             "videos__rec_20251130_124123__f012160.jpg",
+             "videos__rec_20251130_124123__f013260.jpg",
+             "videos__rec_20251130_124123__f014060.jpg"]
     tiles = []
     for nm in picks:
         im = cv2.imread(str(FR / nm)); p, c = track(im)
