@@ -15,11 +15,11 @@
     leakage-free test set. Against a $150$-frame human-labelled subset the pipeline attains a median
     heading error of $5.0^{\circ}$ and a median cross-track error of about $1$\,cm, the temporal stage rather
     than the perception choice being the dominant source of robustness; a residual tail remains where the
-    index locks onto a neighbouring row. Against a reconstructed YOLOv5 detector front end through the same
-    temporal stage, the pipeline is statistically indistinguishable in median heading (the paired $95\%$
-    bootstrap interval spans zero) at zero labelling and GPU cost, the detector ahead only in the error tail
-    and on those wrong-row frames. The scope is one robot, one crop, one camera pose, and open-loop
-    operation.
+    index locks onto a neighbouring row. Against a reconstructed YOLOv5 detector front end, compared as each
+    method stands, the pipeline reaches per-frame parity in median heading (paired difference $0.2^{\circ}$,
+    $95\%$ bootstrap interval $[-0.5,1.1]$ spanning zero) at zero labelling and GPU cost, the detector ahead
+    only in the error tail and on those wrong-row frames. The scope is one robot, one crop, one camera pose,
+    and open-loop operation.
 \end{abstract}
 
 \vspace{1em}

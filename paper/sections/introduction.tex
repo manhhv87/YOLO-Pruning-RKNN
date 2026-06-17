@@ -32,11 +32,12 @@ guidance accuracy and temporal stability this stock composition achieves in fiel
 \noindent This paper makes three contributions. \emph{(i)}~A public forward-view cabbage-robot crop-row
 guidance dataset, recorded on a working field robot at a camera pose representative of low-cost in-row
 navigation. \emph{(ii)}~A leakage-free in-field evaluation of the detector-free pipeline against a
-human-labelled subset, including a like-for-like comparison---through an identical temporal stage---with a
-reconstructed front end from the platform's trained YOLOv5 detector: the two are statistically
-indistinguishable in median heading and cross-track (paired $95\%$ bootstrap intervals span zero) at zero
-labelling and GPU cost, while the trained detector is ahead only in the error tail and on the wrong-row
-frames, the measured cost of going detector-free. \emph{(iii)}~The finding that, across the front ends and indices tested, the temporal stage
+human-labelled subset, including a comparison---method against method, each taken as it stands---with a
+reconstructed front end from the platform's trained YOLOv5 detector: the complete pipeline reaches per-frame
+parity in median heading (paired difference $0.2^\circ$, $95\%$ bootstrap interval $[-0.5,1.1]$ spanning
+zero) at zero labelling and GPU cost---a parity that persists when the detector is given the same temporal
+stage---while the trained detector is ahead only in the error tail and on the wrong-row frames, the measured
+cost of going detector-free. \emph{(iii)}~The finding that, across the front ends and indices tested, the temporal stage
 rather than the perception choice is the main source of heading stability.
 
 \noindent The scope is deliberately narrow. We study one robot, one crop, one camera pose, and an open-loop

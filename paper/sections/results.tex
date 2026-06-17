@@ -291,40 +291,45 @@ when they occur.
 
 \paragraph{Trained-detector baseline.}
 The platform's controller follows the row with a trained YOLOv5 cabbage detector. That detector front end is
-reconstructed here by taking its detections inside the same $\pm220$\,mm safety corridor and fitting the
-same curve, and scored through the same temporal stage as the detector-free pipeline
-(Table~\ref{tab:res-detector}); this is a reconstruction of the detector \emph{front end}, not the
-platform's row-selection and PID logic. With the temporal stage applied to both, the trained detector
-reaches a median heading error of $4.1^\circ$ against the $5.0^\circ$ of the detector-free pipeline, but the
-difference is not statistically resolvable on this subset: the paired per-frame heading difference has a
-median of $0.7^\circ$ with a $95\%$ bootstrap interval of $[-0.3, 1.2]^\circ$, and the cross-track
-difference is likewise indistinguishable ($1.3$\,px, $[-0.3, 3.3]$). The detector's advantage instead lies
-in the error tail and, decisively, in the wrong-row regime: on the $18$ frames where the Excess-Green
-tracker locks onto a neighbouring row it localises the central row to a median cross-track error of
-$10$\,px against the raw tracker's $214$\,px, better on every one of those frames. Stratifying by how far
-the ground-truth row sits off-centre confirms that this parity is not an artifact of the centred frames the
-closed-loop logging produced: even in the most off-centre tercile ($|e^{\mathrm{GT}}|>39$\,px) the two
-remain close ($6.9^\circ$ detector-free against $5.6^\circ$ detector). The detector-free pipeline is thus on
-par with the trained detector in the typical case, at no labelling or GPU cost, and behind it mainly on the
-worst-case wrong-row frames.
+reconstructed here by taking its detections inside the same $\pm220$\,mm safety corridor and fitting the same
+curve (Table~\ref{tab:res-detector}); this reconstructs the detector \emph{front end}, not the platform's
+row-selection and PID logic. The headline comparison is between the two methods as each is actually
+constituted: the complete proposed pipeline, with its temporal stage, against the trained-detector
+reconstruction as-is. Although the trained detector has the lower aggregate median heading error
+($4.2^\circ$ against $5.0^\circ$), the per-frame paired difference is not statistically resolvable: its
+median is $0.2^\circ$ with a $95\%$ bootstrap interval of $[-0.5, 1.1]^\circ$, and the cross-track
+difference is likewise indistinguishable ($1.3$\,px, $[-1.0, 3.1]$). The proposed pipeline therefore reaches
+per-frame parity with the trained detector in the typical case, at no labelling or GPU cost. The detector's
+advantage lies elsewhere: on the $18$ frames where the Excess-Green tracker locks onto a neighbouring row it
+localises the central row to a median cross-track error of $10$\,px against the raw tracker's $214$\,px,
+better on every one of those frames. Two checks guard this parity. Giving the detector the identical temporal
+stage---a configuration nobody deploys, reported only as an ablation---barely moves it
+($4.2^\circ\!\to\!4.1^\circ$, cross-track 90th percentile unchanged at $32$\,px) and the matched paired
+difference still spans zero ($0.7^\circ$, $[-0.2, 1.2]$), so the parity does not rest on smoothing one side
+and not the other. And because the runs were logged under closed-loop centring, stratifying by how far the
+ground-truth row sits off-centre shows the parity persists into the most off-centre tercile
+($|e^{\mathrm{GT}}|>39$\,px: $6.9^\circ$ proposed against $5.6^\circ$ detector), so it is not an artifact of
+the centred frames.
 
 {\renewcommand{\arraystretch}{1.2}
 \begin{table}[!ht]
   \centering
-  \caption{Trained-detector baseline: a reconstructed YOLOv5 detector front end (its detections inside the
-    same safety corridor, the same curve fit) against the detector-free pipeline, both scored raw and after
-    the same temporal stage on the labelled subset. It reconstructs the detector front end, not the
-    platform's deployed row-and-PID logic.}
+  \caption{Trained-detector baseline. The headline comparison is method-versus-method: the complete proposed
+    pipeline (ExG $+$ temporal) against the reconstructed YOLOv5 detector front end as-is---its detections
+    inside the same safety corridor, the same curve fit, no temporal stage. The YOLOv5 $+$ temporal row is an
+    ablation, a configuration nobody deploys, included only to show the temporal stage barely moves the strong
+    detector. The reconstruction covers the detector front end, not the platform's deployed row-and-PID
+    logic.}
   \label{tab:res-detector}
   \begin{tabular}{lccc@{\hskip 1.2em}ccc}
     \hline
     & \multicolumn{3}{c}{\textbf{Heading err ($^\circ$)}} & \multicolumn{3}{c}{\textbf{Cross-track err (px)}} \\
     \textbf{Method} & med & mean & p90 & med & mean & p90 \\
     \hline
-    ExG, raw                  & 6.4 & 9.1 & 19.4 & 11 & 42 & 155 \\
-    ExG $+$ temporal          & 5.0 & 6.5 & 14.5 & 10 & 19 & 46 \\
-    YOLOv5, raw               & 4.2 & 6.1 & 11.9 & 9  & 15 & 32 \\
-    YOLOv5 $+$ temporal       & 4.1 & 5.4 & 11.7 & 9  & 14 & 32 \\
+    ExG, raw                       & 6.4 & 9.1 & 19.4 & 11 & 42 & 155 \\
+    ExG $+$ temporal (proposed)    & 5.0 & 6.5 & 14.5 & 10 & 19 & 46 \\
+    YOLOv5 reconstruction (baseline) & 4.2 & 6.1 & 11.9 & 9  & 15 & 32 \\
+    \quad $+$ temporal (ablation)  & 4.1 & 5.4 & 11.7 & 9  & 14 & 32 \\
     \hline
   \end{tabular}
 \end{table}}

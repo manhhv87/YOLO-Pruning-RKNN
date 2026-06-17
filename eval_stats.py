@@ -100,9 +100,11 @@ def main():
         d = [err(fr, ka) - err(fr, kb) for fr in lab if err(fr, ka) is not None and err(fr, kb) is not None]
         return np.median(d), boot_ci(d), len(d)
     print("\n# PAIRED DIFFERENCES (median, 95% bootstrap CI)")
-    for label, ka, kb in [("ExG fused - YOLO fused (heading)", "exg_fus_h", "yolo_fus_h"),
+    for label, ka, kb in [("PRIMARY ExG+temporal - YOLO raw (heading)", "exg_fus_h", "yolo_raw_h"),
+                          ("PRIMARY ExG+temporal - YOLO raw (cross-track px)", "exg_fus_c", "yolo_raw_c"),
+                          ("ablation ExG fused - YOLO fused (heading)", "exg_fus_h", "yolo_fus_h"),
                           ("ExG raw - ExG fused (heading)", "exg_raw_h", "exg_fus_h"),
-                          ("ExG fused - YOLO fused (cross-track px)", "exg_fus_c", "yolo_fus_c")]:
+                          ("ablation ExG fused - YOLO fused (cross-track px)", "exg_fus_c", "yolo_fus_c")]:
         m, (lo, hi), n = paired(ka, kb)
         sig = "" if lo <= 0 <= hi else "  (CI excludes 0)"
         print("  %-42s med=%+.2f  CI[%+.2f, %+.2f]  n=%d%s" % (label, m, lo, hi, n, sig))

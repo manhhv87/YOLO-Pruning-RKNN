@@ -24,11 +24,11 @@ $5.0^{\circ}$ and a cross-track of about $1$\,cm, with a guidance line emitted o
 stand out. The temporal stage, not the perception front end, carries the robustness: it lowers heading
 error on the gate-suppressed frames in both runs, fires selectively on genuinely poor frames, and improves
 every front end and index tried, while the fit choice is secondary (Section~\ref{sec:results}). And against
-a reconstructed front end from the platform's trained YOLOv5 detector, scored through the same temporal
-stage, the detector-free pipeline is statistically indistinguishable in median heading and cross-track (the
-paired bootstrap intervals span zero) at no labelling or GPU cost; the detector is ahead only in the error
-tail and on the wrong-row frames where a vegetation index cannot separate crop from weed -- the measured
-cost of going detector-free.
+a reconstructed front end from the platform's trained YOLOv5 detector, compared as each method stands, the
+detector-free pipeline reaches per-frame parity in median heading (paired difference $0.2^\circ$, $95\%$
+interval $[-0.5,1.1]$ spanning zero, and still spanning zero when the detector is given the same temporal
+stage) at no labelling or GPU cost; the detector is ahead only in the error tail and on the wrong-row frames
+where a vegetation index cannot separate crop from weed -- the measured cost of going detector-free.
 
 The scope is one robot, one crop, one camera pose, and an open-loop evaluation at $1$\,fps; the claims
 extend no further. The dataset and code will be made publicly available upon publication.
