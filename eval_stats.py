@@ -41,12 +41,28 @@ def pct(v):
 
 
 def boot_ci(diffs, B=10000):
-    """Bootstrap 95% CI of the median of paired per-frame differences."""
+    """Bootstrap 95% CI of the median of paired per-frame differences (frame-level i.i.d. resampling)."""
     d = np.asarray(diffs, float)
     if len(d) < 2:
         return (float("nan"), float("nan"))
     idx = RNG.integers(0, len(d), size=(B, len(d)))
     meds = np.median(d[idx], axis=1)
+    return float(np.percentile(meds, 2.5)), float(np.percentile(meds, 97.5))
+
+
+def boot_ci_clustered(diffs, runs, B=10000):
+    """Run-clustered 95% CI: frames are resampled WITHIN each run, preserving per-run counts, so the
+    within-run correlation of 1 fps frames is not mistaken for extra independent evidence. More conservative
+    (wider) than the frame-level CI, which is the point the reviewers raised."""
+    d = np.asarray(diffs, float)
+    runs = np.asarray(runs)
+    if len(d) < 2:
+        return (float("nan"), float("nan"))
+    groups = [np.where(runs == r)[0] for r in np.unique(runs)]
+    meds = np.empty(B)
+    for b in range(B):
+        pick = np.concatenate([g[RNG.integers(0, len(g), size=len(g))] for g in groups])
+        meds[b] = np.median(d[pick])
     return float(np.percentile(meds, 2.5)), float(np.percentile(meds, 97.5))
 
 
@@ -97,17 +113,20 @@ def main():
 
     # ---- paired bootstrap CIs for the load-bearing comparisons ----
     def paired(ka, kb):
-        d = [err(fr, ka) - err(fr, kb) for fr in lab if err(fr, ka) is not None and err(fr, kb) is not None]
-        return np.median(d), boot_ci(d), len(d)
-    print("\n# PAIRED DIFFERENCES (median, 95% bootstrap CI)")
+        keep = [fr for fr in lab if err(fr, ka) is not None and err(fr, kb) is not None]
+        d = [err(fr, ka) - err(fr, kb) for fr in keep]
+        runs = [exg[fr]["video"] for fr in keep]
+        return np.median(d), boot_ci(d), boot_ci_clustered(d, runs), len(d)
+    print("\n# PAIRED DIFFERENCES (median; 95% CI frame-level | run-clustered)")
     for label, ka, kb in [("PRIMARY ExG+temporal - YOLO raw (heading)", "exg_fus_h", "yolo_raw_h"),
                           ("PRIMARY ExG+temporal - YOLO raw (cross-track px)", "exg_fus_c", "yolo_raw_c"),
                           ("ablation ExG fused - YOLO fused (heading)", "exg_fus_h", "yolo_fus_h"),
                           ("ExG raw - ExG fused (heading)", "exg_raw_h", "exg_fus_h"),
                           ("ablation ExG fused - YOLO fused (cross-track px)", "exg_fus_c", "yolo_fus_c")]:
-        m, (lo, hi), n = paired(ka, kb)
-        sig = "" if lo <= 0 <= hi else "  (CI excludes 0)"
-        print("  %-42s med=%+.2f  CI[%+.2f, %+.2f]  n=%d%s" % (label, m, lo, hi, n, sig))
+        m, (lo, hi), (clo, chi), n = paired(ka, kb)
+        sig = "" if clo <= 0 <= chi else "  (clustered CI excludes 0)"
+        print("  %-42s med=%+.2f  frame[%+.2f,%+.2f]  run[%+.2f,%+.2f]  n=%d%s"
+              % (label, m, lo, hi, clo, chi, n, sig))
 
     # ---- stratify by how far off-centre the GT row sits (|GT cross-track|) ----
     labc = [(fr, abs(f(exg[fr]["gt_ct_px"]))) for fr in lab if f(exg[fr]["gt_ct_px"]) is not None]

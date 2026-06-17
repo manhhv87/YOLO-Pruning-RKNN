@@ -61,7 +61,7 @@ growth stage, and camera geometry, and its accuracy is assured only on
 distributions that resemble the training set. Degradation under changes of
 field, crop, and acquisition condition recurs across this family. For a single
 robot, a single crop, and a fixed camera pose, a training-free pipeline that
-needs no labels and has no parameters to overfit or leak is a label-free
+needs no labelled training data is a label-free
 alternative warranting in-field validation against navigation-unit ground truth.
 The classical family that supplies such a pipeline is examined in the following
 subsection, and its robustness across a long real run remains unaddressed by the
@@ -130,11 +130,11 @@ cross-track error for autonomous ground vehicles~\cite{stanley2006}, and the
 kinematic bicycle model supplies the standard vehicle abstraction these
 controllers assume~\cite{rajamani2012}.
 
-In the crop-row literature this back end is often treated as an implementation
-detail behind a learned front end, even though it is the dominant contributor to
-the per-frame stability of a guidance system. A transparent temporal stage, kept
-in front of a simple stock extractor, occupies the role that learned pipelines
-fill implicitly. The substantive robustness questions, namely heading error
+In the crop-row literature this temporal back end, though standard, is seldom
+isolated as a controlled ablation against the perception choice, so its relative
+contribution to per-frame stability is rarely quantified. A transparent temporal
+stage, kept in front of a simple stock extractor, occupies the role that learned
+pipelines fill implicitly, and this paper measures its contribution directly. The substantive robustness questions, namely heading error
 against a human ground truth on the frames where the raw extractor diverges, and
 the selectivity of the gate, are answered against the labelled subset in
 Section~\ref{sec:res-accuracy}; the fit-arm comparison against RANSAC and

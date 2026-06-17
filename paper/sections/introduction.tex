@@ -17,7 +17,9 @@ difficulties. The detector is optimised for a box-level objective such as mean a
 heading the controller consumes. It also
 needs field-specific labelled data that is costly to obtain and prone to leakage between training and
 test, and it introduces a learned failure surface that is hard to audit in the field~\cite{cth1,sogaard}.
-We therefore investigate whether crop-row guidance can be achieved without a trained detector.
+Detector-free, training-free row extraction is itself a classical alternative~\cite{marchant1995,astrand2005,bakker2008};
+the open question we address is not \emph{whether} it works but \emph{which} component carries its
+robustness, and how close it comes to a trained detector when measured against the same ground truth.
 
 \noindent We study a deliberately simple pipeline assembled entirely from classical computer vision and
 evaluate it in the field on a cabbage robot. An Excess-Green vegetation index~\cite{woebbecke1995,meyer2008}
@@ -33,10 +35,10 @@ guidance accuracy and temporal stability this stock composition achieves in fiel
 guidance dataset, recorded on a working field robot at a camera pose representative of low-cost in-row
 navigation. \emph{(ii)}~A leakage-free in-field evaluation of the detector-free pipeline against a
 human-labelled subset, including a comparison with a trained YOLOv5 detector baseline: the complete pipeline
-reaches per-frame parity in median heading (paired difference $0.2^\circ$, $95\%$ bootstrap interval
-$[-0.5,1.2]$ spanning zero) at zero labelling and GPU cost---a parity that persists when the detector is
-given the same temporal stage---while the trained detector is ahead only in the error tail and on the
-wrong-row frames, the measured cost of going detector-free. \emph{(iii)}~The finding that, across the front ends and indices tested, the temporal stage
+trails it by a median heading gap of only $0.2^\circ$ that is not resolvable at $n=150$ ($95\%$ bootstrap
+interval $[-0.5,1.2]$; the gap stays unresolved when the detector is given the same temporal stage), while
+the detector remains uniformly ahead in point estimate and decisively better on the wrong-row frames---the
+measured cost of going detector-free, at zero labelling and GPU cost. \emph{(iii)}~The finding that, across the front ends and indices tested, the temporal stage
 rather than the perception choice is the main source of heading stability.
 
 \noindent The scope is deliberately narrow. We study one robot, one crop, and one camera pose, and we make

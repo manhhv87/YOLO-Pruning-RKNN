@@ -242,12 +242,15 @@ on genuinely poor frames rather than rejecting good ones. This is the
 non-circular form of the temporal result: unlike the jump counts of
 Section~\ref{sec:res-temporal}, the comparison is against an external reference on
 exactly the frames the stage acts upon. The two front-end and temporal additions
-that target the wrong-row tail are consistent with this picture. Tightening the
-Excess-Green seed search to the $\pm180$\,mm ground safety corridor reduced the
-number of large cross-track errors ($>100$\,px) on the labelled subset from $23$
-(no corridor) to $13$, and stabilising the cross-track signal through the temporal
-stage, rather than reporting it per frame, reduced its 90th-percentile error from
-$74$\,px (raw) to $43$\,px (fused).
+that target the wrong-row tail are consistent with this picture. The seed-corridor
+width is the one perception hyperparameter selected with reference to this labelled
+subset: sweeping it, the large cross-track errors ($>100$\,px) fall from $23$ (no
+corridor) to $18$ ($\pm220$\,mm) to $13$ ($\pm180$\,mm), while $\pm150$\,mm
+over-tightens and worsens the cross-track tail, so $\pm180$\,mm is adopted; because
+this touches the evaluation subset, choosing it on a disjoint set is left to future
+work. Stabilising the cross-track signal through the temporal stage, rather than
+reporting it per frame, then reduced its 90th-percentile error from $74$\,px (raw)
+to $43$\,px (fused).
 
 \paragraph{Fit-arm comparison.}
 Replacing the pipeline's Huber IRLS fit with the two standard alternatives on the
@@ -289,19 +292,23 @@ A trained YOLOv5 cabbage detector provides the comparison baseline: its detectio
 $\pm220$\,mm safety corridor and the same curve is fit to them (Table~\ref{tab:res-detector}), so the two
 methods share the downstream fit and differ in their perception front end. The headline comparison is between
 the two methods as each is constituted: the complete proposed pipeline, with its temporal stage, against the
-trained detector. Although the trained detector has the lower aggregate median heading error ($4.2^\circ$
-against $5.0^\circ$), the per-frame paired difference is not statistically resolvable: its median is
-$0.2^\circ$ with a $95\%$ bootstrap interval of $[-0.5, 1.2]^\circ$, and the cross-track difference is
-likewise indistinguishable ($1.1$\,px, $[-0.9, 3.1]$). The proposed pipeline therefore reaches per-frame
-parity with the trained detector in the typical case, at no labelling or GPU cost. The detector's advantage
-lies elsewhere: on the $13$ frames where the Excess-Green tracker locks onto a neighbouring row it localises
-the central row to a median cross-track error of $13$\,px against the raw tracker's $201$\,px, better on every
-one of those frames. Two checks support the parity. Giving the detector the identical temporal stage, reported
-as an ablation, barely moves it ($4.2^\circ\!\to\!4.1^\circ$, cross-track 90th percentile unchanged at
-$32$\,px) and the matched paired difference still spans zero ($0.5^\circ$, $[-0.4, 1.2]$), so the parity does
-not rest on smoothing one side and not the other. And stratifying by how far the ground-truth row sits
-off-centre shows the parity persists into the most off-centre tercile ($|e^{\mathrm{GT}}|>39$\,px:
-$6.9^\circ$ proposed against $5.6^\circ$ detector), so it holds across the full range of row offsets.
+trained detector. The trained detector has the lower point estimate on every aggregate---heading median $4.2^\circ$ against
+$5.0^\circ$, mean $6.1$ against $6.3$, 90th percentile $11.9$ against $13.2$, and a uniformly lower
+cross-track---and it is decisively better on the wrong-row tail. The per-frame paired difference is, however,
+small relative to the sample's resolution: a median of $0.2^\circ$ with a run-clustered $95\%$ bootstrap
+interval of $[-0.5, 1.2]^\circ$ (cross-track $1.1$\,px, $[-0.9, 3.1]$). An advantage of up to about
+$1.2^\circ$ therefore cannot be excluded at $n=150$; the gap is not resolvable here rather than demonstrably
+zero. The detector's decisive advantage is on the $13$ frames where the Excess-Green tracker locks onto a
+neighbouring row: there it localises the central row to a median cross-track error of $13$\,px against the
+raw tracker's $201$\,px, better on every one of those frames. Two checks bound the comparison. Giving the
+detector the identical temporal stage, reported as an ablation, barely moves it ($4.2^\circ\!\to\!4.1^\circ$,
+cross-track 90th percentile unchanged at $32$\,px) and the matched paired difference is still unresolved
+($0.5^\circ$, $[-0.4, 1.2]$), so the small gap does not rest on smoothing one side and not the other. And
+stratifying by how far the ground-truth row sits off-centre shows the gap does not widen into the most
+off-centre tercile ($|e^{\mathrm{GT}}|>39$\,px: $6.9^\circ$ proposed against $5.6^\circ$ detector). The
+detector-free pipeline thus comes within the sample's resolution of the trained detector in the typical case,
+at no labelling or GPU cost, while remaining behind it in point estimate and on the worst-case wrong-row
+frames.
 
 {\renewcommand{\arraystretch}{1.2}
 \begin{table}[!ht]

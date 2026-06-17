@@ -76,8 +76,8 @@ accuracy evaluation does not exercise. Integrating the guidance into the steerin
 loop and measuring the realised intervention rate and tracking error with wheel
 odometry is the clear next step. The accuracy itself is, however, robust to how
 far the row sits off-centre: stratifying every trained-detector comparison by
-$|e^{\mathrm{GT}}|$ shows the pipeline-versus-detector parity persists into the
-most off-centre tercile (Section~\ref{sec:res-accuracy}).
+$|e^{\mathrm{GT}}|$ shows the small pipeline-versus-detector gap does not widen into
+the most off-centre tercile (Section~\ref{sec:res-accuracy}).
 
 The metric figures rest on a measured camera pose and a flat-ground assumption. The heading $\theta$
 is reported in degrees, which is controller-relevant and scale-free, and the
@@ -95,7 +95,7 @@ The scope is narrow: two runs, one crop, one camera pose. The evidence is two
 real cabbage runs ($\sim 20$ and $\sim 14$ minutes, $1482$ curated cabbage frames at $1$\,fps,
 $640\times 480$), from one robot, one crop, and one forward-view camera pose.
 This is a pure test set, since there is no training stage anywhere in the
-pipeline and nothing can leak from these frames into the method, but it is also a
+pipeline and no learned weights can leak from these frames into the method, but it is also a
 small, single-condition sample. With $n=2$ runs the across-field, across-season,
 and across-platform variability cannot be characterised, and the descriptive
 front end statistics already differ markedly between the two runs (raw
@@ -105,6 +105,13 @@ $189/669$), which is itself a caution against generalising from two clips.
 Finally, accuracy is measured against a single annotator, so an inter-annotator
 agreement floor on the smallest meaningful error is not established; a second
 annotator is left to future work. To avoid over-reading differences that may sit
-within label noise, comparisons whose paired bootstrap interval spans zero -- including the sub-degree
-gap between the detector-free pipeline and the trained detector, and the Huber-versus-least-squares fit
-difference -- are reported as statistically indistinguishable rather than ranked.
+within label noise, comparisons whose paired bootstrap interval spans zero -- the sub-degree detector gap
+(reported as not resolvable at this sample size, with the detector still ahead in point estimate) and the
+Huber-versus-least-squares fit difference (median zero) -- are reported as unresolved rather than ranked.
+
+The trained-detector baseline is also a single reference. Its detections are filtered by a $\pm220$\,mm
+corridor while the pipeline seeds inside a $\pm180$\,mm band, so the wrong-row comparison is not
+corridor-matched, and the detector's training set, growth-stage coverage, and held-out accuracy are not
+characterised here. The comparison should therefore be read as against one trained detector at one operating
+point, not against trained detectors in general; a corridor-matched evaluation and a documented detector are
+left to future work.
