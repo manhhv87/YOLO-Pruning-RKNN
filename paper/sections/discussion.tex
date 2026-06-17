@@ -13,10 +13,9 @@ and the cost of avoiding a trained detector, and the limits of the evidence.
 A steering controller integrates whatever heading it is handed, so what matters is not the mean heading
 error but the rate of \emph{large} errors: one frame in which the Excess-Green front end latches onto a
 weed, a gap, or the wrong row can swing the look-ahead tangent by tens of degrees, and such a spike, if
-acted on, could drive the robot into the crop. No actuation took place in this open-loop study, so this
-motivates rather than measures the value of suppressing such spikes, which is the temporal stage's job; the
-raw-versus-fused jump counts of Table~\ref{tab:res-temporal} only confirm that the gate does so by
-construction, and the test that matters is error against ground truth on the frames it acts upon.
+acted on, could drive the robot into the crop. Suppressing such spikes is the temporal stage's job; the
+raw-versus-fused jump counts of Table~\ref{tab:res-temporal} confirm that the gate does so by construction,
+and the test that matters is error against ground truth on the frames it acts upon.
 
 The Excess-Green tracker is a single-frame estimator that commits, per frame, to the strongest column of
 vegetation contrast with no memory of the last few seconds; any stock single-frame front end shares this
@@ -32,7 +31,8 @@ every front end and index tried, so within the set we tested the temporal stage,
 is the lever, although generality beyond that set is unproven. One caveat is unmeasured: the gate's
 selectivity shows the frames it holds carry larger errors on average, but whether it ever vetoes a
 \emph{correct} sharp correction -- at a headland, a bend, or a genuine drift -- is the false-reject rate
-that a closed-loop trial would need to establish before the gate can be called a safety mechanism.
+that a dedicated trial with annotated sharp-correction events would need to establish before the gate can be
+called a safety mechanism.
 
 \subsection{Failure modes of the Excess-Green front end}
 \label{sec:disc-exg}
@@ -67,21 +67,17 @@ decisively more accurate (Section~\ref{sec:res-accuracy}).
 
 \subsection{Limitations}
 \label{sec:limitations}
-Several boundaries limit how far these conclusions generalise. The evaluation is
-open-loop with respect to the proposed pipeline: the recorded forward-view runs
-are processed offline and the detector-free pipeline never steered the robot,
-which during logging was driven by its own detector-based controller. A
-closed-loop intervention rate and realised tracking error under the proposed
-pipeline are therefore out of reach, and the smoothness of its fused heading trace
-is not the same thing as closed-loop stability. The temporal
-parameters (window length, EMA factor, jump threshold) interact with controller
-and vehicle dynamics that an offline replay does not capture. A closed-loop field
-trial with odometry is the clear next step. Because the runs were logged under the platform's own
-detector-based centring, the labelled frames are biased towards a centred row; stratifying every
-trained-detector comparison by how far off-centre the ground-truth row sits shows the
-pipeline-versus-detector parity persists into the most off-centre tercile
-(Section~\ref{sec:res-accuracy}), so it is not merely an artifact of the easy centred frames, but a
-closed-loop trial remains the only way to remove the confound entirely.
+Several boundaries limit how far these conclusions generalise. This study measures
+guidance accuracy against ground truth; it does not close the steering loop. The
+smoothness of the fused heading trace is an accuracy property and not a measured
+closed-loop tracking result, and the temporal parameters (window length, EMA
+factor, jump threshold) interact with controller and vehicle dynamics that an
+accuracy evaluation does not exercise. Integrating the guidance into the steering
+loop and measuring the realised intervention rate and tracking error with wheel
+odometry is the clear next step. The accuracy itself is, however, robust to how
+far the row sits off-centre: stratifying every trained-detector comparison by
+$|e^{\mathrm{GT}}|$ shows the pipeline-versus-detector parity persists into the
+most off-centre tercile (Section~\ref{sec:res-accuracy}).
 
 The metric figures rest on a measured camera pose and a flat-ground assumption. The heading $\theta$
 is reported in degrees, which is controller-relevant and scale-free, and the

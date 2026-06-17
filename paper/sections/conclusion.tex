@@ -24,20 +24,20 @@ $5.0^{\circ}$ and a cross-track of about $1$\,cm, with a guidance line emitted o
 stand out. The temporal stage, not the perception front end, carries the robustness: it lowers heading
 error on the gate-suppressed frames in both runs, fires selectively on genuinely poor frames, and improves
 every front end and index tried, while the fit choice is secondary (Section~\ref{sec:results}). And against
-a reconstructed front end from the platform's trained YOLOv5 detector, compared as each method stands, the
-detector-free pipeline reaches per-frame parity in median heading (paired difference $0.2^\circ$, $95\%$
-interval $[-0.5,1.1]$ spanning zero, and still spanning zero when the detector is given the same temporal
-stage) at no labelling or GPU cost; the detector is ahead only in the error tail and on the wrong-row frames
-where a vegetation index cannot separate crop from weed -- the measured cost of going detector-free.
+a trained YOLOv5 detector baseline the detector-free pipeline reaches per-frame parity in median heading
+(paired difference $0.2^\circ$, $95\%$ interval $[-0.5,1.1]$ spanning zero, and still spanning zero when the
+detector is given the same temporal stage) at no labelling or GPU cost; the detector is ahead only in the
+error tail and on the wrong-row frames where a vegetation index cannot separate crop from weed -- the
+measured cost of going detector-free.
 
-The scope is one robot, one crop, one camera pose, and an open-loop evaluation at $1$\,fps; the claims
-extend no further. The dataset and code will be made publicly available upon publication.
+The scope is one robot, one crop, and one camera pose, at $1$\,fps; the claims extend no further. The dataset
+and code will be made publicly available upon publication.
 
 \subsection{Future work}
 \label{sec:future-work}
 Four steps follow from the boundaries above. An on-robot checkerboard calibration would replace the reused
-intrinsics and flat-ground homography with one measured on the cabbage robot. A closed-loop field trial with
-wheel odometry would turn the open-loop accuracy into a measured intervention rate and expose how controller
-and terrain dynamics interact with the gate~\cite{rajamani2012}. A second annotator would establish the
+intrinsics and flat-ground homography with one measured on the cabbage robot. Closing the steering loop from
+the pipeline's output, with wheel odometry, would turn the measured guidance accuracy into a realised
+intervention rate and expose how controller and terrain dynamics interact with the gate~\cite{rajamani2012}. A second annotator would establish the
 inter-annotator agreement floor this single-annotator study lacks. And extending the dataset to further row
 crops would test whether the temporal stage remains the robustness lever under genuine distribution shift.

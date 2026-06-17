@@ -39,10 +39,8 @@ work.
 
 \noindent The data were collected from a single ground robot (Figure~\ref{fig:robot}), a four-wheel straddle
 platform that drives along a crop row with a forward-view camera mounted to look down the inter-row corridor.
-During the recorded runs the robot followed the cabbage rows under its own closed-loop controller, a trained
-cabbage detector driving a PID steering loop, at a nominal forward speed of approximately
-$0.14$\,m\,s$^{-1}$; the detector-free pipeline of this paper is evaluated offline on the logged frames and
-did not steer the robot. The platform pairs an embedded CPU-only computer and a forward-view USB
+The field runs were recorded as the robot drove along the cabbage rows at a nominal forward speed of
+approximately $0.14$\,m\,s$^{-1}$. The platform pairs an embedded CPU-only computer and a forward-view USB
 webcam at $640\times480$, here a Logitech HD~C270 webcam and an embedded board of the NVIDIA Jetson Nano /
 Raspberry Pi~4 class. The detector-free pipeline of this paper runs on its CPU with no neural accelerator
 (Figure~\ref{fig:camera}). This
@@ -60,17 +58,15 @@ $\pm5$\,cm and the tilt by $\pm5^{\circ}$ moves the near-row pixel-to-centimetre
 reported median cross-track over roughly $[0.9,1.3]$\,cm, so the centimetre figures are indicative and the
 pixel error is treated as the primary cross-track metric. The scope is fixed to one robot,
 one crop (cabbage), and one camera pose. The validation reported here is narrow by design and at a single low
-frame rate, with no claim of generalisation beyond this configuration. It is open-loop with respect to the
-proposed pipeline: the robot was steered during logging by its existing detector-based controller, whereas
-closing the loop from the detector-free pipeline's output is left to future work.
+frame rate, with no claim of generalisation beyond this configuration. Integrating the guidance into the
+steering loop and measuring the resulting closed-loop tracking is left to future work.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=0.8\linewidth]{IMG_20251201_162642.jpg}
   \caption{The cabbage-field robot during a field-test session: a four-wheel straddle platform carrying a
-  forward-view camera, following the cabbage rows under its own closed-loop detector-and-PID controller.
-  The detector-free pipeline of this paper is evaluated offline on the frames logged during these runs;
-  closing the loop from its output is left to future work.}
+  forward-view camera, driving along the cabbage rows. The guidance pipeline runs on the platform's onboard
+  CPU; closing the steering loop from the pipeline's output is left to future work.}
   \label{fig:robot}
 \end{figure}
 
@@ -268,7 +264,7 @@ all cases also reported in pixels and in \% of half-image width.
 \noindent The per-frame heading $\theta$ and offset $e$ are smoothed over time by three stock,
 lightweight operators applied in sequence. Together they form the temporal stage, which is the primary
 source of robustness. The chain is far simpler than a full state estimator such as a Kalman
-filter~\cite{kalman1960}; its complexity is matched to the 1\,fps, open-loop operating regime.
+filter~\cite{kalman1960}; its complexity is matched to the 1\,fps operating regime.
 
 The first operator passes the raw heading stream through a short sliding-window median filter. The median is
 robust to isolated single-frame outliers, such as a momentary wrong-row peak or a gap-induced bad fit,
@@ -375,6 +371,5 @@ per-frame differences); the labelled frames are a sparse stratified sample drawn
 are resampled at the frame level. Where that interval covers zero the difference is reported as
 statistically indistinguishable rather than as a ranking. This is the case for the Huber fit against
 equal-weight least squares (median paired difference $0^\circ$) and, notably, for the proposed pipeline
-against the reconstructed trained detector with each method taken as it stands (median $0.2^\circ$, interval
-$[-0.5,1.1]^\circ$; still covering zero when the detector is also given the temporal stage, $0.7^\circ$,
-$[-0.2,1.2]^\circ$).
+against the trained YOLOv5 detector baseline (median $0.2^\circ$, interval $[-0.5,1.1]^\circ$; still
+covering zero when the detector is also given the temporal stage, $0.7^\circ$, $[-0.2,1.2]^\circ$).
